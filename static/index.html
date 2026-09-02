@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="FITPLAN">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2316A34A'/%3E%3Cg stroke='white' stroke-width='9' stroke-linecap='round'%3E%3Cpath d='M30 32v36M70 32v36M18 42v16M82 42v16M30 50h40'/%3E%3C/g%3E%3C/svg%3E">
-<link rel="stylesheet" href="/static/css/style.css?v=1.5">
+<link rel="stylesheet" href="/static/css/style.css?v=1.6">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -227,15 +227,17 @@
       <div class="table-wrap">
         <table>
           <thead><tr>
-            <th>Mês</th><th class="right">Aulas</th><th class="right">Realizadas</th>
-            <th class="right">Faltas</th><th class="right">Previsto</th><th class="right">A pagar (consolidado)</th>
+            <th>Mês</th><th class="right">Aulas</th><th class="right">Valor do mês</th>
+            <th class="right">Treinadas</th><th class="right">A treinar</th><th class="right">Faltas</th>
           </tr></thead>
           <tbody id="lista-financeiro"></tbody>
         </table>
       </div>
       <div class="card-body" style="border-top:1px solid var(--border);font-size:12px;color:var(--muted)">
-        <b>Previsto</b> = tudo que está na agenda (agendadas + realizadas + faltas).
-        <b>Consolidado</b> = o que já é devido: aulas realizadas + faltas. Aula <b>cancelada</b> não é cobrada.
+        <b>Pré-pago:</b> o mês é pago quando as aulas entram na agenda. O <b>valor do mês</b> soma
+        tudo que está agendado, realizado ou perdido em falta. Aula <b>cancelada</b> sai da conta.
+        Precisa trocar um dia? <b>Remarque dentro do mesmo mês</b> — mudar a aula para outro mês
+        não é permitido, porque aquele mês já foi pago.
       </div>
     </div>
 
@@ -326,7 +328,7 @@
     <div class="modal-body">
       <input type="hidden" id="a-id">
       <div class="form-grid">
-        <div><label>Data *</label><input id="a-data" type="date"></div>
+        <div><label>Data * <span style="font-weight:400;color:var(--muted)">(remarque dentro do mês)</span></label><input id="a-data" type="date"></div>
         <div><label>Hora</label><input id="a-hora" type="time"></div>
         <div><label>Duração (min)</label><input id="a-duracao" type="number" min="10" step="5" value="60"></div>
         <div><label>Status</label>
@@ -562,6 +564,6 @@
 </div>
 
 <div class="toast-wrap" id="toasts"></div>
-<script src="/static/js/app.js?v=1.5"></script>
+<script src="/static/js/app.js?v=1.6"></script>
 </body>
 </html>

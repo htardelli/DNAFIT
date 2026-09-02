@@ -652,7 +652,15 @@ async def editar_aula(aid: int, body: AulaUpdate, user=Depends(get_current_user)
     if "status" in data and data["status"] not in STATUS_VALIDOS:
         raise HTTPException(400, f"Status deve ser um de: {', '.join(STATUS_VALIDOS)}")
     if "data" in data and data["data"]:
-        data["data"] = _parse_data(data["data"])
+        nova = _parse_data(data["data"])
+        # O mês é pago quando as aulas entram na agenda. Remarcar é trocar de dia
+        # DENTRO do mês pago; jogar a aula para outro mês moveria dinheiro de um
+        # fechamento para outro, então é recusado.
+        if nova[:7] != (atual["data"] or "")[:7]:
+            raise HTTPException(400,
+                f"Remarcação só dentro do mesmo mês. Esta aula é de {atual['data'][5:7]}/{atual['data'][:4]}, "
+                f"que já está pago. Para mover para outro mês, exclua esta aula e crie uma nova lá.")
+        data["data"] = nova
     trocou_modelo = "modelo_id" in data and data["modelo_id"] and data["modelo_id"] != atual["modelo_id"]
     sets = [f"{k}=?" for k in data]
     params = list(data.values())
@@ -988,9 +996,9 @@ async def resumo(mes: Optional[str] = None, user=Depends(get_current_user),
             sequencia += 1
             s -= timedelta(weeks=1)
 
-    # Financeiro do mês.
-    #   previsto    = tudo que está na agenda e ainda pode acontecer (agendada + realizada + falta)
-    #   consolidado = o que já é devido: realizada + falta (cancelada com aviso não é cobrada)
+    # Financeiro — modelo PRÉ-PAGO: o aluno paga o mês quando as aulas entram na
+    # agenda, antes de treinar. Então tudo que está agendado já é dinheiro pago;
+    # o que muda depois é só o destino da aula (treinada, perdida ou cancelada).
     cur = await db.execute("""
         SELECT status, COUNT(*) n, COALESCE(SUM(COALESCE(valor,0)),0) v
           FROM aulas WHERE data BETWEEN ? AND ? GROUP BY status
@@ -998,8 +1006,9 @@ async def resumo(mes: Optional[str] = None, user=Depends(get_current_user),
     fin = {r["status"]: {"n": r["n"], "v": r["v"]} for r in await cur.fetchall()}
     def _v(*sts):
         return round(sum(fin.get(x, {}).get("v", 0) for x in sts), 2)
-    previsto = _v("agendada", "realizada", "falta")
-    consolidado = _v("realizada", "falta")
+    def _n(*sts):
+        return sum(fin.get(x, {}).get("n", 0) for x in sts)
+    valor_mes = _v("agendada", "realizada", "falta")
 
     # Aulas sem treino montado (a fila de trabalho do personal)
     sem_treino = (await (await db.execute("""
@@ -1019,11 +1028,12 @@ async def resumo(mes: Optional[str] = None, user=Depends(get_current_user),
         "proxima": _d(prox), "plano": plano,
         "financeiro": {
             "valor_hora": await _valor_hora(db, ini),
-            "aulas_previstas": sum(fin.get(x, {}).get("n", 0) for x in ("agendada", "realizada", "falta")),
-            "previsto": previsto,
-            "consolidado": consolidado,
-            "a_realizar": round(previsto - consolidado, 2),
-            "cancelado": _v("cancelada"),
+            "aulas_pagas": _n("agendada", "realizada", "falta"),
+            "valor_mes": valor_mes,          # o que o aluno paga / o personal recebe no mês
+            "treinado": _v("realizada"),     # do valor pago, o que já virou treino
+            "a_treinar": _v("agendada"),     # já pago, ainda por acontecer
+            "perdido": _v("falta"),          # pago e não usado
+            "cancelado": _v("cancelada"),    # fora da conta do mês
         },
     }
 
@@ -1031,12 +1041,13 @@ async def resumo(mes: Optional[str] = None, user=Depends(get_current_user),
 @app.get("/api/financeiro")
 async def financeiro(ano: Optional[int] = None, user=Depends(get_current_user),
                      db: aiosqlite.Connection = Depends(get_db)):
-    """Fechamento mês a mês: quanto o aluno paga e quanto o personal recebe
-    (é o mesmo número, visto dos dois lados)."""
+    """Fechamento mês a mês (pré-pago): o valor do mês é tudo que entrou na agenda
+    e não foi cancelado — o aluno paga, o personal recebe, é o mesmo número."""
     ano = ano or _hoje().year
     ini, fim = date(ano, 1, 1).isoformat(), date(ano, 12, 31).isoformat()
-    meses = [{"mes": m, "aulas": 0, "previsto": 0.0, "consolidado": 0.0,
-              "realizadas": 0, "faltas": 0} for m in range(1, 13)]
+    meses = [{"mes": m, "aulas": 0, "valor": 0.0, "treinado": 0.0, "a_treinar": 0.0,
+              "perdido": 0.0, "realizadas": 0, "faltas": 0, "agendadas": 0}
+             for m in range(1, 13)]
     cur = await db.execute("""
         SELECT CAST(substr(data,6,2) AS INTEGER) m, status,
                COUNT(*) n, COALESCE(SUM(COALESCE(valor,0)),0) v
@@ -1049,18 +1060,21 @@ async def financeiro(ano: Optional[int] = None, user=Depends(get_current_user),
         if r["status"] == "cancelada":
             continue
         alvo["aulas"] += r["n"]
-        alvo["previsto"] += r["v"]
+        alvo["valor"] += r["v"]
         if r["status"] == "realizada":
-            alvo["realizadas"] = r["n"]; alvo["consolidado"] += r["v"]
+            alvo["realizadas"] = r["n"]; alvo["treinado"] += r["v"]
         elif r["status"] == "falta":
-            alvo["faltas"] = r["n"]; alvo["consolidado"] += r["v"]
+            alvo["faltas"] = r["n"]; alvo["perdido"] += r["v"]
+        elif r["status"] == "agendada":
+            alvo["agendadas"] = r["n"]; alvo["a_treinar"] += r["v"]
     for m in meses:
-        m["previsto"] = round(m["previsto"], 2)
-        m["consolidado"] = round(m["consolidado"], 2)
+        for k in ("valor", "treinado", "a_treinar", "perdido"):
+            m[k] = round(m[k], 2)
     return {
         "ano": ano, "meses": meses,
-        "total_previsto": round(sum(m["previsto"] for m in meses), 2),
-        "total_consolidado": round(sum(m["consolidado"] for m in meses), 2),
+        "total_valor": round(sum(m["valor"] for m in meses), 2),
+        "total_treinado": round(sum(m["treinado"] for m in meses), 2),
+        "total_perdido": round(sum(m["perdido"] for m in meses), 2),
         "valor_hora": await _valor_hora(db),
     }
 
