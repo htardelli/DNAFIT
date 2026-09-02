@@ -228,16 +228,17 @@
         <table>
           <thead><tr>
             <th>Mês</th><th class="right">Aulas</th><th class="right">Valor do mês</th>
-            <th class="right">Treinadas</th><th class="right">A treinar</th><th class="right">Faltas</th>
+            <th class="right">Treinadas</th><th class="right">A treinar</th><th class="right">Perdidas</th>
           </tr></thead>
           <tbody id="lista-financeiro"></tbody>
         </table>
       </div>
       <div class="card-body" style="border-top:1px solid var(--border);font-size:12px;color:var(--muted)">
-        <b>Pré-pago:</b> o mês é pago quando as aulas entram na agenda. O <b>valor do mês</b> soma
-        tudo que está agendado, realizado ou perdido em falta. Aula <b>cancelada</b> sai da conta.
-        Precisa trocar um dia? <b>Remarque dentro do mesmo mês</b> — mudar a aula para outro mês
-        não é permitido, porque aquele mês já foi pago.
+        <b>Pré-pago, sem devolução.</b> O mês é pago quando as aulas entram na agenda, e o
+        <b>valor do mês</b> soma <b>todas</b> elas — nenhum status devolve dinheiro.
+        Não pôde ir num dia? <b>Remarque para outro dia do mesmo mês.</b> Se não remarcar,
+        a aula entra em <b>Perdidas</b> (falta ou cancelamento) e o valor não volta.
+        Mudar a aula para outro mês é recusado: aquele mês já foi pago.
       </div>
     </div>
 
@@ -564,6 +565,6 @@
 </div>
 
 <div class="toast-wrap" id="toasts"></div>
-<script src="/static/js/app.js?v=1.6"></script>
+<script src="/static/js/app.js?v=1.7"></script>
 </body>
 </html>

@@ -259,13 +259,13 @@ projeto (já está no `.gitignore`).
 ### Regras de negócio
 
 - Status: `agendada` · `realizada` · `falta` · `cancelada`.
-- Consomem aula do pacote: `realizada` e `falta`. `cancelada` não consome.
+- **Toda** aula na agenda consome o pacote — o valor pago nunca é devolvido.
 - **Aderência** = realizadas ÷ (realizadas + faltas + agendadas já vencidas).
-  Canceladas ficam fora de propósito.
-- **Modelo PRÉ-PAGO:** o mês é pago quando as aulas entram na agenda.
-  `valor_mes` = agendadas + realizadas + faltas; `treinado` = realizadas;
-  `a_treinar` = agendadas; `perdido` = faltas; `cancelada` fora da conta.
-  Mudar status **não** altera `valor_mes`.
+  Canceladas ficam fora **desta métrica** (mede disciplina de treino, não dinheiro).
+- **Modelo PRÉ-PAGO E SEM DEVOLUÇÃO:** o mês é pago quando as aulas entram na agenda.
+  `valor_mes` = **todas** as aulas do mês; `treinado` = realizadas;
+  `a_treinar` = agendadas; `perdido` = faltas + canceladas.
+  Nenhum status altera `valor_mes` — só redistribui.
 - **Remarcação só dentro do mesmo mês:** `PATCH /api/aulas/{id}` com uma `data` de
   outro mês devolve **400**. O mês já está pago; migrar a aula moveria dinheiro entre
   fechamentos.

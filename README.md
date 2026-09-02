@@ -109,19 +109,19 @@ Crie o acesso do personal em **Configurações → Acessos → + Novo acesso**.
 - **Sequência** = semanas consecutivas (encerradas) em que você bateu a meta semanal do pacote.
 - **Volume de carga (kg)** = séries × repetições × carga, somado nas aulas realizadas.
   Reps em tempo ("30s") não entram no volume — só o que tem repetição contável.
-- **Dinheiro — modelo pré-pago:** o mês é pago **quando as aulas entram na agenda**,
-  antes de treinar. Marcar os dias já fecha o valor do mês.
-  - **Valor do mês** = agendadas + realizadas + faltas. É o que o aluno transfere.
-  - **Virou treino** = realizadas · **A treinar** = agendadas · **Perdido** = faltas.
-  - **Cancelada** sai da conta do mês.
-  - Mudar o status de uma aula **não altera o valor do mês** — só muda o destino do
-    dinheiro já pago.
+- **Dinheiro — pré-pago e sem devolução:** o mês é pago **quando as aulas entram na
+  agenda**, antes de treinar. Marcar os dias já fecha o valor do mês.
+  - **Valor do mês** = **todas** as aulas do mês. É o que o aluno transfere.
+  - **Virou treino** = realizadas · **A treinar** = agendadas ·
+    **Perdido** = faltas **+ cancelamentos**.
+  - **Nenhum status devolve dinheiro.** Mudar o status não altera o valor do mês —
+    só muda o destino do que já foi pago.
   - É o mesmo número para os dois lados: **"Pago no mês"** (aluno) ou
     **"A receber no mês"** (personal), conforme quem está logado.
   - Cada aula guarda o **valor da hora-aula do dia em que foi criada** (snapshot).
     Reajuste vale só para as aulas novas — mês fechado não se reescreve.
-- **Remarcação só dentro do mesmo mês.** Precisou trocar um dia? Abra a aula e mude a
-  data para outro dia **do mesmo mês**. Mover para outro mês é recusado pelo sistema:
+- **Remarcação só dentro do mesmo mês** — e é a única forma de não perder o valor.
+  Precisou trocar um dia? Abra a aula e mude a data para outro dia **do mesmo mês**. Mover para outro mês é recusado pelo sistema:
   aquele mês já foi pago, e a aula não pode migrar de fechamento. Se precisar mesmo,
   exclua a aula e crie uma nova no mês de destino — aí ela entra no valor daquele mês.
 - **Quem define o preço:** só o aluno (dono). O personal **vê** o valor, mas não altera.

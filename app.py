@@ -66,8 +66,10 @@ def _login_falhou(chave: str):
     if reg["n"] >= LOGIN_MAX_TENTATIVAS:
         reg["ate"] = datetime.utcnow() + timedelta(minutes=LOGIN_BLOQUEIO_MIN)
         reg["n"] = 0
-# Consomem aula do pacote: a aula aconteceu ou o horário foi perdido sem aviso.
-STATUS_CONSOME = ("realizada", "falta")
+# Acordo com o personal: o valor pago NUNCA é devolvido. Ou a aula é remarcada
+# dentro do mês, ou o valor se perde. Logo toda aula na agenda consome o pacote e
+# entra no valor do mês — nenhum status devolve dinheiro.
+STATUS_CONSOME = STATUS_VALIDOS
 
 
 def _hash(pw: str) -> str:
@@ -996,9 +998,9 @@ async def resumo(mes: Optional[str] = None, user=Depends(get_current_user),
             sequencia += 1
             s -= timedelta(weeks=1)
 
-    # Financeiro — modelo PRÉ-PAGO: o aluno paga o mês quando as aulas entram na
-    # agenda, antes de treinar. Então tudo que está agendado já é dinheiro pago;
-    # o que muda depois é só o destino da aula (treinada, perdida ou cancelada).
+    # Financeiro — modelo PRÉ-PAGO e SEM DEVOLUÇÃO: o aluno paga o mês quando as
+    # aulas entram na agenda. Depois disso, nenhum status tira dinheiro do mês —
+    # a aula vira treino, é remarcada dentro do mês, ou o valor se perde.
     cur = await db.execute("""
         SELECT status, COUNT(*) n, COALESCE(SUM(COALESCE(valor,0)),0) v
           FROM aulas WHERE data BETWEEN ? AND ? GROUP BY status
@@ -1008,7 +1010,7 @@ async def resumo(mes: Optional[str] = None, user=Depends(get_current_user),
         return round(sum(fin.get(x, {}).get("v", 0) for x in sts), 2)
     def _n(*sts):
         return sum(fin.get(x, {}).get("n", 0) for x in sts)
-    valor_mes = _v("agendada", "realizada", "falta")
+    valor_mes = _v(*STATUS_VALIDOS)
 
     # Aulas sem treino montado (a fila de trabalho do personal)
     sem_treino = (await (await db.execute("""
@@ -1028,12 +1030,12 @@ async def resumo(mes: Optional[str] = None, user=Depends(get_current_user),
         "proxima": _d(prox), "plano": plano,
         "financeiro": {
             "valor_hora": await _valor_hora(db, ini),
-            "aulas_pagas": _n("agendada", "realizada", "falta"),
-            "valor_mes": valor_mes,          # o que o aluno paga / o personal recebe no mês
-            "treinado": _v("realizada"),     # do valor pago, o que já virou treino
-            "a_treinar": _v("agendada"),     # já pago, ainda por acontecer
-            "perdido": _v("falta"),          # pago e não usado
-            "cancelado": _v("cancelada"),    # fora da conta do mês
+            "aulas_pagas": _n(*STATUS_VALIDOS),
+            "valor_mes": valor_mes,                  # pago pelo aluno / recebido pelo personal
+            "treinado": _v("realizada"),             # do valor pago, o que virou treino
+            "a_treinar": _v("agendada"),             # pago, ainda por acontecer
+            "perdido": _v("falta", "cancelada"),     # pago e não treinado — não volta
+            "aulas_perdidas": _n("falta", "cancelada"),
         },
     }
 
@@ -1041,12 +1043,12 @@ async def resumo(mes: Optional[str] = None, user=Depends(get_current_user),
 @app.get("/api/financeiro")
 async def financeiro(ano: Optional[int] = None, user=Depends(get_current_user),
                      db: aiosqlite.Connection = Depends(get_db)):
-    """Fechamento mês a mês (pré-pago): o valor do mês é tudo que entrou na agenda
-    e não foi cancelado — o aluno paga, o personal recebe, é o mesmo número."""
+    """Fechamento mês a mês (pré-pago, sem devolução): o valor do mês é TUDO que
+    entrou na agenda — o aluno paga, o personal recebe, é o mesmo número."""
     ano = ano or _hoje().year
     ini, fim = date(ano, 1, 1).isoformat(), date(ano, 12, 31).isoformat()
     meses = [{"mes": m, "aulas": 0, "valor": 0.0, "treinado": 0.0, "a_treinar": 0.0,
-              "perdido": 0.0, "realizadas": 0, "faltas": 0, "agendadas": 0}
+              "perdido": 0.0, "realizadas": 0, "perdidas": 0, "agendadas": 0}
              for m in range(1, 13)]
     cur = await db.execute("""
         SELECT CAST(substr(data,6,2) AS INTEGER) m, status,
@@ -1057,16 +1059,14 @@ async def financeiro(ano: Optional[int] = None, user=Depends(get_current_user),
         if not (1 <= r["m"] <= 12):
             continue
         alvo = meses[r["m"] - 1]
-        if r["status"] == "cancelada":
-            continue
         alvo["aulas"] += r["n"]
         alvo["valor"] += r["v"]
         if r["status"] == "realizada":
             alvo["realizadas"] = r["n"]; alvo["treinado"] += r["v"]
-        elif r["status"] == "falta":
-            alvo["faltas"] = r["n"]; alvo["perdido"] += r["v"]
         elif r["status"] == "agendada":
             alvo["agendadas"] = r["n"]; alvo["a_treinar"] += r["v"]
+        else:   # falta ou cancelada — pago e não treinado
+            alvo["perdidas"] += r["n"]; alvo["perdido"] += r["v"]
     for m in meses:
         for k in ("valor", "treinado", "a_treinar", "perdido"):
             m[k] = round(m[k], 2)

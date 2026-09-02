@@ -239,8 +239,8 @@ function renderKpis(r) {
     s: `${f.aulas_pagas || 0} aulas × ${fmtR(f.valor_hora || 0)} · ${fmtR(f.a_treinar || 0)} ainda por treinar`
   });
   if (f.perdido) {
-    cards.push({ l: 'Perdido em faltas', v: fmtR(f.perdido),
-                 s: 'pago e não treinado — remarque dentro do mês para não perder' });
+    cards.push({ l: 'Valor perdido', v: fmtR(f.perdido),
+                 s: `${f.aulas_perdidas} aula(s) pagas e não treinadas — o valor não volta` });
   }
   if (r.sem_treino) {
     cards.push({ l: 'Sem treino montado', v: r.sem_treino,
@@ -765,9 +765,9 @@ async function loadFinanceiro() {
     document.getElementById('fin-hora').textContent = `Hora-aula vigente: ${fmtR(d.valor_hora)}`;
     document.getElementById('fin-kpis').innerHTML = [
       { l: dono ? 'Pago no ano' : 'A receber no ano', v: fmtR(d.total_valor),
-        s: 'tudo que entrou na agenda (canceladas fora)' },
+        s: 'todas as aulas que entraram na agenda' },
       { l: 'Virou treino', v: fmtR(d.total_treinado), s: 'aulas efetivamente realizadas' },
-      { l: 'Perdido em faltas', v: fmtR(d.total_perdido), s: 'pago e não treinado' },
+      { l: 'Valor perdido', v: fmtR(d.total_perdido), s: 'faltas e cancelamentos — não volta' },
     ].map(c => `<div class="kpi"><div class="kpi-label">${c.l}</div>
                   <div class="kpi-value sm">${c.v}</div><div class="kpi-sub">${c.s}</div></div>`).join('');
     document.getElementById('lista-financeiro').innerHTML = d.meses.map((m, i) => m.aulas ? `
@@ -777,7 +777,7 @@ async function loadFinanceiro() {
         <td class="right"><b>${fmtR(m.valor)}</b></td>
         <td class="right">${m.realizadas || '—'}</td>
         <td class="right">${m.agendadas || '—'}</td>
-        <td class="right">${m.faltas ? `<span style="color:var(--danger)">${m.faltas} · ${fmtR(m.perdido)}</span>` : '—'}</td>
+        <td class="right">${m.perdidas ? `<span style="color:var(--danger)">${m.perdidas} · ${fmtR(m.perdido)}</span>` : '—'}</td>
       </tr>` : '').join('') ||
       '<tr><td colspan="6"><div class="empty">Nenhuma aula neste ano.</div></td></tr>';
   } catch (e) { toast(e.message, 'err'); }
