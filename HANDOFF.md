@@ -259,6 +259,16 @@ projeto (já está no `.gitignore`).
 ### Regras de negócio
 
 - Status: `agendada` · `realizada` · `falta` · `cancelada`.
+- **Modalidade da aula** (`modalidade`): `com_personal` | `sozinho`.
+  - `sozinho` nasce com `valor = 0` e **fica fora** de todo o financeiro
+    (`/api/resumo` e `/api/financeiro` filtram por `modalidade='com_personal'`).
+  - O aluno só monta o treino de aulas `sozinho`. Em aula `com_personal`,
+    `PUT /api/aulas/{id}/exercicios` e `POST .../aplicar-modelo/{mid}` devolvem **403**,
+    e `PATCH` aceita dele apenas `data`, `hora`, `status`, `obs`, `pse`, `valor` e
+    `modalidade` — qualquer outro campo devolve 403.
+  - O personal monta o treino de qualquer aula.
+  - `POST /api/aulas/mes` opera **por modalidade**: marcar os dias de uma agenda nunca
+    remove aulas da outra (as da outra voltam em `outras_modalidades`).
 - **Toda** aula na agenda consome o pacote — o valor pago nunca é devolvido.
 - **Aderência** = realizadas ÷ (realizadas + faltas + agendadas já vencidas).
   Canceladas ficam fora **desta métrica** (mede disciplina de treino, não dinheiro).

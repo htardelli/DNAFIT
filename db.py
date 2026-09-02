@@ -123,6 +123,7 @@ CREATE TABLE IF NOT EXISTS aulas (
     local         TEXT,
     professor     TEXT,
     status        TEXT DEFAULT 'agendada',   -- agendada | realizada | falta | cancelada
+    modalidade    TEXT DEFAULT 'com_personal', -- com_personal | sozinho
     plano_id      INTEGER,
     modelo_id     INTEGER,
     descricao     TEXT,                      -- descrição do treino do dia
@@ -234,6 +235,10 @@ async def init_db(hash_fn):
                 pass   # a coluna já existe
         await _add_col("planos", "valor_hora", "REAL")
         await _add_col("aulas", "valor", "REAL")
+        await _add_col("aulas", "modalidade", "TEXT")
+        # aulas criadas antes desta coluna eram todas com o personal
+        await db.execute("UPDATE aulas SET modalidade='com_personal' "
+                         "WHERE modalidade IS NULL OR modalidade=''")
 
         for chave, valor in DEFAULTS_CONFIG.items():
             await db.execute("INSERT OR IGNORE INTO config (chave, valor) VALUES (?,?)", (chave, valor))

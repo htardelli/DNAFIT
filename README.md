@@ -23,11 +23,30 @@ dos exercícios de cada treino.
 
 ---
 
+## Com o personal ou sozinho
+
+Ao marcar os dias, você diz **como** vai treinar. São duas agendas independentes no
+mesmo mês — marcar os dias de uma nunca apaga os da outra.
+
+| | **Com o personal** | **Sozinho** |
+|---|---|---|
+| Quem monta o treino | o personal | você |
+| Você pode editar o treino | não, só acompanha | sim |
+| O que é seu na aula | status (realizada/falta/cancelada), remarcação e o feedback em Observações | tudo |
+| Entra no valor pago | **sim** | **não** |
+
+Na aula do personal, o app trava para você os campos que são prescrição dele (tipo,
+foco, descrição, modelo, duração, local, professor) e libera o que é seu. Isso vale
+também na API — não é só a tela que esconde.
+
+---
+
 ## O fluxo do mês (é assim que o app foi desenhado)
 
-1. **Você (aluno)** abre **Agenda → Dias do mês**, clica nos dias em que vai treinar
-   (ou usa os atalhos *Seg/Qua/Sex*, *Ter/Qui*, *Seg a Sex*) e vê **na hora** quanto vai custar:
-   `13 aulas × R$ 90,00 = R$ 1.170,00`. Salva.
+1. **Você (aluno)** abre **Agenda → Dias do mês**, escolhe **Com o personal** ou
+   **Sozinho**, clica nos dias (ou usa os atalhos *Seg/Qua/Sex*, *Ter/Qui*, *Seg a Sex*)
+   e vê **na hora** quanto vai custar: `13 aulas × R$ 90,00 = R$ 1.170,00`. Salva.
+   Repita trocando a modalidade para montar os dois tipos no mesmo mês.
 2. As aulas entram na agenda como **agendadas**, sem treino — e aparecem no KPI
    **"Sem treino montado"** e no filtro *só sem treino*.
 3. **O personal** abre cada dia (ou aplica um **modelo** Treino A/B/C) e prescreve os exercícios.

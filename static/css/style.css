@@ -291,3 +291,26 @@ tbody tr:hover { background: rgba(22,163,74,.05); }
 }
 [data-theme="dark"] .aviso { color: #FCD34D; }
 .aviso a { color: inherit; font-weight: 700; }
+
+/* ── Modalidade da aula (com o personal × sozinho) ── */
+.toggle-modalidade { display: flex; gap: 6px; margin-bottom: 12px; }
+.tm-btn {
+  flex: 1; padding: 9px 10px; border: 1px solid var(--border); background: var(--card);
+  color: var(--text); border-radius: 9px; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.tm-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.tm-btn[data-mod="sozinho"].active { background: var(--info); border-color: var(--info); }
+
+/* dia já ocupado pela OUTRA modalidade: informativo, não clicável */
+.dm-dia.outra { background: var(--info-l); border-color: var(--info); color: #0369A1; cursor: not-allowed; }
+[data-theme="dark"] .dm-dia.outra { color: #7DD3FC; }
+
+/* aula de treino sozinho no calendário: contorno tracejado */
+.chip.solo { border-left-style: dashed; }
+.badge-solo { background: var(--info-l); color: #0369A1; }
+[data-theme="dark"] .badge-solo { color: #7DD3FC; }
+
+/* campos travados quando o treino é prescrição do personal */
+input:disabled, select:disabled, textarea:disabled {
+  background: var(--bg); color: var(--muted); cursor: not-allowed; opacity: 1;
+}

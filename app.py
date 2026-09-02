@@ -71,6 +71,21 @@ def _login_falhou(chave: str):
 # entra no valor do mês — nenhum status devolve dinheiro.
 STATUS_CONSOME = STATUS_VALIDOS
 
+# Como a aula acontece. Define quem monta o treino e se ela é cobrada.
+MODALIDADES = ("com_personal", "sozinho")
+
+# Numa aula COM O PERSONAL, o treino é prescrição do professor: o aluno só lê.
+# Ele continua dono do registro do dia — pode remarcar, dizer se aconteceu e
+# lançar o feedback. Estes são os campos que ele pode mexer nessas aulas.
+CAMPOS_ALUNO_EM_AULA_DO_PERSONAL = {"data", "hora", "status", "obs", "pse", "valor", "modalidade"}
+
+
+def _pode_montar_treino(user, aula) -> bool:
+    """O personal monta qualquer treino. O aluno monta só o que treina sozinho."""
+    if user["role"] == "personal":
+        return True
+    return (aula["modalidade"] or "com_personal") == "sozinho"
+
 
 def _hash(pw: str) -> str:
     return _pwd.hash(pw)
@@ -357,6 +372,7 @@ class AulaIn(BaseModel):
     local: Optional[str] = None
     professor: Optional[str] = None
     status: Optional[str] = "agendada"
+    modalidade: Optional[str] = "com_personal"
     plano_id: Optional[int] = None
     modelo_id: Optional[int] = None
     descricao: Optional[str] = None
@@ -378,6 +394,7 @@ class AulaUpdate(BaseModel):
     local: Optional[str] = None
     professor: Optional[str] = None
     status: Optional[str] = None
+    modalidade: Optional[str] = None
     plano_id: Optional[int] = None
     modelo_id: Optional[int] = None
     descricao: Optional[str] = None
@@ -395,6 +412,7 @@ class DiasDoMesIn(BaseModel):
     professor: Optional[str] = None
     local: Optional[str] = None
     valor: Optional[float] = None  # None → valor da hora-aula vigente
+    modalidade: Optional[str] = "com_personal"
     plano_id: Optional[int] = None
 
 
@@ -543,6 +561,9 @@ async def criar_aula(body: AulaIn, user=Depends(get_current_user),
                      db: aiosqlite.Connection = Depends(get_db)):
     if body.status and body.status not in STATUS_VALIDOS:
         raise HTTPException(400, f"Status deve ser um de: {', '.join(STATUS_VALIDOS)}")
+    modalidade = body.modalidade or "com_personal"
+    if modalidade not in MODALIDADES:
+        raise HTTPException(400, f"Modalidade deve ser um de: {', '.join(MODALIDADES)}")
     d0 = date.fromisoformat(_parse_data(body.data))
 
     # Datas a criar: a própria + a recorrência semanal, se pedida
@@ -567,13 +588,20 @@ async def criar_aula(body: AulaIn, user=Depends(get_current_user),
         if dup:
             ignoradas += 1
             continue
-        valor = body.valor if body.valor is not None else await _valor_hora(db, d.isoformat())
+        # Treino sozinho não envolve o personal, então não entra na conta do mês
+        if body.valor is not None:
+            valor = body.valor
+        elif modalidade == "sozinho":
+            valor = 0
+        else:
+            valor = await _valor_hora(db, d.isoformat())
         cur = await db.execute("""
             INSERT INTO aulas (data, hora, duracao_min, tipo, foco, local, professor,
-                               status, plano_id, modelo_id, descricao, obs, pse, valor, atualizado_em)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
+                               status, modalidade, plano_id, modelo_id, descricao, obs, pse,
+                               valor, atualizado_em)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
         """, (d.isoformat(), body.hora, body.duracao_min or 60, body.tipo, body.foco,
-              body.local, body.professor, body.status or "agendada", body.plano_id,
+              body.local, body.professor, body.status or "agendada", modalidade, body.plano_id,
               body.modelo_id, body.descricao, body.obs, body.pse, valor))
         aid = cur.lastrowid
         if body.modelo_id:
@@ -596,6 +624,9 @@ async def definir_dias_do_mes(body: DiasDoMesIn, user=Depends(get_current_user),
     de removidas e é reportada em 'protegidas'.
     """
     ini, fim = _mes_range(body.mes)
+    modalidade = body.modalidade or "com_personal"
+    if modalidade not in MODALIDADES:
+        raise HTTPException(400, f"Modalidade deve ser um de: {', '.join(MODALIDADES)}")
     ano, mes = int(ini[:4]), int(ini[5:7])
     ult = _cal.monthrange(ano, mes)[1]
     dias = sorted({d for d in body.dias if 1 <= d <= ult})
@@ -612,20 +643,29 @@ async def definir_dias_do_mes(body: DiasDoMesIn, user=Depends(get_current_user),
           FROM aulas a WHERE a.data BETWEEN ? AND ?
     """, (ini, fim))
     existentes = [dict(r) for r in await cur.fetchall()]
-    por_data = {}
+    # Cada modalidade tem a sua agenda: marcar os dias de treino sozinho não pode
+    # apagar as aulas com o personal, e vice-versa.
+    minhas, das_outras = {}, {}
     for a in existentes:
-        por_data.setdefault(a["data"], []).append(a)
+        alvo_dict = minhas if (a["modalidade"] or "com_personal") == modalidade else das_outras
+        alvo_dict.setdefault(a["data"], []).append(a)
 
     criadas, removidas, protegidas = 0, 0, []
-    for d in sorted(alvo - set(por_data)):
-        valor = body.valor if body.valor is not None else await _valor_hora(db, d)
+    for d in sorted(alvo - set(minhas)):
+        if body.valor is not None:
+            valor = body.valor
+        elif modalidade == "sozinho":
+            valor = 0            # treino sozinho não é cobrado
+        else:
+            valor = await _valor_hora(db, d)
         await db.execute("""
-            INSERT INTO aulas (data, hora, duracao_min, professor, local, status, plano_id, valor, atualizado_em)
-            VALUES (?,?,?,?,?, 'agendada', ?,?, CURRENT_TIMESTAMP)
-        """, (d, hora, duracao, professor, local, body.plano_id, valor))
+            INSERT INTO aulas (data, hora, duracao_min, professor, local, status,
+                               modalidade, plano_id, valor, atualizado_em)
+            VALUES (?,?,?,?,?, 'agendada', ?,?,?, CURRENT_TIMESTAMP)
+        """, (d, hora, duracao, professor, local, modalidade, body.plano_id, valor))
         criadas += 1
 
-    for d, aulas_do_dia in por_data.items():
+    for d, aulas_do_dia in minhas.items():
         if d in alvo:
             continue
         for a in aulas_do_dia:
@@ -638,10 +678,11 @@ async def definir_dias_do_mes(body: DiasDoMesIn, user=Depends(get_current_user),
 
     cur = await db.execute(
         "SELECT COUNT(*) n, COALESCE(SUM(COALESCE(valor,0)),0) v FROM aulas "
-        "WHERE data BETWEEN ? AND ? AND status <> 'cancelada'", (ini, fim))
+        "WHERE data BETWEEN ? AND ? AND modalidade=?", (ini, fim, modalidade))
     r = await cur.fetchone()
-    return {"mes": body.mes, "criadas": criadas, "removidas": removidas,
-            "protegidas": protegidas, "aulas_no_mes": r["n"], "valor_previsto": round(r["v"], 2)}
+    return {"mes": body.mes, "modalidade": modalidade, "criadas": criadas, "removidas": removidas,
+            "protegidas": protegidas, "outras_modalidades": sorted(das_outras),
+            "aulas_no_mes": r["n"], "valor_previsto": round(r["v"], 2)}
 
 
 @app.patch("/api/aulas/{aid}")
@@ -653,6 +694,17 @@ async def editar_aula(aid: int, body: AulaUpdate, user=Depends(get_current_user)
     data = body.dict(exclude_unset=True)
     if "status" in data and data["status"] not in STATUS_VALIDOS:
         raise HTTPException(400, f"Status deve ser um de: {', '.join(STATUS_VALIDOS)}")
+    if "modalidade" in data and data["modalidade"] not in MODALIDADES:
+        raise HTTPException(400, f"Modalidade deve ser um de: {', '.join(MODALIDADES)}")
+    # Aula com o personal: a prescrição é dele. O aluno remarca, diz se aconteceu e
+    # registra o feedback, mas não reescreve o treino.
+    if not _pode_montar_treino(user, atual):
+        proibidos = set(data) - CAMPOS_ALUNO_EM_AULA_DO_PERSONAL
+        if proibidos:
+            raise HTTPException(403,
+                "Esta aula é com o personal: o treino é prescrição dele. "
+                "Você pode remarcar dentro do mês, mudar o status e registrar o feedback. "
+                f"Campos bloqueados: {', '.join(sorted(proibidos))}.")
     if "data" in data and data["data"]:
         nova = _parse_data(data["data"])
         # O mês é pago quando as aulas entram na agenda. Remarcar é trocar de dia
@@ -693,8 +745,12 @@ async def salvar_exercicios_aula(aid: int, itens: List[ItemIn], user=Depends(get
                                  db: aiosqlite.Connection = Depends(get_db)):
     """Substitui a lista inteira de exercícios da aula (mais simples e atômico
     do que sincronizar item a item)."""
-    if not await (await db.execute("SELECT id FROM aulas WHERE id=?", (aid,))).fetchone():
+    aula = await (await db.execute("SELECT * FROM aulas WHERE id=?", (aid,))).fetchone()
+    if not aula:
         raise HTTPException(404, "Aula não encontrada")
+    if not _pode_montar_treino(user, aula):
+        raise HTTPException(403, "O treino desta aula é montado pelo personal. "
+                                 "Marque a aula como 'sozinho' se for treinar por conta.")
     await db.execute("DELETE FROM aula_exercicios WHERE aula_id=?", (aid,))
     for i, it in enumerate(itens):
         nome = (it.nome or "").strip()
@@ -717,8 +773,11 @@ async def salvar_exercicios_aula(aid: int, itens: List[ItemIn], user=Depends(get
 @app.post("/api/aulas/{aid}/aplicar-modelo/{mid}")
 async def aplicar_modelo(aid: int, mid: int, substituir: bool = True,
                          user=Depends(get_current_user), db: aiosqlite.Connection = Depends(get_db)):
-    if not await (await db.execute("SELECT id FROM aulas WHERE id=?", (aid,))).fetchone():
+    aula = await (await db.execute("SELECT * FROM aulas WHERE id=?", (aid,))).fetchone()
+    if not aula:
         raise HTTPException(404, "Aula não encontrada")
+    if not _pode_montar_treino(user, aula):
+        raise HTTPException(403, "O treino desta aula é montado pelo personal.")
     mod = await (await db.execute("SELECT * FROM modelos WHERE id=?", (mid,))).fetchone()
     if not mod:
         raise HTTPException(404, "Modelo não encontrado")
@@ -1001,9 +1060,11 @@ async def resumo(mes: Optional[str] = None, user=Depends(get_current_user),
     # Financeiro — modelo PRÉ-PAGO e SEM DEVOLUÇÃO: o aluno paga o mês quando as
     # aulas entram na agenda. Depois disso, nenhum status tira dinheiro do mês —
     # a aula vira treino, é remarcada dentro do mês, ou o valor se perde.
+    # Treino sozinho não envolve o personal: fica fora da conta do mês.
     cur = await db.execute("""
         SELECT status, COUNT(*) n, COALESCE(SUM(COALESCE(valor,0)),0) v
-          FROM aulas WHERE data BETWEEN ? AND ? GROUP BY status
+          FROM aulas WHERE data BETWEEN ? AND ? AND modalidade='com_personal'
+      GROUP BY status
     """, (ini, fim))
     fin = {r["status"]: {"n": r["n"], "v": r["v"]} for r in await cur.fetchall()}
     def _v(*sts):
@@ -1012,12 +1073,20 @@ async def resumo(mes: Optional[str] = None, user=Depends(get_current_user),
         return sum(fin.get(x, {}).get("n", 0) for x in sts)
     valor_mes = _v(*STATUS_VALIDOS)
 
-    # Aulas sem treino montado (a fila de trabalho do personal)
+    # Aulas sem treino montado — a fila de trabalho do personal
     sem_treino = (await (await db.execute("""
         SELECT COUNT(*) FROM aulas a
          WHERE a.data BETWEEN ? AND ? AND a.status IN ('agendada','realizada')
+           AND a.modalidade = 'com_personal'
            AND NOT EXISTS (SELECT 1 FROM aula_exercicios ae WHERE ae.aula_id = a.id)
     """, (ini, fim))).fetchone())[0]
+
+    # Quantas aulas do mês são de cada tipo
+    cur = await db.execute("""
+        SELECT COALESCE(NULLIF(modalidade,''),'com_personal') m, COUNT(*) n
+          FROM aulas WHERE data BETWEEN ? AND ? GROUP BY m
+    """, (ini, fim))
+    por_modalidade = {r["m"]: r["n"] for r in await cur.fetchall()}
 
     return {
         "mes": ini[:7], "inicio": ini, "fim": fim,
@@ -1027,6 +1096,8 @@ async def resumo(mes: Optional[str] = None, user=Depends(get_current_user),
         "volume_kg": round(volume, 1),
         "sequencia_semanas": sequencia,
         "sem_treino": sem_treino,
+        "com_personal": por_modalidade.get("com_personal", 0),
+        "sozinho": por_modalidade.get("sozinho", 0),
         "proxima": _d(prox), "plano": plano,
         "financeiro": {
             "valor_hora": await _valor_hora(db, ini),
@@ -1053,7 +1124,8 @@ async def financeiro(ano: Optional[int] = None, user=Depends(get_current_user),
     cur = await db.execute("""
         SELECT CAST(substr(data,6,2) AS INTEGER) m, status,
                COUNT(*) n, COALESCE(SUM(COALESCE(valor,0)),0) v
-          FROM aulas WHERE data BETWEEN ? AND ? GROUP BY m, status
+          FROM aulas WHERE data BETWEEN ? AND ? AND modalidade='com_personal'
+      GROUP BY m, status
     """, (ini, fim))
     for r in await cur.fetchall():
         if not (1 <= r["m"] <= 12):

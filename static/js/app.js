@@ -7,6 +7,8 @@ let _aulas = [], _exercicios = [], _modelos = [], _planos = [];
 let _cfg = {};                          // valor da hora-aula e padrões da agenda
 let _dmSel = new Set();                 // dias marcados no modal "dias do mês"
 let _dmTravados = {};                   // dia → motivo (aula que não pode ser desmarcada)
+let _dmMod = 'com_personal';            // modalidade sendo editada no modal
+let _dmOutras = {};                     // dia → modalidade, para os dias da outra agenda
 let _chMensal, _chSemanal, _chGrupo, _chEvol;
 
 const Auth = {
@@ -217,7 +219,7 @@ function renderKpis(r) {
   const px = r.proxima;
   const cards = [
     { l: 'Aulas realizadas', v: r.realizadas,
-      s: (r.meta_mes ? `meta ${r.meta_mes} · ` : '') + `${r.agendadas} agendadas · ${r.faltas} falta(s)` },
+      s: `${r.com_personal || 0} com o personal · ${r.sozinho || 0} sozinho` },
     { l: 'Frequência', v: r.aderencia === null ? '—' : r.aderencia + '%',
       s: 'realizadas ÷ aulas previstas' },
     { l: 'Sequência', v: r.sequencia_semanas,
@@ -254,9 +256,20 @@ function renderKpis(r) {
     </div>`).join('');
 }
 
+// O personal monta qualquer treino; o aluno monta só o que treina sozinho.
+function podeMontarTreino(modalidade) {
+  if (_user && _user.role === 'personal') return true;
+  return (modalidade || 'com_personal') === 'sozinho';
+}
+
+function rotuloModalidade(m) {
+  return (m || 'com_personal') === 'sozinho' ? 'Sozinho' : 'Com o personal';
+}
+
 // Aula que ainda espera o personal montar o treino
 function semTreino(a) {
-  return !a.qtd_exercicios && (a.status === 'agendada' || a.status === 'realizada');
+  return !a.qtd_exercicios && (a.status === 'agendada' || a.status === 'realizada')
+         && (a.modalidade || 'com_personal') === 'com_personal';
 }
 
 function renderCal() {
@@ -276,8 +289,8 @@ function renderCal() {
     const fora = d.getMonth() !== mes;
     if (fora && i >= 35) continue;                     // não desenha a 6ª linha vazia
     const chips = (porDia[k] || []).map(a => `
-      <div class="chip chip-${a.status}${semTreino(a) ? ' pend' : ''}" onclick="event.stopPropagation();abrirAula(${a.id})"
-           title="${esc((a.hora||'') + ' ' + (a.tipo||a.foco||'Aula') + (semTreino(a) ? ' — sem treino montado' : ''))}">
+      <div class="chip chip-${a.status}${semTreino(a) ? ' pend' : ''}${(a.modalidade === 'sozinho') ? ' solo' : ''}" onclick="event.stopPropagation();abrirAula(${a.id})"
+           title="${esc((a.hora||'') + ' ' + (a.tipo||a.foco||'Aula') + ' · ' + rotuloModalidade(a.modalidade) + (semTreino(a) ? ' — sem treino montado' : ''))}">
         ${a.hora ? `<span class="chip-hora">${a.hora}</span> ` : ''}<span class="chip-txt">${esc(a.tipo || a.foco || 'Aula')}</span>
       </div>`).join('');
     html += `<div class="cal-day ${fora ? 'out' : ''} ${k === hojeIso ? 'today' : ''}" onclick="novaAula('${k}')">
@@ -300,8 +313,8 @@ function renderLista() {
     <tr>
       <td><b>${fmtData(a.data)}</b> <span class="muted">${diaSemana(a.data)}</span></td>
       <td>${a.hora || '—'}</td>
-      <td>${esc(a.tipo || '—')}</td>
-      <td>${esc(a.foco || a.descricao || '—')}</td>
+      <td><span class="badge ${a.modalidade === 'sozinho' ? 'badge-solo' : 'b-realizada'}">${a.modalidade === 'sozinho' ? 'sozinho' : 'personal'}</span></td>
+      <td>${esc(a.tipo || a.foco || a.descricao || '—')}</td>
       <td class="right">${a.qtd_exercicios || 0}${semTreino(a) ? ' <span style="color:var(--accent)" title="sem treino montado">•</span>' : ''}</td>
       <td class="right">${a.valor ? fmtR(a.valor) : '—'}</td>
       <td><span class="badge b-${a.status}">${a.status}</span></td>
@@ -324,6 +337,7 @@ async function marcar(id, status) {
 function limparAula() {
   ['a-id','a-hora','a-foco','a-local','a-professor','a-pse','a-descricao','a-obs','a-valor'].forEach(i => setVal(i, ''));
   setVal('a-duracao', 60); setVal('a-status', 'agendada'); setVal('a-tipo', '');
+  setVal('a-modalidade', 'com_personal');
   setVal('a-plano', ''); setVal('a-modelo', ''); setVal('a-repetir', 0);
   document.querySelectorAll('#a-dias input').forEach(c => c.checked = false);
   document.getElementById('a-ex').innerHTML = '';
@@ -343,6 +357,7 @@ function novaAula(dataIso) {
   document.getElementById('m-aula-titulo').textContent = 'Nova aula';
   document.getElementById('a-btn-del').style.display = 'none';
   document.getElementById('a-recorrencia').style.display = '';
+  aplicarModoAula();
   abrirModal('m-aula');
 }
 
@@ -357,23 +372,55 @@ async function abrirAula(id) {
     setVal('a-plano', a.plano_id || ''); setVal('a-modelo', a.modelo_id || '');
     setVal('a-pse', a.pse || ''); setVal('a-descricao', a.descricao || ''); setVal('a-obs', a.obs || '');
     setVal('a-valor', a.valor ?? '');
+    setVal('a-modalidade', a.modalidade || 'com_personal');
     (a.exercicios || []).forEach(it => addLinhaEx('a-ex', it));
     document.getElementById('m-aula-titulo').textContent = `Aula de ${fmtData(a.data)}`;
     document.getElementById('a-btn-del').style.display = '';
     document.getElementById('a-recorrencia').style.display = 'none';   // recorrência só na criação
+    aplicarModoAula();
     abrirModal('m-aula');
   } catch (e) { toast(e.message, 'err'); }
+}
+
+// Ajusta o modal ao que o usuário logado pode fazer nesta aula.
+// Aula com o personal, na visão do aluno: o treino é leitura; o que é dele são
+// data, status e feedback.
+function aplicarModoAula() {
+  const pode = podeMontarTreino(val('a-modalidade'));
+  // Campos que pertencem ao personal. Ficam travados para o aluno em aula com o
+  // personal — o backend também os recusa, e campo editável que não salva é pior
+  // do que campo travado.
+  ['a-tipo', 'a-foco', 'a-descricao', 'a-modelo', 'a-duracao', 'a-local', 'a-professor', 'a-plano'].forEach(i => {
+    const el = document.getElementById(i);
+    if (el) el.disabled = !pode;
+  });
+  document.getElementById('a-ex-acoes').style.display = pode ? '' : 'none';
+  document.getElementById('a-ex-aviso').style.display = pode ? 'none' : '';
+  // linhas de exercício viram somente leitura (o "feito" continua marcável)
+  document.querySelectorAll('#a-ex .ex-row').forEach(row => {
+    row.querySelectorAll('input, select').forEach(el => {
+      if (!el.classList.contains('ex-feito')) el.disabled = !pode;
+    });
+    const del = row.querySelector('.ex-del');
+    if (del) del.style.display = pode ? '' : 'none';
+  });
 }
 
 async function salvarAula() {
   const id = val('a-id');
   if (!val('a-data')) return toast('Informe a data', 'err');
-  const body = {
+  const pode = podeMontarTreino(val('a-modalidade'));
+  // Numa aula do personal, o aluno só envia o que é dele — o backend recusa o resto
+  const body = pode ? {
     data: val('a-data'), hora: val('a-hora') || null, duracao_min: num('a-duracao') || 60,
     tipo: val('a-tipo') || null, foco: val('a-foco') || null, local: val('a-local') || null,
     professor: val('a-professor') || null, status: val('a-status'),
-    plano_id: num('a-plano'), modelo_id: num('a-modelo'),
+    modalidade: val('a-modalidade'), plano_id: num('a-plano'), modelo_id: num('a-modelo'),
     descricao: val('a-descricao') || null, obs: val('a-obs') || null, pse: num('a-pse'),
+    valor: num('a-valor')
+  } : {
+    data: val('a-data'), hora: val('a-hora') || null, status: val('a-status'),
+    modalidade: val('a-modalidade'), obs: val('a-obs') || null, pse: num('a-pse'),
     valor: num('a-valor')
   };
   try {
@@ -388,9 +435,12 @@ async function salvarAula() {
       if (r.criadas > 1) toast(`${r.criadas} aulas criadas na agenda`);
       if (r.ignoradas) toast(`${r.ignoradas} data(s) já tinham aula no mesmo horário`, 'warn');
     }
-    // Exercícios só são gravados na aula "base" (a recorrência copia o modelo, quando houver)
-    const itens = coletarEx('a-ex');
-    if (itens.length || id) await api('PUT', `/api/aulas/${aulaId}/exercicios`, itens);
+    // Exercícios só são gravados na aula "base" (a recorrência copia o modelo, quando
+    // houver) e só por quem pode montar o treino
+    if (pode) {
+      const itens = coletarEx('a-ex');
+      if (itens.length || id) await api('PUT', `/api/aulas/${aulaId}/exercicios`, itens);
+    }
     fecharModal('m-aula');
     toast('Aula salva');
     loadAgenda();
@@ -461,12 +511,20 @@ function coletarEx(containerId) {
 }
 
 // ── Dias de aula do mês (o aluno define; o personal preenche o treino) ────────
-function abrirDiasDoMes() {
-  const ano = _mesRef.getFullYear(), mes = _mesRef.getMonth();
+function abrirDiasDoMes(mod) {
+  _dmMod = mod || 'com_personal';
+  document.querySelectorAll('#m-dias .tm-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.mod === _dmMod));
+  document.getElementById('dm-ajuda').innerHTML = _dmMod === 'com_personal'
+    ? 'Marque os dias de aula <b>com o personal</b>. Elas entram como <b>agendadas</b>, prontas para ele montar o treino — e já contam no valor do mês.'
+    : 'Marque os dias em que você vai <b>treinar sozinho</b>. Você mesmo monta o treino, e essas aulas <b>não entram no valor pago ao personal</b>.';
   _dmSel = new Set();
   _dmTravados = {};
+  _dmOutras = {};
   _aulas.forEach(a => {
     const d = Number(a.data.slice(8, 10));
+    const m = a.modalidade || 'com_personal';
+    if (m !== _dmMod) { _dmOutras[d] = m; return; }   // agenda da outra modalidade
     _dmSel.add(d);
     // Aula realizada/falta/cancelada ou já com treino montado não pode ser desmarcada aqui
     if (a.status !== 'agendada' || a.qtd_exercicios) {
@@ -479,10 +537,14 @@ function abrirDiasDoMes() {
   setVal('dm-duracao', _cfg.duracao_padrao || 60);
   setVal('dm-prof', _cfg.professor_padrao || '');
   setVal('dm-local', _cfg.local_padrao || '');
-  setVal('dm-valor', _cfg.valor_hora_vigente || _cfg.valor_hora || '');
-  dmGrid(ano, mes);
+  setVal('dm-valor', _dmMod === 'sozinho' ? 0 : (_cfg.valor_hora_vigente || _cfg.valor_hora || ''));
+  dmGrid(_mesRef.getFullYear(), _mesRef.getMonth());
   abrirModal('m-dias');
 }
+
+// Troca a agenda que está sendo editada. Cada modalidade tem a sua: marcar os dias
+// de treino sozinho não mexe nas aulas com o personal.
+function dmModalidade(mod) { abrirDiasDoMes(mod); }
 
 function dmGrid(ano, mes) {
   const ult = new Date(ano, mes + 1, 0).getDate();
@@ -491,14 +553,18 @@ function dmGrid(ano, mes) {
   for (let i = 0; i < offset; i++) html += '<button class="dm-dia vazio" disabled></button>';
   for (let d = 1; d <= ult; d++) {
     const travado = _dmTravados[d];
-    html += `<button class="dm-dia ${_dmSel.has(d) ? 'on' : ''} ${travado ? 'travado' : ''}"
-                     onclick="dmToggle(${d})" ${travado ? `title="${esc(travado)} — não pode ser removida aqui"` : ''}>${d}</button>`;
+    const outra = _dmOutras[d];
+    const cls = outra ? 'outra' : (travado ? 'travado' : '') + (_dmSel.has(d) ? ' on' : '');
+    const tit = outra ? `já tem aula ${rotuloModalidade(outra).toLowerCase()} neste dia`
+                      : (travado ? `${travado} — não pode ser removida aqui` : '');
+    html += `<button class="dm-dia ${cls}" onclick="dmToggle(${d})" ${tit ? `title="${esc(tit)}"` : ''}>${d}</button>`;
   }
   document.getElementById('dm-grid').innerHTML = html;
   dmTotal();
 }
 
 function dmToggle(d) {
+  if (_dmOutras[d]) { toast(`Dia ${d} já tem aula ${rotuloModalidade(_dmOutras[d]).toLowerCase()}`, 'warn'); return; }
   if (_dmTravados[d]) { toast(`Dia ${d}: ${_dmTravados[d]} — abra a aula para alterar`, 'warn'); return; }
   if (_dmSel.has(d)) _dmSel.delete(d); else _dmSel.add(d);
   dmGrid(_mesRef.getFullYear(), _mesRef.getMonth());
@@ -510,7 +576,7 @@ function dmSemana(dows) {
   const ult = new Date(ano, mes + 1, 0).getDate();
   _dmSel = new Set(Object.keys(_dmTravados).map(Number));
   for (let d = 1; d <= ult; d++) {
-    if (dows.includes(new Date(ano, mes, d).getDay())) _dmSel.add(d);
+    if (dows.includes(new Date(ano, mes, d).getDay()) && !_dmOutras[d]) _dmSel.add(d);
   }
   dmGrid(ano, mes);
 }
@@ -520,16 +586,20 @@ function dmTotal() {
   const v = num('dm-valor') || 0;
   const dono = !_user || _user.role === 'aluno';
   document.getElementById('dm-resumo').innerHTML = n
-    ? `${n} aula${n > 1 ? 's' : ''} × ${fmtR(v)} = <b>${fmtR(n * v)}</b>` +
-      `<div style="font-weight:600;font-size:12px;opacity:.85">` +
-      (dono ? 'valor do mês — pago ao agendar' : 'valor do mês — recebido no agendamento') +
-      `</div>`
+    ? (_dmMod === 'sozinho'
+        ? `${n} treino${n > 1 ? 's' : ''} sozinho` +
+          `<div style="font-weight:600;font-size:12px;opacity:.85">não entra no valor pago ao personal</div>`
+        : `${n} aula${n > 1 ? 's' : ''} × ${fmtR(v)} = <b>${fmtR(n * v)}</b>` +
+          `<div style="font-weight:600;font-size:12px;opacity:.85">` +
+          (dono ? 'valor do mês — pago ao agendar' : 'valor do mês — recebido no agendamento') +
+          `</div>`)
     : 'Nenhum dia marcado.';
 }
 
 async function salvarDiasDoMes() {
   const body = {
     mes: mesRefStr(),
+    modalidade: _dmMod,
     dias: [..._dmSel],
     hora: val('dm-hora') || null,
     duracao_min: num('dm-duracao') || 60,
