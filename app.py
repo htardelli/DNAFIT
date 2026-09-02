@@ -1,0 +1,920 @@
+"""FITPLAN — controle de aulas com o personal trainer.
+
+Aplicação independente (backend FastAPI + SQLite + SPA em HTML/JS puro).
+Não compartilha código, banco ou login com o PLANGEST.
+
+Módulos:
+  • Agenda      — calendário de aulas, status e recorrência
+  • Treinos     — biblioteca de exercícios e modelos de treino (A/B/C…)
+  • Frequência  — aderência, volume, evolução de carga
+  • Planos      — pacotes contratados e saldo de aulas
+"""
+import os
+import re
+import calendar as _cal
+from datetime import date, datetime, timedelta
+from typing import Optional, List
+
+import aiosqlite
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from jose import JWTError, jwt
+from passlib.context import CryptContext
+from pydantic import BaseModel
+
+from db import DB_PATH, get_db, init_db
+
+# ── Config ────────────────────────────────────────────────────────────────────
+SECRET_KEY = os.environ.get("FITPLAN_SECRET_KEY", "fitplan-dev-key-troque-em-producao")
+ALGORITHM = "HS256"
+TOKEN_EXPIRE_HOURS = int(os.environ.get("FITPLAN_TOKEN_HORAS", "720"))  # 30 dias (uso em celular)
+
+_pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
+_oauth2 = OAuth2PasswordBearer(tokenUrl="/auth/login")
+
+STATUS_VALIDOS = ("agendada", "realizada", "falta", "cancelada")
+# Consomem aula do pacote: a aula aconteceu ou o horário foi perdido sem aviso.
+STATUS_CONSOME = ("realizada", "falta")
+
+
+def _hash(pw: str) -> str:
+    return _pwd.hash(pw)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await init_db(_hash)
+    yield
+
+
+app = FastAPI(title="FITPLAN", lifespan=lifespan)
+
+
+# ── Auth ──────────────────────────────────────────────────────────────────────
+def _create_token(data: dict) -> str:
+    exp = datetime.utcnow() + timedelta(hours=TOKEN_EXPIRE_HOURS)
+    return jwt.encode({**data, "exp": exp}, SECRET_KEY, algorithm=ALGORITHM)
+
+
+async def get_current_user(token: str = Depends(_oauth2),
+                           db: aiosqlite.Connection = Depends(get_db)):
+    exc = HTTPException(401, "Token inválido ou expirado", headers={"WWW-Authenticate": "Bearer"})
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        uid = int(payload.get("sub"))
+    except (JWTError, TypeError, ValueError):
+        raise exc
+    row = await (await db.execute("SELECT * FROM usuarios WHERE id=? AND ativo=1", (uid,))).fetchone()
+    if not row:
+        raise exc
+    return dict(row)
+
+
+async def require_dono(user=Depends(get_current_user)):
+    """Só o aluno (dono da conta) gerencia usuários."""
+    if user["role"] != "aluno":
+        raise HTTPException(403, "Ação restrita ao dono da conta")
+    return user
+
+
+class LoginOut(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    nome: str
+    role: str
+
+
+@app.post("/auth/login", response_model=LoginOut)
+async def login(form: OAuth2PasswordRequestForm = Depends(),
+                db: aiosqlite.Connection = Depends(get_db)):
+    row = await (await db.execute("SELECT * FROM usuarios WHERE email=?",
+                                  (form.username.lower().strip(),))).fetchone()
+    if not row or not _pwd.verify(form.password, row["senha_hash"]):
+        raise HTTPException(401, "E-mail ou senha incorretos")
+    if not row["ativo"]:
+        raise HTTPException(403, "Usuário inativo")
+    return LoginOut(access_token=_create_token({"sub": str(row["id"]), "role": row["role"]}),
+                    nome=row["nome"], role=row["role"])
+
+
+@app.get("/auth/me")
+async def me(user=Depends(get_current_user)):
+    return {"id": user["id"], "nome": user["nome"], "email": user["email"], "role": user["role"]}
+
+
+class SenhaIn(BaseModel):
+    senha_atual: str
+    nova_senha: str
+
+
+@app.post("/auth/senha")
+async def trocar_senha(body: SenhaIn, user=Depends(get_current_user),
+                       db: aiosqlite.Connection = Depends(get_db)):
+    if not _pwd.verify(body.senha_atual, user["senha_hash"]):
+        raise HTTPException(400, "Senha atual incorreta")
+    if len(body.nova_senha) < 6:
+        raise HTTPException(400, "A nova senha deve ter no mínimo 6 caracteres")
+    await db.execute("UPDATE usuarios SET senha_hash=? WHERE id=?", (_hash(body.nova_senha), user["id"]))
+    await db.commit()
+    return {"msg": "Senha alterada"}
+
+
+class UsuarioIn(BaseModel):
+    nome: str
+    email: str
+    senha: str
+    role: str = "personal"
+
+
+class UsuarioUpdate(BaseModel):
+    nome: Optional[str] = None
+    email: Optional[str] = None
+    role: Optional[str] = None
+    ativo: Optional[bool] = None
+    nova_senha: Optional[str] = None
+
+
+@app.get("/api/usuarios")
+async def listar_usuarios(user=Depends(require_dono), db: aiosqlite.Connection = Depends(get_db)):
+    cur = await db.execute("SELECT id, nome, email, role, ativo, criado_em FROM usuarios ORDER BY id")
+    return [dict(r) for r in await cur.fetchall()]
+
+
+@app.post("/api/usuarios", status_code=201)
+async def criar_usuario(body: UsuarioIn, user=Depends(require_dono),
+                        db: aiosqlite.Connection = Depends(get_db)):
+    if body.role not in ("aluno", "personal"):
+        raise HTTPException(400, "Perfil deve ser 'aluno' ou 'personal'")
+    if len(body.senha) < 6:
+        raise HTTPException(400, "A senha deve ter no mínimo 6 caracteres")
+    email = body.email.lower().strip()
+    if await (await db.execute("SELECT id FROM usuarios WHERE email=?", (email,))).fetchone():
+        raise HTTPException(400, "E-mail já cadastrado")
+    cur = await db.execute(
+        "INSERT INTO usuarios (nome, email, senha_hash, role) VALUES (?,?,?,?)",
+        (body.nome.strip(), email, _hash(body.senha), body.role))
+    await db.commit()
+    return {"id": cur.lastrowid}
+
+
+@app.patch("/api/usuarios/{uid}")
+async def editar_usuario(uid: int, body: UsuarioUpdate, user=Depends(require_dono),
+                         db: aiosqlite.Connection = Depends(get_db)):
+    alvo = await (await db.execute("SELECT * FROM usuarios WHERE id=?", (uid,))).fetchone()
+    if not alvo:
+        raise HTTPException(404, "Usuário não encontrado")
+    sets, params = [], []
+    if body.nome:
+        sets.append("nome=?"); params.append(body.nome.strip())
+    if body.email:
+        email = body.email.lower().strip()
+        if await (await db.execute("SELECT id FROM usuarios WHERE email=? AND id<>?", (email, uid))).fetchone():
+            raise HTTPException(400, "E-mail já cadastrado")
+        sets.append("email=?"); params.append(email)
+    if body.role:
+        if body.role not in ("aluno", "personal"):
+            raise HTTPException(400, "Perfil inválido")
+        sets.append("role=?"); params.append(body.role)
+    if body.ativo is not None:
+        sets.append("ativo=?"); params.append(1 if body.ativo else 0)
+    if body.nova_senha:
+        if len(body.nova_senha) < 6:
+            raise HTTPException(400, "A senha deve ter no mínimo 6 caracteres")
+        sets.append("senha_hash=?"); params.append(_hash(body.nova_senha))
+    # Trava de segurança: nunca deixar a conta sem um dono ativo
+    if (body.role and body.role != "aluno") or body.ativo is False:
+        n = (await (await db.execute(
+            "SELECT COUNT(*) FROM usuarios WHERE role='aluno' AND ativo=1 AND id<>?", (uid,))).fetchone())[0]
+        if alvo["role"] == "aluno" and n == 0:
+            raise HTTPException(400, "Não é possível remover o único dono da conta")
+    if not sets:
+        raise HTTPException(400, "Nada para atualizar")
+    params.append(uid)
+    await db.execute(f"UPDATE usuarios SET {', '.join(sets)} WHERE id=?", params)
+    await db.commit()
+    return {"msg": "Usuário atualizado"}
+
+
+@app.delete("/api/usuarios/{uid}", status_code=204)
+async def remover_usuario(uid: int, user=Depends(require_dono),
+                          db: aiosqlite.Connection = Depends(get_db)):
+    if uid == user["id"]:
+        raise HTTPException(400, "Você não pode remover a própria conta")
+    await db.execute("DELETE FROM usuarios WHERE id=?", (uid,))
+    await db.commit()
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+def _d(row) -> dict:
+    return dict(row) if row is not None else None
+
+
+def _hoje() -> date:
+    return date.today()
+
+
+def _parse_data(s: str) -> str:
+    """Aceita 'YYYY-MM-DD' ou 'DD/MM/YYYY' e devolve sempre ISO."""
+    s = (s or "").strip()
+    if not s:
+        raise HTTPException(400, "Data obrigatória")
+    if "/" in s:
+        d, m, a = s.split("/")
+        return f"{int(a):04d}-{int(m):02d}-{int(d):02d}"
+    try:
+        return date.fromisoformat(s[:10]).isoformat()
+    except ValueError:
+        raise HTTPException(400, f"Data inválida: {s}")
+
+
+def _mes_range(mes: Optional[str]) -> tuple:
+    """'YYYY-MM' → (primeiro_dia_iso, ultimo_dia_iso). Sem argumento, mês corrente."""
+    if mes:
+        try:
+            ano, m = int(mes[:4]), int(mes[5:7])
+        except (ValueError, IndexError):
+            raise HTTPException(400, "Mês inválido (use YYYY-MM)")
+    else:
+        hoje = _hoje()
+        ano, m = hoje.year, hoje.month
+    ult = _cal.monthrange(ano, m)[1]
+    return date(ano, m, 1).isoformat(), date(ano, m, ult).isoformat()
+
+
+_RE_NUM = re.compile(r"\d+(?:[.,]\d+)?")
+
+
+def _reps_num(rep) -> float:
+    """'12'→12 · '8-10'→9 (média) · '30s'→0 (tempo não entra no volume de carga)."""
+    if rep is None:
+        return 0.0
+    t = str(rep).strip().lower()
+    if not t or "s" in t or "min" in t or ":" in t:
+        return 0.0
+    nums = [float(x.replace(",", ".")) for x in _RE_NUM.findall(t)]
+    if not nums:
+        return 0.0
+    return sum(nums[:2]) / len(nums[:2])
+
+
+def _volume(series, repeticoes, carga) -> float:
+    """Volume de carga (kg) = séries × repetições × carga."""
+    return float(series or 0) * _reps_num(repeticoes) * float(carga or 0)
+
+
+def _semana_ini(d: date) -> date:
+    """Segunda-feira da semana da data."""
+    return d - timedelta(days=d.weekday())
+
+
+# ── Schemas ───────────────────────────────────────────────────────────────────
+class AulaIn(BaseModel):
+    data: str
+    hora: Optional[str] = None
+    duracao_min: Optional[int] = 60
+    tipo: Optional[str] = None
+    foco: Optional[str] = None
+    local: Optional[str] = None
+    professor: Optional[str] = None
+    status: Optional[str] = "agendada"
+    plano_id: Optional[int] = None
+    modelo_id: Optional[int] = None
+    descricao: Optional[str] = None
+    obs: Optional[str] = None
+    pse: Optional[int] = None
+    # Recorrência: repete a aula por N semanas nos dias da semana escolhidos
+    # (0=segunda … 6=domingo). Vazio = usa o dia da semana da própria data.
+    repetir_semanas: Optional[int] = 0
+    dias_semana: Optional[List[int]] = None
+
+
+class AulaUpdate(BaseModel):
+    data: Optional[str] = None
+    hora: Optional[str] = None
+    duracao_min: Optional[int] = None
+    tipo: Optional[str] = None
+    foco: Optional[str] = None
+    local: Optional[str] = None
+    professor: Optional[str] = None
+    status: Optional[str] = None
+    plano_id: Optional[int] = None
+    modelo_id: Optional[int] = None
+    descricao: Optional[str] = None
+    obs: Optional[str] = None
+    pse: Optional[int] = None
+
+
+class ItemIn(BaseModel):
+    exercicio_id: Optional[int] = None
+    nome: Optional[str] = None
+    ordem: Optional[int] = None   # None → usa a posição na lista
+    series: Optional[int] = None
+    repeticoes: Optional[str] = None
+    carga: Optional[float] = None
+    descanso_seg: Optional[int] = None
+    feito: Optional[bool] = False
+    obs: Optional[str] = None
+
+
+class ExercicioIn(BaseModel):
+    nome: str
+    grupo: Optional[str] = None
+    equipamento: Optional[str] = None
+    descricao: Optional[str] = None
+    video_url: Optional[str] = None
+    ativo: Optional[bool] = True
+
+
+class ModeloIn(BaseModel):
+    nome: str
+    tipo: Optional[str] = None
+    foco: Optional[str] = None
+    obs: Optional[str] = None
+    ativo: Optional[bool] = True
+    itens: Optional[List[ItemIn]] = None
+
+
+class PlanoIn(BaseModel):
+    nome: str
+    inicio: Optional[str] = None
+    fim: Optional[str] = None
+    aulas_contratadas: Optional[int] = 0
+    valor: Optional[float] = 0
+    freq_semanal: Optional[int] = 0
+    professor: Optional[str] = None
+    obs: Optional[str] = None
+    ativo: Optional[bool] = True
+
+
+# ── Aulas ─────────────────────────────────────────────────────────────────────
+async def _itens_da_aula(db, aula_id: int) -> list:
+    cur = await db.execute(
+        "SELECT * FROM aula_exercicios WHERE aula_id=? ORDER BY ordem, id", (aula_id,))
+    return [dict(r) for r in await cur.fetchall()]
+
+
+@app.get("/api/aulas")
+async def listar_aulas(ini: Optional[str] = None, fim: Optional[str] = None,
+                       status: Optional[str] = None, mes: Optional[str] = None,
+                       user=Depends(get_current_user), db: aiosqlite.Connection = Depends(get_db)):
+    # Sem período explícito (ou com 'mes'), a janela é o mês — usada pelo calendário
+    if mes:
+        ini, fim = _mes_range(mes)
+    elif not ini or not fim:
+        m_ini, m_fim = _mes_range(None)
+        ini, fim = ini or m_ini, fim or m_fim
+    sql = "SELECT * FROM aulas WHERE data BETWEEN ? AND ?"
+    params = [_parse_data(ini), _parse_data(fim)]
+    if status:
+        sql += " AND status=?"; params.append(status)
+    sql += " ORDER BY data, COALESCE(hora,'99:99')"
+    cur = await db.execute(sql, params)
+    aulas = [dict(r) for r in await cur.fetchall()]
+    # Quantidade de exercícios por aula (para o resumo no calendário/lista)
+    if aulas:
+        ph = ",".join("?" * len(aulas))
+        cur = await db.execute(
+            f"SELECT aula_id, COUNT(*) n FROM aula_exercicios WHERE aula_id IN ({ph}) GROUP BY aula_id",
+            [a["id"] for a in aulas])
+        cont = {r["aula_id"]: r["n"] for r in await cur.fetchall()}
+        for a in aulas:
+            a["qtd_exercicios"] = cont.get(a["id"], 0)
+    return aulas
+
+
+@app.get("/api/aulas/{aid}")
+async def obter_aula(aid: int, user=Depends(get_current_user),
+                     db: aiosqlite.Connection = Depends(get_db)):
+    row = await (await db.execute("SELECT * FROM aulas WHERE id=?", (aid,))).fetchone()
+    if not row:
+        raise HTTPException(404, "Aula não encontrada")
+    aula = dict(row)
+    aula["exercicios"] = await _itens_da_aula(db, aid)
+    return aula
+
+
+async def _copiar_modelo(db, aula_id: int, modelo_id: int) -> int:
+    """Copia os itens do modelo para a aula (snapshot: editar a aula não mexe no modelo)."""
+    cur = await db.execute(
+        "SELECT * FROM modelo_itens WHERE modelo_id=? ORDER BY ordem, id", (modelo_id,))
+    itens = [dict(r) for r in await cur.fetchall()]
+    for i, it in enumerate(itens):
+        await db.execute("""
+            INSERT INTO aula_exercicios
+                (aula_id, exercicio_id, nome, ordem, series, repeticoes, carga, descanso_seg, obs)
+            VALUES (?,?,?,?,?,?,?,?,?)
+        """, (aula_id, it["exercicio_id"], it["nome"], it["ordem"] or i,
+              it["series"], it["repeticoes"], it["carga"], it["descanso_seg"], it["obs"]))
+    return len(itens)
+
+
+@app.post("/api/aulas", status_code=201)
+async def criar_aula(body: AulaIn, user=Depends(get_current_user),
+                     db: aiosqlite.Connection = Depends(get_db)):
+    if body.status and body.status not in STATUS_VALIDOS:
+        raise HTTPException(400, f"Status deve ser um de: {', '.join(STATUS_VALIDOS)}")
+    d0 = date.fromisoformat(_parse_data(body.data))
+
+    # Datas a criar: a própria + a recorrência semanal, se pedida
+    datas = [d0]
+    semanas = max(0, int(body.repetir_semanas or 0))
+    if semanas:
+        dias = sorted(set(body.dias_semana or [d0.weekday()]))
+        for s in range(semanas + 1):           # semana 0 = a da própria data
+            base = _semana_ini(d0) + timedelta(weeks=s)
+            for wd in dias:
+                d = base + timedelta(days=wd)
+                if d > d0 and d not in datas:  # nunca cria no passado da data base
+                    datas.append(d)
+        datas = sorted(datas)
+
+    criadas, ignoradas = [], 0
+    for d in datas:
+        # Não duplica aula no mesmo dia e horário
+        dup = await (await db.execute(
+            "SELECT id FROM aulas WHERE data=? AND COALESCE(hora,'')=?",
+            (d.isoformat(), body.hora or ""))).fetchone()
+        if dup:
+            ignoradas += 1
+            continue
+        cur = await db.execute("""
+            INSERT INTO aulas (data, hora, duracao_min, tipo, foco, local, professor,
+                               status, plano_id, modelo_id, descricao, obs, pse, atualizado_em)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
+        """, (d.isoformat(), body.hora, body.duracao_min or 60, body.tipo, body.foco,
+              body.local, body.professor, body.status or "agendada", body.plano_id,
+              body.modelo_id, body.descricao, body.obs, body.pse))
+        aid = cur.lastrowid
+        if body.modelo_id:
+            await _copiar_modelo(db, aid, body.modelo_id)
+        criadas.append(aid)
+    await db.commit()
+    if not criadas:
+        raise HTTPException(409, "Já existe aula nesse dia e horário")
+    return {"ids": criadas, "criadas": len(criadas), "ignoradas": ignoradas}
+
+
+@app.patch("/api/aulas/{aid}")
+async def editar_aula(aid: int, body: AulaUpdate, user=Depends(get_current_user),
+                      db: aiosqlite.Connection = Depends(get_db)):
+    atual = await (await db.execute("SELECT * FROM aulas WHERE id=?", (aid,))).fetchone()
+    if not atual:
+        raise HTTPException(404, "Aula não encontrada")
+    data = body.dict(exclude_unset=True)
+    if "status" in data and data["status"] not in STATUS_VALIDOS:
+        raise HTTPException(400, f"Status deve ser um de: {', '.join(STATUS_VALIDOS)}")
+    if "data" in data and data["data"]:
+        data["data"] = _parse_data(data["data"])
+    trocou_modelo = "modelo_id" in data and data["modelo_id"] and data["modelo_id"] != atual["modelo_id"]
+    sets = [f"{k}=?" for k in data]
+    params = list(data.values())
+    if sets:
+        sets.append("atualizado_em=CURRENT_TIMESTAMP")
+        params.append(aid)
+        await db.execute(f"UPDATE aulas SET {', '.join(sets)} WHERE id=?", params)
+    # Trocar o modelo só repopula a lista se a aula ainda não tem exercícios
+    if trocou_modelo:
+        n = (await (await db.execute(
+            "SELECT COUNT(*) FROM aula_exercicios WHERE aula_id=?", (aid,))).fetchone())[0]
+        if n == 0:
+            await _copiar_modelo(db, aid, data["modelo_id"])
+    await db.commit()
+    return await obter_aula(aid, user, db)
+
+
+@app.delete("/api/aulas/{aid}", status_code=204)
+async def remover_aula(aid: int, user=Depends(get_current_user),
+                       db: aiosqlite.Connection = Depends(get_db)):
+    await db.execute("DELETE FROM aula_exercicios WHERE aula_id=?", (aid,))
+    await db.execute("DELETE FROM aulas WHERE id=?", (aid,))
+    await db.commit()
+
+
+@app.put("/api/aulas/{aid}/exercicios")
+async def salvar_exercicios_aula(aid: int, itens: List[ItemIn], user=Depends(get_current_user),
+                                 db: aiosqlite.Connection = Depends(get_db)):
+    """Substitui a lista inteira de exercícios da aula (mais simples e atômico
+    do que sincronizar item a item)."""
+    if not await (await db.execute("SELECT id FROM aulas WHERE id=?", (aid,))).fetchone():
+        raise HTTPException(404, "Aula não encontrada")
+    await db.execute("DELETE FROM aula_exercicios WHERE aula_id=?", (aid,))
+    for i, it in enumerate(itens):
+        nome = (it.nome or "").strip()
+        if not nome and it.exercicio_id:
+            ex = await (await db.execute("SELECT nome FROM exercicios WHERE id=?", (it.exercicio_id,))).fetchone()
+            nome = ex["nome"] if ex else ""
+        if not nome:
+            continue
+        await db.execute("""
+            INSERT INTO aula_exercicios
+                (aula_id, exercicio_id, nome, ordem, series, repeticoes, carga, descanso_seg, feito, obs)
+            VALUES (?,?,?,?,?,?,?,?,?,?)
+        """, (aid, it.exercicio_id, nome, it.ordem if it.ordem is not None else i,
+              it.series, it.repeticoes, it.carga, it.descanso_seg, 1 if it.feito else 0, it.obs))
+    await db.execute("UPDATE aulas SET atualizado_em=CURRENT_TIMESTAMP WHERE id=?", (aid,))
+    await db.commit()
+    return await _itens_da_aula(db, aid)
+
+
+@app.post("/api/aulas/{aid}/aplicar-modelo/{mid}")
+async def aplicar_modelo(aid: int, mid: int, substituir: bool = True,
+                         user=Depends(get_current_user), db: aiosqlite.Connection = Depends(get_db)):
+    if not await (await db.execute("SELECT id FROM aulas WHERE id=?", (aid,))).fetchone():
+        raise HTTPException(404, "Aula não encontrada")
+    mod = await (await db.execute("SELECT * FROM modelos WHERE id=?", (mid,))).fetchone()
+    if not mod:
+        raise HTTPException(404, "Modelo não encontrado")
+    if substituir:
+        await db.execute("DELETE FROM aula_exercicios WHERE aula_id=?", (aid,))
+    n = await _copiar_modelo(db, aid, mid)
+    await db.execute(
+        "UPDATE aulas SET modelo_id=?, tipo=COALESCE(NULLIF(tipo,''),?), foco=COALESCE(NULLIF(foco,''),?),"
+        " atualizado_em=CURRENT_TIMESTAMP WHERE id=?",
+        (mid, mod["tipo"], mod["foco"], aid))
+    await db.commit()
+    return {"itens": n}
+
+
+# ── Exercícios ────────────────────────────────────────────────────────────────
+@app.get("/api/exercicios")
+async def listar_exercicios(grupo: Optional[str] = None, busca: Optional[str] = None,
+                            user=Depends(get_current_user), db: aiosqlite.Connection = Depends(get_db)):
+    sql, params = "SELECT * FROM exercicios WHERE 1=1", []
+    if grupo:
+        sql += " AND grupo=?"; params.append(grupo)
+    if busca:
+        sql += " AND (nome LIKE ? OR descricao LIKE ? OR equipamento LIKE ?)"
+        params += [f"%{busca}%"] * 3
+    sql += " ORDER BY grupo, nome"
+    cur = await db.execute(sql, params)
+    return [dict(r) for r in await cur.fetchall()]
+
+
+@app.post("/api/exercicios", status_code=201)
+async def criar_exercicio(body: ExercicioIn, user=Depends(get_current_user),
+                          db: aiosqlite.Connection = Depends(get_db)):
+    nome = body.nome.strip()
+    if not nome:
+        raise HTTPException(400, "Nome obrigatório")
+    if await (await db.execute("SELECT id FROM exercicios WHERE nome=?", (nome,))).fetchone():
+        raise HTTPException(409, "Já existe um exercício com esse nome")
+    cur = await db.execute("""
+        INSERT INTO exercicios (nome, grupo, equipamento, descricao, video_url, ativo)
+        VALUES (?,?,?,?,?,?)
+    """, (nome, body.grupo, body.equipamento, body.descricao, body.video_url,
+          1 if body.ativo else 0))
+    await db.commit()
+    return {"id": cur.lastrowid}
+
+
+@app.patch("/api/exercicios/{eid}")
+async def editar_exercicio(eid: int, body: ExercicioIn, user=Depends(get_current_user),
+                           db: aiosqlite.Connection = Depends(get_db)):
+    if not await (await db.execute("SELECT id FROM exercicios WHERE id=?", (eid,))).fetchone():
+        raise HTTPException(404, "Exercício não encontrado")
+    dup = await (await db.execute(
+        "SELECT id FROM exercicios WHERE nome=? AND id<>?", (body.nome.strip(), eid))).fetchone()
+    if dup:
+        raise HTTPException(409, "Já existe um exercício com esse nome")
+    await db.execute("""
+        UPDATE exercicios SET nome=?, grupo=?, equipamento=?, descricao=?, video_url=?, ativo=?
+        WHERE id=?
+    """, (body.nome.strip(), body.grupo, body.equipamento, body.descricao, body.video_url,
+          1 if body.ativo else 0, eid))
+    await db.commit()
+    return {"msg": "Exercício atualizado"}
+
+
+@app.delete("/api/exercicios/{eid}", status_code=204)
+async def remover_exercicio(eid: int, user=Depends(get_current_user),
+                            db: aiosqlite.Connection = Depends(get_db)):
+    # O histórico guarda o nome do exercício, então a exclusão não apaga o passado
+    await db.execute("DELETE FROM exercicios WHERE id=?", (eid,))
+    await db.commit()
+
+
+# ── Modelos de treino ─────────────────────────────────────────────────────────
+@app.get("/api/modelos")
+async def listar_modelos(user=Depends(get_current_user), db: aiosqlite.Connection = Depends(get_db)):
+    cur = await db.execute("SELECT * FROM modelos ORDER BY ativo DESC, nome")
+    modelos = [dict(r) for r in await cur.fetchall()]
+    if modelos:
+        ph = ",".join("?" * len(modelos))
+        cur = await db.execute(
+            f"SELECT modelo_id, COUNT(*) n FROM modelo_itens WHERE modelo_id IN ({ph}) GROUP BY modelo_id",
+            [m["id"] for m in modelos])
+        cont = {r["modelo_id"]: r["n"] for r in await cur.fetchall()}
+        for m in modelos:
+            m["qtd_exercicios"] = cont.get(m["id"], 0)
+    return modelos
+
+
+@app.get("/api/modelos/{mid}")
+async def obter_modelo(mid: int, user=Depends(get_current_user),
+                       db: aiosqlite.Connection = Depends(get_db)):
+    row = await (await db.execute("SELECT * FROM modelos WHERE id=?", (mid,))).fetchone()
+    if not row:
+        raise HTTPException(404, "Modelo não encontrado")
+    m = dict(row)
+    cur = await db.execute("SELECT * FROM modelo_itens WHERE modelo_id=? ORDER BY ordem, id", (mid,))
+    m["itens"] = [dict(r) for r in await cur.fetchall()]
+    return m
+
+
+async def _salvar_itens_modelo(db, mid: int, itens: List[ItemIn]):
+    await db.execute("DELETE FROM modelo_itens WHERE modelo_id=?", (mid,))
+    for i, it in enumerate(itens or []):
+        nome = (it.nome or "").strip()
+        if not nome and it.exercicio_id:
+            ex = await (await db.execute("SELECT nome FROM exercicios WHERE id=?", (it.exercicio_id,))).fetchone()
+            nome = ex["nome"] if ex else ""
+        if not nome:
+            continue
+        await db.execute("""
+            INSERT INTO modelo_itens (modelo_id, exercicio_id, nome, ordem, series, repeticoes,
+                                      carga, descanso_seg, obs)
+            VALUES (?,?,?,?,?,?,?,?,?)
+        """, (mid, it.exercicio_id, nome, it.ordem if it.ordem is not None else i,
+              it.series, it.repeticoes, it.carga, it.descanso_seg, it.obs))
+
+
+@app.post("/api/modelos", status_code=201)
+async def criar_modelo(body: ModeloIn, user=Depends(get_current_user),
+                       db: aiosqlite.Connection = Depends(get_db)):
+    cur = await db.execute(
+        "INSERT INTO modelos (nome, tipo, foco, obs, ativo) VALUES (?,?,?,?,?)",
+        (body.nome.strip(), body.tipo, body.foco, body.obs, 1 if body.ativo else 0))
+    mid = cur.lastrowid
+    await _salvar_itens_modelo(db, mid, body.itens)
+    await db.commit()
+    return {"id": mid}
+
+
+@app.put("/api/modelos/{mid}")
+async def editar_modelo(mid: int, body: ModeloIn, user=Depends(get_current_user),
+                        db: aiosqlite.Connection = Depends(get_db)):
+    if not await (await db.execute("SELECT id FROM modelos WHERE id=?", (mid,))).fetchone():
+        raise HTTPException(404, "Modelo não encontrado")
+    await db.execute(
+        "UPDATE modelos SET nome=?, tipo=?, foco=?, obs=?, ativo=? WHERE id=?",
+        (body.nome.strip(), body.tipo, body.foco, body.obs, 1 if body.ativo else 0, mid))
+    if body.itens is not None:
+        await _salvar_itens_modelo(db, mid, body.itens)
+    await db.commit()
+    return await obter_modelo(mid, user, db)
+
+
+@app.delete("/api/modelos/{mid}", status_code=204)
+async def remover_modelo(mid: int, user=Depends(get_current_user),
+                         db: aiosqlite.Connection = Depends(get_db)):
+    await db.execute("DELETE FROM modelo_itens WHERE modelo_id=?", (mid,))
+    await db.execute("DELETE FROM modelos WHERE id=?", (mid,))
+    await db.commit()
+
+
+# ── Planos (pacotes de aula) ──────────────────────────────────────────────────
+async def _saldo_plano(db, p: dict) -> dict:
+    """Consumo do pacote = aulas realizadas + faltas dentro da vigência."""
+    sql = "SELECT status, COUNT(*) n FROM aulas WHERE (plano_id=? OR (? IS NOT NULL AND ? IS NOT NULL AND plano_id IS NULL AND data BETWEEN ? AND ?)) GROUP BY status"
+    cur = await db.execute(sql, (p["id"], p["inicio"], p["fim"], p["inicio"], p["fim"]))
+    por_status = {r["status"]: r["n"] for r in await cur.fetchall()}
+    usadas = sum(por_status.get(s, 0) for s in STATUS_CONSOME)
+    p = dict(p)
+    p["realizadas"] = por_status.get("realizada", 0)
+    p["faltas"] = por_status.get("falta", 0)
+    p["canceladas"] = por_status.get("cancelada", 0)
+    p["agendadas"] = por_status.get("agendada", 0)
+    p["usadas"] = usadas
+    p["saldo"] = max((p["aulas_contratadas"] or 0) - usadas, 0)
+    p["valor_aula"] = round((p["valor"] or 0) / p["aulas_contratadas"], 2) if p["aulas_contratadas"] else None
+    return p
+
+
+@app.get("/api/planos")
+async def listar_planos(user=Depends(get_current_user), db: aiosqlite.Connection = Depends(get_db)):
+    cur = await db.execute("SELECT * FROM planos ORDER BY ativo DESC, COALESCE(inicio,'') DESC, id DESC")
+    return [await _saldo_plano(db, dict(r)) for r in await cur.fetchall()]
+
+
+@app.post("/api/planos", status_code=201)
+async def criar_plano(body: PlanoIn, user=Depends(get_current_user),
+                      db: aiosqlite.Connection = Depends(get_db)):
+    cur = await db.execute("""
+        INSERT INTO planos (nome, inicio, fim, aulas_contratadas, valor, freq_semanal, professor, obs, ativo)
+        VALUES (?,?,?,?,?,?,?,?,?)
+    """, (body.nome.strip(), _parse_data(body.inicio) if body.inicio else None,
+          _parse_data(body.fim) if body.fim else None, body.aulas_contratadas or 0,
+          body.valor or 0, body.freq_semanal or 0, body.professor, body.obs,
+          1 if body.ativo else 0))
+    await db.commit()
+    return {"id": cur.lastrowid}
+
+
+@app.put("/api/planos/{pid}")
+async def editar_plano(pid: int, body: PlanoIn, user=Depends(get_current_user),
+                       db: aiosqlite.Connection = Depends(get_db)):
+    if not await (await db.execute("SELECT id FROM planos WHERE id=?", (pid,))).fetchone():
+        raise HTTPException(404, "Plano não encontrado")
+    await db.execute("""
+        UPDATE planos SET nome=?, inicio=?, fim=?, aulas_contratadas=?, valor=?, freq_semanal=?,
+                          professor=?, obs=?, ativo=? WHERE id=?
+    """, (body.nome.strip(), _parse_data(body.inicio) if body.inicio else None,
+          _parse_data(body.fim) if body.fim else None, body.aulas_contratadas or 0,
+          body.valor or 0, body.freq_semanal or 0, body.professor, body.obs,
+          1 if body.ativo else 0, pid))
+    await db.commit()
+    return {"msg": "Plano atualizado"}
+
+
+@app.delete("/api/planos/{pid}", status_code=204)
+async def remover_plano(pid: int, user=Depends(get_current_user),
+                        db: aiosqlite.Connection = Depends(get_db)):
+    await db.execute("DELETE FROM planos WHERE id=?", (pid,))
+    await db.commit()
+
+
+# ── Resumo (KPIs do mês) ──────────────────────────────────────────────────────
+@app.get("/api/resumo")
+async def resumo(mes: Optional[str] = None, user=Depends(get_current_user),
+                 db: aiosqlite.Connection = Depends(get_db)):
+    ini, fim = _mes_range(mes)
+    hoje = _hoje().isoformat()
+
+    cur = await db.execute(
+        "SELECT status, COUNT(*) n FROM aulas WHERE data BETWEEN ? AND ? GROUP BY status", (ini, fim))
+    st = {r["status"]: r["n"] for r in await cur.fetchall()}
+    realizadas = st.get("realizada", 0)
+    faltas = st.get("falta", 0)
+    canceladas = st.get("cancelada", 0)
+    agendadas = st.get("agendada", 0)
+
+    # Aderência = realizadas ÷ (aulas que já deveriam ter acontecido).
+    # Cancelamentos com aviso não entram na conta; agendadas no passado, sim.
+    pendentes_passado = (await (await db.execute(
+        "SELECT COUNT(*) FROM aulas WHERE status='agendada' AND data BETWEEN ? AND ? AND data < ?",
+        (ini, fim, hoje))).fetchone())[0]
+    base = realizadas + faltas + pendentes_passado
+    aderencia = round(100.0 * realizadas / base, 1) if base else None
+
+    # Plano ativo (o mais recente que cobre o mês) → meta e saldo
+    plano = await (await db.execute("""
+        SELECT * FROM planos WHERE ativo=1
+          AND (inicio IS NULL OR inicio <= ?) AND (fim IS NULL OR fim >= ?)
+        ORDER BY COALESCE(inicio,'') DESC LIMIT 1
+    """, (fim, ini))).fetchone()
+    plano = await _saldo_plano(db, dict(plano)) if plano else None
+
+    # Meta do mês: nº de semanas do mês × frequência semanal do plano
+    meta_mes = None
+    if plano and plano.get("freq_semanal"):
+        dias = (date.fromisoformat(fim) - date.fromisoformat(ini)).days + 1
+        meta_mes = round(plano["freq_semanal"] * dias / 7)
+
+    # Volume de carga (kg) das aulas realizadas no mês
+    cur = await db.execute("""
+        SELECT ae.series, ae.repeticoes, ae.carga
+          FROM aula_exercicios ae JOIN aulas a ON a.id = ae.aula_id
+         WHERE a.status='realizada' AND a.data BETWEEN ? AND ?
+    """, (ini, fim))
+    volume = sum(_volume(r["series"], r["repeticoes"], r["carga"]) for r in await cur.fetchall())
+
+    # Próxima aula agendada (a partir de hoje)
+    prox = await (await db.execute(
+        "SELECT * FROM aulas WHERE status='agendada' AND data >= ? ORDER BY data, COALESCE(hora,'99:99') LIMIT 1",
+        (hoje,))).fetchone()
+
+    # Sequência: semanas consecutivas (terminando na semana passada) batendo a meta semanal
+    sequencia = 0
+    if plano and plano.get("freq_semanal"):
+        alvo = plano["freq_semanal"]
+        cur = await db.execute(
+            "SELECT data FROM aulas WHERE status='realizada' AND data >= ?",
+            ((_hoje() - timedelta(weeks=53)).isoformat(),))
+        por_semana = {}
+        for r in await cur.fetchall():
+            k = _semana_ini(date.fromisoformat(r["data"])).isoformat()
+            por_semana[k] = por_semana.get(k, 0) + 1
+        s = _semana_ini(_hoje()) - timedelta(weeks=1)
+        while por_semana.get(s.isoformat(), 0) >= alvo and sequencia < 53:
+            sequencia += 1
+            s -= timedelta(weeks=1)
+
+    return {
+        "mes": ini[:7], "inicio": ini, "fim": fim,
+        "realizadas": realizadas, "faltas": faltas, "canceladas": canceladas,
+        "agendadas": agendadas, "total": realizadas + faltas + canceladas + agendadas,
+        "aderencia": aderencia, "meta_mes": meta_mes,
+        "volume_kg": round(volume, 1),
+        "sequencia_semanas": sequencia,
+        "proxima": _d(prox), "plano": plano,
+    }
+
+
+# ── Frequência (análises) ─────────────────────────────────────────────────────
+@app.get("/api/frequencia")
+async def frequencia(ano: Optional[int] = None, user=Depends(get_current_user),
+                     db: aiosqlite.Connection = Depends(get_db)):
+    ano = ano or _hoje().year
+    ini, fim = date(ano, 1, 1).isoformat(), date(ano, 12, 31).isoformat()
+
+    # Por mês (12 posições, sempre completas para o gráfico)
+    mensal = [{"mes": m, "realizadas": 0, "faltas": 0, "canceladas": 0, "agendadas": 0}
+              for m in range(1, 13)]
+    cur = await db.execute("""
+        SELECT CAST(substr(data,6,2) AS INTEGER) m, status, COUNT(*) n
+          FROM aulas WHERE data BETWEEN ? AND ? GROUP BY m, status
+    """, (ini, fim))
+    _mapa = {"realizada": "realizadas", "falta": "faltas",
+             "cancelada": "canceladas", "agendada": "agendadas"}
+    for r in await cur.fetchall():
+        chave = _mapa.get(r["status"])
+        if chave and 1 <= r["m"] <= 12:
+            mensal[r["m"] - 1][chave] = r["n"]
+
+    # Últimas 12 semanas (realizadas por semana)
+    s0 = _semana_ini(_hoje()) - timedelta(weeks=11)
+    semanal = [{"semana": (s0 + timedelta(weeks=i)).isoformat(), "realizadas": 0} for i in range(12)]
+    idx = {s["semana"]: s for s in semanal}
+    cur = await db.execute(
+        "SELECT data FROM aulas WHERE status='realizada' AND data >= ?", (s0.isoformat(),))
+    for r in await cur.fetchall():
+        k = _semana_ini(date.fromisoformat(r["data"])).isoformat()
+        if k in idx:
+            idx[k]["realizadas"] += 1
+
+    # Volume e séries por grupo muscular (aulas realizadas no ano)
+    cur = await db.execute("""
+        SELECT COALESCE(e.grupo, 'Sem grupo') grupo, ae.series, ae.repeticoes, ae.carga
+          FROM aula_exercicios ae
+          JOIN aulas a ON a.id = ae.aula_id
+     LEFT JOIN exercicios e ON e.id = ae.exercicio_id
+                            OR (ae.exercicio_id IS NULL AND e.nome = ae.nome)
+         WHERE a.status='realizada' AND a.data BETWEEN ? AND ?
+    """, (ini, fim))
+    grupos = {}
+    for r in await cur.fetchall():
+        g = grupos.setdefault(r["grupo"], {"grupo": r["grupo"], "series": 0, "volume": 0.0})
+        g["series"] += int(r["series"] or 0)
+        g["volume"] += _volume(r["series"], r["repeticoes"], r["carga"])
+    por_grupo = sorted(grupos.values(), key=lambda x: -x["series"])
+    for g in por_grupo:
+        g["volume"] = round(g["volume"], 1)
+
+    # Aulas realizadas por tipo de treino
+    cur = await db.execute("""
+        SELECT COALESCE(NULLIF(tipo,''),'Sem tipo') tipo, COUNT(*) n
+          FROM aulas WHERE status='realizada' AND data BETWEEN ? AND ?
+      GROUP BY tipo ORDER BY n DESC
+    """, (ini, fim))
+    por_tipo = [dict(r) for r in await cur.fetchall()]
+
+    # Anos com dados (para o seletor)
+    cur = await db.execute("SELECT DISTINCT substr(data,1,4) a FROM aulas ORDER BY a DESC")
+    anos = [int(r["a"]) for r in await cur.fetchall()]
+    if ano not in anos:
+        anos.append(ano); anos.sort(reverse=True)
+
+    return {"ano": ano, "mensal": mensal, "semanal": semanal,
+            "por_grupo": por_grupo, "por_tipo": por_tipo, "anos": anos}
+
+
+@app.get("/api/evolucao")
+async def evolucao(exercicio: Optional[str] = Query(None, description="Nome do exercício"),
+                   user=Depends(get_current_user), db: aiosqlite.Connection = Depends(get_db)):
+    """Evolução de carga: por aula realizada, a maior carga registrada no exercício.
+    Sem argumento, devolve só a lista de exercícios já treinados."""
+    cur = await db.execute("""
+        SELECT DISTINCT ae.nome FROM aula_exercicios ae
+          JOIN aulas a ON a.id = ae.aula_id
+         WHERE a.status='realizada' AND ae.carga IS NOT NULL AND ae.carga > 0
+      ORDER BY ae.nome
+    """)
+    nomes = [r["nome"] for r in await cur.fetchall()]
+    serie = []
+    if exercicio:
+        cur = await db.execute("""
+            SELECT a.data, MAX(ae.carga) carga, MAX(ae.series) series, MAX(ae.repeticoes) repeticoes
+              FROM aula_exercicios ae JOIN aulas a ON a.id = ae.aula_id
+             WHERE a.status='realizada' AND ae.nome=?
+          GROUP BY a.data ORDER BY a.data
+        """, (exercicio,))
+        serie = [dict(r) for r in await cur.fetchall()]
+    return {"exercicios": nomes, "serie": serie}
+
+
+# ── Static / SPA ──────────────────────────────────────────────────────────────
+_static = os.path.join(os.path.dirname(__file__), "static")
+app.mount("/static", StaticFiles(directory=_static), name="static")
+
+
+@app.get("/health")
+async def health():
+    return {"ok": True, "db": DB_PATH}
+
+
+@app.get("/")
+async def index():
+    return FileResponse(os.path.join(_static, "index.html"))

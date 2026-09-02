@@ -1,0 +1,9 @@
+# Deploy do FITPLAN como serviço PRÓPRIO no Railway.
+# Em Settings → Root Directory aponte para "fitplan" (assim este arquivo é lido
+# e o serviço do PLANGEST, na raiz do repositório, não é afetado).
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "python -c \"import os; import uvicorn; uvicorn.run('app:app', host='0.0.0.0', port=int(os.environ.get('PORT', 8090)))\""
+restartPolicyType = "on_failure"

@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FITPLAN — Controle de Aulas</title>
+<meta name="theme-color" content="#16A34A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="FITPLAN">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2316A34A'/%3E%3Cg stroke='white' stroke-width='9' stroke-linecap='round'%3E%3Cpath d='M30 32v36M70 32v36M18 42v16M82 42v16M30 50h40'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/css/style.css?v=1.2">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<!-- ── Login ── -->
+<div class="auth" id="auth">
+  <div class="auth-box">
+    <div class="auth-logo">
+      <b>FITPLAN</b>
+      <div>Controle de aulas · aluno + personal</div>
+    </div>
+    <div style="margin-bottom:12px">
+      <label>E-mail</label>
+      <input id="log-email" type="email" placeholder="seu@email.com" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <div style="margin-bottom:16px">
+      <label>Senha</label>
+      <input id="log-senha" type="password" placeholder="••••••" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <div id="log-erro" style="display:none;color:var(--danger);font-size:12px;margin-bottom:10px;text-align:center"></div>
+    <button class="btn btn-primary" style="width:100%;height:42px" onclick="doLogin()">Entrar</button>
+  </div>
+</div>
+
+<div id="app" style="display:none">
+<div class="overlay" id="overlay" onclick="fecharMenu()"></div>
+
+<aside class="sidebar" id="sidebar">
+  <div class="side-logo">
+    <h1>FITPLAN</h1>
+    <div class="sub">Aulas · Treinos · Frequência</div>
+  </div>
+  <nav class="side-nav">
+    <button class="nav-item active" data-page="agenda" onclick="nav('agenda')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+      Agenda
+    </button>
+    <button class="nav-item" data-page="treinos" onclick="nav('treinos')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6.5 6.5v11M17.5 6.5v11M3 9v6M21 9v6M6.5 12h11"/></svg>
+      Treinos
+    </button>
+    <button class="nav-item" data-page="frequencia" onclick="nav('frequencia')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
+      Frequência
+    </button>
+    <button class="nav-item" data-page="planos" onclick="nav('planos')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/></svg>
+      Planos
+    </button>
+    <button class="nav-item" data-page="config" onclick="nav('config')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 008 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9c.14.36.43.65.79.79H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      Configurações
+    </button>
+  </nav>
+  <div class="side-foot">
+    <div id="side-user" style="color:#94A3B8;font-weight:700"></div>
+    <a href="#" onclick="sair();return false" style="color:#64748B">Sair</a>
+  </div>
+</aside>
+
+<div class="main">
+  <div class="topbar">
+    <button class="hamb" onclick="abrirMenu()">
+      <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+    <span class="title" id="page-title">Agenda</span>
+    <button class="btn btn-sm btn-ghost" onclick="toggleTema()" title="Tema claro/escuro" id="btn-tema">🌙</button>
+    <button class="btn btn-sm btn-primary" onclick="novaAula()">+ Aula</button>
+  </div>
+
+  <div class="content">
+
+  <!-- ══ AGENDA ══ -->
+  <section class="page active" id="page-agenda">
+    <div class="kpis" id="kpis"></div>
+
+    <div class="card">
+      <div class="card-head">
+        <div class="row">
+          <button class="btn btn-sm" onclick="mudarMes(-1)">‹</button>
+          <span class="card-title" id="cal-mes" style="min-width:150px;text-align:center"></span>
+          <button class="btn btn-sm" onclick="mudarMes(1)">›</button>
+          <button class="btn btn-sm" onclick="irHoje()">Hoje</button>
+        </div>
+        <div class="row" style="font-size:11px;color:var(--muted)">
+          <span class="badge b-agendada">agendada</span>
+          <span class="badge b-realizada">realizada</span>
+          <span class="badge b-falta">falta</span>
+          <span class="badge b-cancelada">cancelada</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="cal-head">
+          <div>Seg</div><div>Ter</div><div>Qua</div><div>Qui</div><div>Sex</div><div>Sáb</div><div>Dom</div>
+        </div>
+        <div class="cal" id="cal"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">Aulas do mês</span>
+        <select id="f-status" onchange="renderLista()" style="width:auto">
+          <option value="">Todos os status</option>
+          <option value="agendada">Agendada</option>
+          <option value="realizada">Realizada</option>
+          <option value="falta">Falta</option>
+          <option value="cancelada">Cancelada</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Data</th><th>Hora</th><th>Tipo</th><th>Foco / Descrição</th>
+            <th class="right">Exerc.</th><th>Status</th><th></th>
+          </tr></thead>
+          <tbody id="lista-aulas"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ TREINOS ══ -->
+  <section class="page" id="page-treinos">
+    <div class="tabs">
+      <button class="tab active" data-tab="modelos" onclick="tabTreino('modelos')">Modelos de treino</button>
+      <button class="tab" data-tab="exercicios" onclick="tabTreino('exercicios')">Biblioteca de exercícios</button>
+    </div>
+
+    <div id="tab-modelos">
+      <div class="card">
+        <div class="card-head">
+          <span class="card-title">Modelos (Treino A, B, C…)</span>
+          <button class="btn btn-sm btn-primary" onclick="novoModelo()">+ Novo modelo</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Nome</th><th>Tipo</th><th>Foco</th><th class="right">Exercícios</th><th></th></tr></thead>
+            <tbody id="lista-modelos"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-exercicios" style="display:none">
+      <div class="card">
+        <div class="card-head">
+          <span class="card-title">Exercícios</span>
+          <div class="row">
+            <select id="f-grupo" onchange="renderExercicios()" style="width:auto"><option value="">Todos os grupos</option></select>
+            <input id="f-ex-busca" placeholder="Buscar exercício…" oninput="renderExercicios()" style="width:180px">
+            <button class="btn btn-sm btn-primary" onclick="novoExercicio()">+ Novo</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Exercício</th><th>Grupo</th><th>Equipamento</th><th>Execução</th><th></th></tr></thead>
+            <tbody id="lista-exercicios"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ FREQUÊNCIA ══ -->
+  <section class="page" id="page-frequencia">
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">Aulas por mês</span>
+        <select id="f-ano" onchange="loadFrequencia()" style="width:auto"></select>
+      </div>
+      <div class="card-body"><div class="chart-wrap"><canvas id="ch-mensal"></canvas></div></div>
+    </div>
+
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">
+      <div class="card">
+        <div class="card-head"><span class="card-title">Últimas 12 semanas</span></div>
+        <div class="card-body"><div class="chart-wrap"><canvas id="ch-semanal"></canvas></div></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-title">Séries por grupo muscular</span></div>
+        <div class="card-body"><div class="chart-wrap"><canvas id="ch-grupo"></canvas></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">Evolução de carga</span>
+        <select id="f-evol" onchange="loadEvolucao()" style="width:auto;max-width:260px"></select>
+      </div>
+      <div class="card-body"><div class="chart-wrap"><canvas id="ch-evol"></canvas></div></div>
+    </div>
+  </section>
+
+  <!-- ══ PLANOS ══ -->
+  <section class="page" id="page-planos">
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">Pacotes de aula contratados</span>
+        <button class="btn btn-sm btn-primary" onclick="novoPlano()">+ Novo pacote</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Pacote</th><th>Vigência</th><th class="right">Contratadas</th><th class="right">Usadas</th>
+            <th class="right">Saldo</th><th class="right">Meta/sem</th><th class="right">Valor</th>
+            <th class="right">R$/aula</th><th></th>
+          </tr></thead>
+          <tbody id="lista-planos"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ CONFIG ══ -->
+  <section class="page" id="page-config">
+    <div class="card">
+      <div class="card-head"><span class="card-title">Minha senha</span></div>
+      <div class="card-body">
+        <div class="form-grid" style="max-width:520px">
+          <div><label>Senha atual</label><input id="sn-atual" type="password"></div>
+          <div><label>Nova senha</label><input id="sn-nova" type="password" placeholder="mín. 6 caracteres"></div>
+          <div class="form-full"><button class="btn btn-primary" onclick="trocarSenha()">Alterar senha</button></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="card-usuarios" style="display:none">
+      <div class="card-head">
+        <span class="card-title">Acessos</span>
+        <button class="btn btn-sm btn-primary" onclick="novoUsuario()">+ Novo acesso</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Status</th><th></th></tr></thead>
+          <tbody id="lista-usuarios"></tbody>
+        </table>
+      </div>
+      <div class="card-body" style="border-top:1px solid var(--border);font-size:12px;color:var(--muted)">
+        <b>Aluno</b> = dono da conta (gerencia acessos). <b>Personal</b> = professor: monta treinos,
+        agenda e registra as aulas, mas não mexe nos acessos.
+      </div>
+    </div>
+  </section>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+</div><!-- /app -->
+
+<!-- ══ Modal: Aula ══ -->
+<div class="modal-bg" id="m-aula">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="modal-title" id="m-aula-titulo">Nova aula</span>
+      <button class="btn btn-sm btn-ghost" onclick="fecharModal('m-aula')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="a-id">
+      <div class="form-grid">
+        <div><label>Data *</label><input id="a-data" type="date"></div>
+        <div><label>Hora</label><input id="a-hora" type="time"></div>
+        <div><label>Duração (min)</label><input id="a-duracao" type="number" min="10" step="5" value="60"></div>
+        <div><label>Status</label>
+          <select id="a-status">
+            <option value="agendada">Agendada</option>
+            <option value="realizada">Realizada</option>
+            <option value="falta">Falta</option>
+            <option value="cancelada">Cancelada</option>
+          </select>
+        </div>
+        <div><label>Tipo de treino</label>
+          <select id="a-tipo">
+            <option value="">—</option>
+            <option>Força</option><option>Hipertrofia</option><option>Funcional</option>
+            <option>HIIT</option><option>Cardio</option><option>Mobilidade</option><option>Avaliação</option>
+          </select>
+        </div>
+        <div><label>Foco (grupos)</label><input id="a-foco" placeholder="Peito e tríceps"></div>
+        <div><label>Local</label><input id="a-local" placeholder="Academia / casa"></div>
+        <div><label>Professor</label><input id="a-professor"></div>
+        <div><label>Pacote</label><select id="a-plano"><option value="">—</option></select></div>
+        <div><label>Modelo de treino</label><select id="a-modelo"><option value="">—</option></select></div>
+        <div><label>PSE (esforço 1-10)</label><input id="a-pse" type="number" min="1" max="10"></div>
+        <div class="form-full"><label>Descrição do treino</label><textarea id="a-descricao" placeholder="O que será feito na aula"></textarea></div>
+        <div class="form-full"><label>Observações (como foi)</label><textarea id="a-obs"></textarea></div>
+      </div>
+
+      <div id="a-recorrencia">
+        <div class="sec-title">Repetir na agenda</div>
+        <div class="form-grid">
+          <div><label>Repetir por (semanas)</label><input id="a-repetir" type="number" min="0" max="52" value="0"></div>
+          <div class="form-full">
+            <label>Dias da semana</label>
+            <div class="dow" id="a-dias">
+              <label><input type="checkbox" value="0">Seg</label>
+              <label><input type="checkbox" value="1">Ter</label>
+              <label><input type="checkbox" value="2">Qua</label>
+              <label><input type="checkbox" value="3">Qui</label>
+              <label><input type="checkbox" value="4">Sex</label>
+              <label><input type="checkbox" value="5">Sáb</label>
+              <label><input type="checkbox" value="6">Dom</label>
+            </div>
+            <div style="font-size:11px;color:var(--muted);margin-top:6px">
+              Deixe em 0 semanas para criar só esta aula. Aulas já existentes no mesmo dia e horário são ignoradas.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="a-ex-bloco">
+        <div class="sec-title" style="display:flex;justify-content:space-between;align-items:center">
+          <span>Exercícios da aula</span>
+          <span>
+            <select id="a-aplicar-modelo" style="width:auto;font-size:12px;padding:4px 8px"><option value="">Aplicar modelo…</option></select>
+            <button class="btn btn-sm" onclick="addLinhaEx('a-ex')">+ Exercício</button>
+          </span>
+        </div>
+        <div class="ex-head">
+          <span>Exercício</span><span>Séries</span><span>Reps</span><span>Carga</span><span>Desc.(s)</span><span>Obs</span><span>Feito</span>
+        </div>
+        <div id="a-ex"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-danger" id="a-btn-del" onclick="excluirAula()" style="margin-right:auto;display:none">Excluir</button>
+      <button class="btn" onclick="fecharModal('m-aula')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarAula()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Modal: Exercício ══ -->
+<div class="modal-bg" id="m-ex">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-head">
+      <span class="modal-title" id="m-ex-titulo">Novo exercício</span>
+      <button class="btn btn-sm btn-ghost" onclick="fecharModal('m-ex')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="e-id">
+      <div class="form-grid">
+        <div class="form-full"><label>Nome *</label><input id="e-nome"></div>
+        <div><label>Grupo muscular</label>
+          <select id="e-grupo">
+            <option value="">—</option><option>Peito</option><option>Costas</option><option>Pernas</option>
+            <option>Ombro</option><option>Braços</option><option>Core</option><option>Cardio</option><option>Mobilidade</option>
+          </select>
+        </div>
+        <div><label>Equipamento</label>
+          <select id="e-equip">
+            <option value="">—</option><option>Barra</option><option>Halter</option><option>Máquina</option>
+            <option>Cabo</option><option>Peso corporal</option><option>Elástico</option><option>Livre</option>
+          </select>
+        </div>
+        <div class="form-full"><label>Execução</label><textarea id="e-desc" placeholder="Como executar o movimento"></textarea></div>
+        <div class="form-full"><label>Vídeo (link)</label><input id="e-video" placeholder="https://…"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="fecharModal('m-ex')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarExercicio()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Modal: Modelo ══ -->
+<div class="modal-bg" id="m-mod">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="modal-title" id="m-mod-titulo">Novo modelo</span>
+      <button class="btn btn-sm btn-ghost" onclick="fecharModal('m-mod')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="mo-id">
+      <div class="form-grid">
+        <div class="form-full"><label>Nome *</label><input id="mo-nome" placeholder="Treino A — Peito/Tríceps"></div>
+        <div><label>Tipo</label>
+          <select id="mo-tipo">
+            <option value="">—</option><option>Força</option><option>Hipertrofia</option><option>Funcional</option>
+            <option>HIIT</option><option>Cardio</option><option>Mobilidade</option>
+          </select>
+        </div>
+        <div><label>Foco</label><input id="mo-foco" placeholder="Peito e tríceps"></div>
+        <div class="form-full"><label>Observações</label><textarea id="mo-obs"></textarea></div>
+      </div>
+      <div class="sec-title" style="display:flex;justify-content:space-between;align-items:center">
+        <span>Exercícios do modelo</span>
+        <button class="btn btn-sm" onclick="addLinhaEx('mo-ex')">+ Exercício</button>
+      </div>
+      <div class="ex-head">
+        <span>Exercício</span><span>Séries</span><span>Reps</span><span>Carga</span><span>Desc.(s)</span><span>Obs</span><span></span>
+      </div>
+      <div id="mo-ex"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-danger" id="mo-btn-del" onclick="excluirModelo()" style="margin-right:auto;display:none">Excluir</button>
+      <button class="btn" onclick="fecharModal('m-mod')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarModelo()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Modal: Plano ══ -->
+<div class="modal-bg" id="m-plano">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-head">
+      <span class="modal-title" id="m-plano-titulo">Novo pacote</span>
+      <button class="btn btn-sm btn-ghost" onclick="fecharModal('m-plano')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="p-id">
+      <div class="form-grid">
+        <div class="form-full"><label>Nome *</label><input id="p-nome" placeholder="Pacote 12 aulas — Set/2026"></div>
+        <div><label>Início</label><input id="p-inicio" type="date"></div>
+        <div><label>Fim</label><input id="p-fim" type="date"></div>
+        <div><label>Aulas contratadas</label><input id="p-aulas" type="number" min="0"></div>
+        <div><label>Meta por semana</label><input id="p-freq" type="number" min="0" max="7"></div>
+        <div><label>Valor total (R$)</label><input id="p-valor" type="number" step="0.01" min="0"></div>
+        <div><label>Professor</label><input id="p-prof"></div>
+        <div class="form-full"><label>Observações</label><textarea id="p-obs"></textarea></div>
+        <div class="form-full"><label><input type="checkbox" id="p-ativo" checked style="width:auto"> Pacote ativo</label></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-danger" id="p-btn-del" onclick="excluirPlano()" style="margin-right:auto;display:none">Excluir</button>
+      <button class="btn" onclick="fecharModal('m-plano')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarPlano()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Modal: Usuário ══ -->
+<div class="modal-bg" id="m-user">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-head">
+      <span class="modal-title" id="m-user-titulo">Novo acesso</span>
+      <button class="btn btn-sm btn-ghost" onclick="fecharModal('m-user')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="u-id">
+      <div class="form-grid">
+        <div class="form-full"><label>Nome *</label><input id="u-nome"></div>
+        <div class="form-full"><label>E-mail *</label><input id="u-email" type="email"></div>
+        <div><label>Perfil</label>
+          <select id="u-role"><option value="personal">Personal</option><option value="aluno">Aluno (dono)</option></select>
+        </div>
+        <div><label>Senha</label><input id="u-senha" type="password" placeholder="mín. 6 caracteres"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="fecharModal('m-user')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarUsuario()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toasts"></div>
+<script src="/static/js/app.js?v=1.1"></script>
+</body>
+</html>
