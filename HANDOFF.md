@@ -21,7 +21,8 @@ Fluxo desenhado:
 2. As aulas entram como `agendada`, **sem treino**.
 3. O personal abre cada dia e prescreve os exercícios (ou aplica um modelo A/B/C).
 4. Depois da aula, marcam `realizada` / `falta` / `cancelada`.
-5. A página **Financeiro** fecha o mês: previsto × consolidado.
+5. A página **Financeiro** fecha o mês. **Pré-pago:** o valor do mês é definido no
+   agendamento; mudar o status depois só redistribui (treinado / a treinar / perdido).
 
 Aplicação **independente** do PLANGEST (o sistema de sell-out farmacêutico que
 vive na raiz deste mesmo repositório). Banco, login e deploy próprios; nenhum
@@ -37,7 +38,7 @@ código compartilhado.
 |---|---|
 | Repositório | `htardelli/planges` (privado) |
 | Branch | `claude/aulas-control-app-a0wprp` |
-| Último commit | `cb5b58c` — "FITPLAN: endurece o app para publicacao na internet" |
+| Último commit | `db0cbe5` — "FITPLAN: modelo pre-pago e remarcacao restrita ao mes" |
 | Pasta do app | `fitplan/` |
 
 ### Railway
@@ -46,7 +47,7 @@ código compartilhado.
 |---|---|
 | Projeto | **FIT_DNA** — `2fefe5cd-54a5-4062-96a7-48760fa4e2f3` |
 | Ambiente | `production` — `bf58e74f-fdc2-48e6-ad9e-1dbf4a191181` |
-| Serviço | ainda chamado **`d100-challenge`** (nome herdado de uma conexão errada; só cosmético) |
+| Serviço | **`fitplan`** |
 | Source Repo | `htardelli/planges` |
 | Root Directory | `fitplan` |
 | Branch | `claude/aulas-control-app-a0wprp` |
@@ -67,15 +68,19 @@ INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:8080
 ```
 
+### Já resolvido pelo usuário
+
+- [x] Serviço renomeado para `fitplan`; domínio gerado e app acessado pelo Chrome.
+- [x] Auto-deploy pelo GitHub funcionando (push na branch → republica sozinho).
+
 ### O que ficou pendente
 
-- [ ] Não se confirmou se a variável `FITPLAN_ADMIN_SENHA` foi criada. Se não foi,
-      a senha do dono é `fitplan123` e o app mostra uma faixa amarela de aviso.
-- [ ] Nenhum teste funcional foi feito contra o domínio público.
-- [ ] Persistência do volume não foi comprovada na prática (só pelo log).
-- [ ] `Healthcheck Path` não configurado.
-- [ ] Serviço com nome errado.
+- [ ] Confirmar se a variável `FITPLAN_ADMIN_SENHA` foi criada. Se não foi, a senha do
+      dono é `fitplan123` e o app mostra uma faixa amarela de aviso.
+- [ ] Persistência do volume não comprovada por teste explícito (o log confirma o mount).
+- [ ] `Healthcheck Path` = `/health` não configurado.
 - [ ] Acesso do personal ainda não criado.
+- [ ] Backups do volume (a aba **Backups** do serviço permite agendar) não configurados.
 
 ---
 
@@ -122,9 +127,11 @@ Base: `https://dna-academia.up.railway.app`
 
 4. **Ciclo completo de uma aula**, via API ou navegador:
    - `POST /api/aulas/mes` com `{"mes":"2026-09","dias":[2,4,6]}` → cria 3 aulas
-   - `GET /api/resumo?mes=2026-09` → confere `financeiro.previsto` = 3 × valor_hora
+   - `GET /api/resumo?mes=2026-09` → confere `financeiro.valor_mes` = 3 × valor_hora
    - `PUT /api/aulas/{id}/exercicios` → grava exercícios
-   - `PATCH /api/aulas/{id}` com `{"status":"realizada"}` → confere `consolidado`
+   - `PATCH /api/aulas/{id}` com `{"status":"realizada"}` → `valor_mes` **não muda**;
+     migra de `a_treinar` para `treinado`
+   - `PATCH /api/aulas/{id}` com uma `data` de outro mês → deve devolver **400**
    - `DELETE` das aulas de teste ao final — **não deixar lixo no banco**
 
 5. **Isolamento do perfil `personal`** — criar um usuário de teste com
