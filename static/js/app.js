@@ -115,6 +115,8 @@ async function iniciar() {
   document.getElementById('auth').style.display = 'none';
   document.getElementById('app').style.display = '';
   document.getElementById('side-user').textContent = `${_user.nome} · ${_user.role === 'aluno' ? 'Aluno' : 'Personal'}`;
+  // App publicado na internet: senha inicial ainda em uso é o risco nº 1
+  document.getElementById('aviso-senha').style.display = _user.senha_padrao ? '' : 'none';
   document.getElementById('card-usuarios').style.display = _user.role === 'aluno' ? '' : 'none';
   await Promise.all([carregarExercicios(), carregarModelos(), carregarPlanos(), carregarConfig()]);
   loadAgenda();
@@ -850,9 +852,12 @@ async function trocarSenha() {
   const atual = document.getElementById('sn-atual').value;
   const nova = document.getElementById('sn-nova').value;
   if (!atual || !nova) return toast('Preencha as duas senhas', 'err');
+  if (nova.length < 8) return toast('A nova senha deve ter no mínimo 8 caracteres', 'err');
   try {
     await api('POST', '/auth/senha', { senha_atual: atual, nova_senha: nova });
     setVal('sn-atual', ''); setVal('sn-nova', '');
+    document.getElementById('aviso-senha').style.display = 'none';
+    _user.senha_padrao = false;
     toast('Senha alterada');
   } catch (e) { toast(e.message, 'err'); }
 }
@@ -906,7 +911,7 @@ async function salvarUsuario() {
       if (senha) body.nova_senha = senha;
       await api('PATCH', `/api/usuarios/${id}`, body);
     } else {
-      if (senha.length < 6) return toast('A senha deve ter no mínimo 6 caracteres', 'err');
+      if (senha.length < 8) return toast('A senha deve ter no mínimo 8 caracteres', 'err');
       await api('POST', '/api/usuarios', { nome, email, senha, role });
     }
     fecharModal('m-user'); toast('Acesso salvo'); loadUsuarios();

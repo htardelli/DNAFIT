@@ -230,3 +230,11 @@ tbody tr:hover { background: rgba(22,163,74,.05); }
   color: var(--primary-d); font-weight: 700; font-size: 14px; line-height: 1.35;
 }
 [data-theme="dark"] .dm-resumo { color: #86EFAC; }
+
+/* Aviso de senha inicial ainda em uso (app publicado) */
+.aviso {
+  background: var(--warn-l); border-left: 4px solid var(--warn); color: #7C2D12;
+  padding: 12px 16px; border-radius: 10px; margin-bottom: 16px; font-size: 13px;
+}
+[data-theme="dark"] .aviso { color: #FCD34D; }
+.aviso a { color: inherit; font-weight: 700; }

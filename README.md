@@ -51,22 +51,41 @@ Abre em <http://localhost:8090> (na rede local, `http://SEU_IP:8090` — dá par
 na academia, com o PC ligado).
 
 **Primeiro acesso:** `htardelli@gmail.com` / `fitplan123` → troque a senha em
-**Configurações** antes de qualquer outra coisa.
+**Configurações** antes de qualquer outra coisa. Enquanto a senha inicial estiver em uso,
+o app mostra um aviso no topo de todas as telas.
 
 ## Como publicar no Railway (acesso pelo celular, de qualquer lugar)
 
-1. Novo **serviço** no mesmo repositório `htardelli/planges`.
-2. Settings → **Root Directory** = `fitplan` (é o que separa do PLANGEST; sem isso o Railway
-   sobe o app errado).
-3. Anexe um **volume** em `/data` — sem volume, o banco é apagado a cada deploy.
-4. Variáveis de ambiente:
+1. No projeto do Railway, **+ New → GitHub Repo → `htardelli/planges`** (um **novo serviço**,
+   não mexa no serviço do PLANGEST).
+2. Settings → **Root Directory** = `fitplan`. É isso que separa os dois apps; sem isso o
+   Railway sobe o PLANGEST de novo.
+3. Settings → **Branch** = `claude/aulas-control-app-a0wprp` (ou `main`, depois do merge).
+4. Settings → **Volumes** → adicionar volume em **`/data`**. Sem volume, o banco é apagado
+   a cada deploy — você perde agenda, treinos e histórico financeiro.
+5. Variables (nenhuma é obrigatória, mas estas valem a pena):
 
 | Variável | Para quê |
 |---|---|
-| `FITPLAN_SECRET_KEY` | assina os tokens de login. **Obrigatória em produção** — troque por um valor aleatório longo |
-| `FITPLAN_ADMIN_EMAIL` / `FITPLAN_ADMIN_SENHA` | dono criado no primeiro start (padrão: `htardelli@gmail.com` / `fitplan123`) |
+| `FITPLAN_ADMIN_EMAIL` / `FITPLAN_ADMIN_SENHA` | dono criado no **primeiro start**. Padrão `htardelli@gmail.com` / `fitplan123`. Defina uma senha forte aqui e você já sobe sem senha padrão |
 | `FITPLAN_TOKEN_HORAS` | validade do login (padrão 720 h = 30 dias, para não relogar toda hora no celular) |
+| `FITPLAN_SECRET_KEY` | opcional. Se não vier, o app **sorteia uma chave no primeiro start e guarda no banco** — não existe chave padrão no código |
 | `FITPLAN_DATA_DIR` | pasta do banco, se quiser forçar outro caminho |
+
+6. Settings → **Networking → Generate Domain** para ter o endereço público (HTTPS).
+7. Abra o endereço, entre, **troque a senha** e crie o acesso do personal em
+   **Configurações → Acessos**.
+
+### O que protege o app exposto na internet
+
+- Chave de assinatura dos tokens **sorteada no primeiro start** e guardada no banco
+  (nunca uma chave padrão que esteja no código-fonte).
+- **Bloqueio por tentativas:** 5 senhas erradas → 10 minutos bloqueado (por e-mail + IP).
+- Senha mínima de **8 caracteres** e aviso permanente enquanto a senha inicial estiver em uso.
+- Toda rota `/api/*` exige token; o personal não acessa a gestão de acessos nem altera o preço.
+
+> Só há dois usuários e nenhum dado sensível de terceiros, mas o endereço é público:
+> use uma senha que você não use em mais nada.
 
 ---
 

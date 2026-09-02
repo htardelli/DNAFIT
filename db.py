@@ -207,6 +207,17 @@ DEFAULTS_CONFIG = {
 }
 
 
+async def obter_secret_key() -> str:
+    """Lê do banco a chave de assinatura (a variável de ambiente, se existir, vence)."""
+    import os as _os
+    env = _os.environ.get("FITPLAN_SECRET_KEY")
+    if env:
+        return env
+    async with aiosqlite.connect(DB_PATH) as db:
+        row = await (await db.execute("SELECT valor FROM config WHERE chave='secret_key'")).fetchone()
+        return row[0] if row else ""
+
+
 async def init_db(hash_fn):
     """Cria o schema, semeia a biblioteca de exercícios e o usuário dono.
 
@@ -226,6 +237,13 @@ async def init_db(hash_fn):
 
         for chave, valor in DEFAULTS_CONFIG.items():
             await db.execute("INSERT OR IGNORE INTO config (chave, valor) VALUES (?,?)", (chave, valor))
+
+        # Chave de assinatura dos tokens de login. Gerada aqui, aleatória, e guardada
+        # no banco — assim o app publicado nunca cai numa chave padrão que esteja no
+        # código-fonte (qualquer um que lesse o repositório poderia forjar um login).
+        import secrets
+        await db.execute("INSERT OR IGNORE INTO config (chave, valor) VALUES ('secret_key', ?)",
+                         (secrets.token_urlsafe(48),))
 
         n = (await (await db.execute("SELECT COUNT(*) FROM exercicios")).fetchone())[0]
         if n == 0:

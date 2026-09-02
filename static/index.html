@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="FITPLAN">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2316A34A'/%3E%3Cg stroke='white' stroke-width='9' stroke-linecap='round'%3E%3Cpath d='M30 32v36M70 32v36M18 42v16M82 42v16M30 50h40'/%3E%3C/g%3E%3C/svg%3E">
-<link rel="stylesheet" href="/static/css/style.css?v=1.4">
+<link rel="stylesheet" href="/static/css/style.css?v=1.5">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -81,6 +81,11 @@
   </div>
 
   <div class="content">
+
+  <div id="aviso-senha" class="aviso" style="display:none">
+    <b>Senha inicial em uso.</b> Este endereço está aberto na internet — troque a senha agora em
+    <a href="#" onclick="nav('config');return false">Configurações</a>.
+  </div>
 
   <!-- ══ AGENDA ══ -->
   <section class="page active" id="page-agenda">
@@ -283,7 +288,7 @@
       <div class="card-body">
         <div class="form-grid" style="max-width:520px">
           <div><label>Senha atual</label><input id="sn-atual" type="password"></div>
-          <div><label>Nova senha</label><input id="sn-nova" type="password" placeholder="mín. 6 caracteres"></div>
+          <div><label>Nova senha</label><input id="sn-nova" type="password" placeholder="mín. 8 caracteres"></div>
           <div class="form-full"><button class="btn btn-primary" onclick="trocarSenha()">Alterar senha</button></div>
         </div>
       </div>
@@ -546,7 +551,7 @@
         <div><label>Perfil</label>
           <select id="u-role"><option value="personal">Personal</option><option value="aluno">Aluno (dono)</option></select>
         </div>
-        <div><label>Senha</label><input id="u-senha" type="password" placeholder="mín. 6 caracteres"></div>
+        <div><label>Senha</label><input id="u-senha" type="password" placeholder="mín. 8 caracteres"></div>
       </div>
     </div>
     <div class="modal-foot">
@@ -557,6 +562,6 @@
 </div>
 
 <div class="toast-wrap" id="toasts"></div>
-<script src="/static/js/app.js?v=1.3"></script>
+<script src="/static/js/app.js?v=1.5"></script>
 </body>
 </html>

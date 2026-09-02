@@ -17,7 +17,7 @@ from typing import Optional, List
 
 import aiosqlite
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi import FastAPI, Depends, HTTPException, Query, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -25,10 +25,13 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
 
-from db import DB_PATH, get_db, init_db
+from db import DB_PATH, get_db, init_db, obter_secret_key
 
 # ── Config ────────────────────────────────────────────────────────────────────
-SECRET_KEY = os.environ.get("FITPLAN_SECRET_KEY", "fitplan-dev-key-troque-em-producao")
+# A chave de assinatura NÃO tem valor padrão no código: é sorteada no primeiro start
+# e guardada no banco (ou vem de FITPLAN_SECRET_KEY). Sem isso, um app publicado com
+# a chave que está no repositório aceitaria tokens forjados por qualquer um.
+SECRET_KEY = ""
 ALGORITHM = "HS256"
 TOKEN_EXPIRE_HOURS = int(os.environ.get("FITPLAN_TOKEN_HORAS", "720"))  # 30 dias (uso em celular)
 
@@ -36,6 +39,33 @@ _pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 _oauth2 = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 STATUS_VALIDOS = ("agendada", "realizada", "falta", "cancelada")
+
+# Bloqueio de força bruta no login. App exposto na internet com 2 usuários: sem isso,
+# uma senha fraca cai em minutos. Em memória — reinício do container zera, o que é
+# aceitável para o tamanho do problema.
+LOGIN_MAX_TENTATIVAS = 5
+LOGIN_BLOQUEIO_MIN = 10
+_tentativas: dict = {}
+
+
+def _login_bloqueado(chave: str) -> int:
+    """Segundos restantes de bloqueio (0 = liberado)."""
+    reg = _tentativas.get(chave)
+    if not reg or not reg.get("ate"):
+        return 0
+    falta = (reg["ate"] - datetime.utcnow()).total_seconds()
+    if falta <= 0:
+        _tentativas.pop(chave, None)
+        return 0
+    return int(falta)
+
+
+def _login_falhou(chave: str):
+    reg = _tentativas.setdefault(chave, {"n": 0, "ate": None})
+    reg["n"] += 1
+    if reg["n"] >= LOGIN_MAX_TENTATIVAS:
+        reg["ate"] = datetime.utcnow() + timedelta(minutes=LOGIN_BLOQUEIO_MIN)
+        reg["n"] = 0
 # Consomem aula do pacote: a aula aconteceu ou o horário foi perdido sem aviso.
 STATUS_CONSOME = ("realizada", "falta")
 
@@ -46,7 +76,11 @@ def _hash(pw: str) -> str:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global SECRET_KEY
     await init_db(_hash)
+    SECRET_KEY = await obter_secret_key()
+    if not SECRET_KEY:
+        raise RuntimeError("Não foi possível obter a chave de assinatura dos tokens")
     yield
 
 
@@ -88,21 +122,37 @@ class LoginOut(BaseModel):
 
 
 @app.post("/auth/login", response_model=LoginOut)
-async def login(form: OAuth2PasswordRequestForm = Depends(),
+async def login(request: Request, form: OAuth2PasswordRequestForm = Depends(),
                 db: aiosqlite.Connection = Depends(get_db)):
-    row = await (await db.execute("SELECT * FROM usuarios WHERE email=?",
-                                  (form.username.lower().strip(),))).fetchone()
+    email = form.username.lower().strip()
+    chave = f"{email}|{request.client.host if request.client else '?'}"
+    espera = _login_bloqueado(chave)
+    if espera:
+        raise HTTPException(429, f"Muitas tentativas. Tente novamente em {espera // 60 + 1} min.")
+
+    row = await (await db.execute("SELECT * FROM usuarios WHERE email=?", (email,))).fetchone()
     if not row or not _pwd.verify(form.password, row["senha_hash"]):
+        _login_falhou(chave)
         raise HTTPException(401, "E-mail ou senha incorretos")
     if not row["ativo"]:
         raise HTTPException(403, "Usuário inativo")
+    _tentativas.pop(chave, None)
     return LoginOut(access_token=_create_token({"sub": str(row["id"]), "role": row["role"]}),
                     nome=row["nome"], role=row["role"])
 
 
+SENHA_PADRAO = os.environ.get("FITPLAN_ADMIN_SENHA", "fitplan123")
+
+
 @app.get("/auth/me")
 async def me(user=Depends(get_current_user)):
-    return {"id": user["id"], "nome": user["nome"], "email": user["email"], "role": user["role"]}
+    # Sinaliza se a conta ainda usa a senha inicial — o app publicado avisa na tela
+    try:
+        padrao = _pwd.verify(SENHA_PADRAO, user["senha_hash"])
+    except Exception:
+        padrao = False
+    return {"id": user["id"], "nome": user["nome"], "email": user["email"],
+            "role": user["role"], "senha_padrao": padrao}
 
 
 class SenhaIn(BaseModel):
@@ -115,8 +165,8 @@ async def trocar_senha(body: SenhaIn, user=Depends(get_current_user),
                        db: aiosqlite.Connection = Depends(get_db)):
     if not _pwd.verify(body.senha_atual, user["senha_hash"]):
         raise HTTPException(400, "Senha atual incorreta")
-    if len(body.nova_senha) < 6:
-        raise HTTPException(400, "A nova senha deve ter no mínimo 6 caracteres")
+    if len(body.nova_senha) < 8:
+        raise HTTPException(400, "A nova senha deve ter no mínimo 8 caracteres")
     await db.execute("UPDATE usuarios SET senha_hash=? WHERE id=?", (_hash(body.nova_senha), user["id"]))
     await db.commit()
     return {"msg": "Senha alterada"}
@@ -148,8 +198,8 @@ async def criar_usuario(body: UsuarioIn, user=Depends(require_dono),
                         db: aiosqlite.Connection = Depends(get_db)):
     if body.role not in ("aluno", "personal"):
         raise HTTPException(400, "Perfil deve ser 'aluno' ou 'personal'")
-    if len(body.senha) < 6:
-        raise HTTPException(400, "A senha deve ter no mínimo 6 caracteres")
+    if len(body.senha) < 8:
+        raise HTTPException(400, "A senha deve ter no mínimo 8 caracteres")
     email = body.email.lower().strip()
     if await (await db.execute("SELECT id FROM usuarios WHERE email=?", (email,))).fetchone():
         raise HTTPException(400, "E-mail já cadastrado")
@@ -181,8 +231,8 @@ async def editar_usuario(uid: int, body: UsuarioUpdate, user=Depends(require_don
     if body.ativo is not None:
         sets.append("ativo=?"); params.append(1 if body.ativo else 0)
     if body.nova_senha:
-        if len(body.nova_senha) < 6:
-            raise HTTPException(400, "A senha deve ter no mínimo 6 caracteres")
+        if len(body.nova_senha) < 8:
+            raise HTTPException(400, "A senha deve ter no mínimo 8 caracteres")
         sets.append("senha_hash=?"); params.append(_hash(body.nova_senha))
     # Trava de segurança: nunca deixar a conta sem um dono ativo
     if (body.role and body.role != "aluno") or body.ativo is False:
