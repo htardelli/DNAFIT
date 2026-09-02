@@ -270,6 +270,31 @@ def _semana_ini(d: date) -> date:
     return d - timedelta(days=d.weekday())
 
 
+# ── Configuração e valor da hora-aula ─────────────────────────────────────────
+async def _config(db) -> dict:
+    cur = await db.execute("SELECT chave, valor FROM config")
+    return {r["chave"]: r["valor"] for r in await cur.fetchall()}
+
+
+async def _valor_hora(db, dia: Optional[str] = None) -> float:
+    """Valor da hora-aula vigente: o do pacote que cobre a data (quando informado)
+    tem prioridade sobre o valor geral da configuração."""
+    dia = dia or _hoje().isoformat()
+    row = await (await db.execute("""
+        SELECT valor_hora FROM planos
+         WHERE ativo=1 AND valor_hora IS NOT NULL AND valor_hora > 0
+           AND (inicio IS NULL OR inicio <= ?) AND (fim IS NULL OR fim >= ?)
+      ORDER BY COALESCE(inicio,'') DESC LIMIT 1
+    """, (dia, dia))).fetchone()
+    if row:
+        return float(row["valor_hora"])
+    cfg = await _config(db)
+    try:
+        return float(cfg.get("valor_hora") or 0)
+    except ValueError:
+        return 0.0
+
+
 # ── Schemas ───────────────────────────────────────────────────────────────────
 class AulaIn(BaseModel):
     data: str
@@ -285,6 +310,7 @@ class AulaIn(BaseModel):
     descricao: Optional[str] = None
     obs: Optional[str] = None
     pse: Optional[int] = None
+    valor: Optional[float] = None    # None → usa o valor da hora-aula vigente
     # Recorrência: repete a aula por N semanas nos dias da semana escolhidos
     # (0=segunda … 6=domingo). Vazio = usa o dia da semana da própria data.
     repetir_semanas: Optional[int] = 0
@@ -305,6 +331,27 @@ class AulaUpdate(BaseModel):
     descricao: Optional[str] = None
     obs: Optional[str] = None
     pse: Optional[int] = None
+    valor: Optional[float] = None
+
+
+class DiasDoMesIn(BaseModel):
+    """O aluno marca os dias do mês em que fará aula; o personal preenche o treino depois."""
+    mes: str                       # 'YYYY-MM'
+    dias: List[int]                # dias do mês (1..31)
+    hora: Optional[str] = None
+    duracao_min: Optional[int] = 60
+    professor: Optional[str] = None
+    local: Optional[str] = None
+    valor: Optional[float] = None  # None → valor da hora-aula vigente
+    plano_id: Optional[int] = None
+
+
+class ConfigIn(BaseModel):
+    valor_hora: Optional[float] = None
+    hora_padrao: Optional[str] = None
+    duracao_padrao: Optional[int] = None
+    professor_padrao: Optional[str] = None
+    local_padrao: Optional[str] = None
 
 
 class ItemIn(BaseModel):
@@ -343,10 +390,38 @@ class PlanoIn(BaseModel):
     fim: Optional[str] = None
     aulas_contratadas: Optional[int] = 0
     valor: Optional[float] = 0
+    valor_hora: Optional[float] = None
     freq_semanal: Optional[int] = 0
     professor: Optional[str] = None
     obs: Optional[str] = None
     ativo: Optional[bool] = True
+
+
+@app.get("/api/config")
+async def obter_config(user=Depends(get_current_user), db: aiosqlite.Connection = Depends(get_db)):
+    cfg = await _config(db)
+    return {
+        "valor_hora": float(cfg.get("valor_hora") or 0),
+        "valor_hora_vigente": await _valor_hora(db),
+        "hora_padrao": cfg.get("hora_padrao") or "",
+        "duracao_padrao": int(cfg.get("duracao_padrao") or 60),
+        "professor_padrao": cfg.get("professor_padrao") or "",
+        "local_padrao": cfg.get("local_padrao") or "",
+        "pode_editar": user["role"] == "aluno",
+    }
+
+
+@app.put("/api/config")
+async def salvar_config(body: ConfigIn, user=Depends(require_dono),
+                        db: aiosqlite.Connection = Depends(get_db)):
+    """Só o dono mexe no preço — o personal enxerga, mas não altera."""
+    for chave, valor in body.dict(exclude_unset=True).items():
+        if valor is None:
+            continue
+        await db.execute("INSERT OR REPLACE INTO config (chave, valor) VALUES (?,?)",
+                         (chave, str(valor)))
+    await db.commit()
+    return await obter_config(user, db)
 
 
 # ── Aulas ─────────────────────────────────────────────────────────────────────
@@ -440,13 +515,14 @@ async def criar_aula(body: AulaIn, user=Depends(get_current_user),
         if dup:
             ignoradas += 1
             continue
+        valor = body.valor if body.valor is not None else await _valor_hora(db, d.isoformat())
         cur = await db.execute("""
             INSERT INTO aulas (data, hora, duracao_min, tipo, foco, local, professor,
-                               status, plano_id, modelo_id, descricao, obs, pse, atualizado_em)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
+                               status, plano_id, modelo_id, descricao, obs, pse, valor, atualizado_em)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
         """, (d.isoformat(), body.hora, body.duracao_min or 60, body.tipo, body.foco,
               body.local, body.professor, body.status or "agendada", body.plano_id,
-              body.modelo_id, body.descricao, body.obs, body.pse))
+              body.modelo_id, body.descricao, body.obs, body.pse, valor))
         aid = cur.lastrowid
         if body.modelo_id:
             await _copiar_modelo(db, aid, body.modelo_id)
@@ -455,6 +531,65 @@ async def criar_aula(body: AulaIn, user=Depends(get_current_user),
     if not criadas:
         raise HTTPException(409, "Já existe aula nesse dia e horário")
     return {"ids": criadas, "criadas": len(criadas), "ignoradas": ignoradas}
+
+
+@app.post("/api/aulas/mes")
+async def definir_dias_do_mes(body: DiasDoMesIn, user=Depends(get_current_user),
+                              db: aiosqlite.Connection = Depends(get_db)):
+    """Define de uma vez os dias do mês em que haverá aula.
+
+    Cria as aulas que faltam e remove as que saíram da seleção — mas só as que ainda
+    estão 'agendada' E sem treino montado. Aula já realizada, com falta, cancelada ou
+    com exercícios prescritos pelo personal nunca é apagada por aqui; ela sai da lista
+    de removidas e é reportada em 'protegidas'.
+    """
+    ini, fim = _mes_range(body.mes)
+    ano, mes = int(ini[:4]), int(ini[5:7])
+    ult = _cal.monthrange(ano, mes)[1]
+    dias = sorted({d for d in body.dias if 1 <= d <= ult})
+    alvo = {date(ano, mes, d).isoformat() for d in dias}
+
+    cfg = await _config(db)
+    hora = body.hora or cfg.get("hora_padrao") or None
+    duracao = body.duracao_min or int(cfg.get("duracao_padrao") or 60)
+    professor = body.professor if body.professor is not None else (cfg.get("professor_padrao") or None)
+    local = body.local if body.local is not None else (cfg.get("local_padrao") or None)
+
+    cur = await db.execute("""
+        SELECT a.*, (SELECT COUNT(*) FROM aula_exercicios ae WHERE ae.aula_id = a.id) n_ex
+          FROM aulas a WHERE a.data BETWEEN ? AND ?
+    """, (ini, fim))
+    existentes = [dict(r) for r in await cur.fetchall()]
+    por_data = {}
+    for a in existentes:
+        por_data.setdefault(a["data"], []).append(a)
+
+    criadas, removidas, protegidas = 0, 0, []
+    for d in sorted(alvo - set(por_data)):
+        valor = body.valor if body.valor is not None else await _valor_hora(db, d)
+        await db.execute("""
+            INSERT INTO aulas (data, hora, duracao_min, professor, local, status, plano_id, valor, atualizado_em)
+            VALUES (?,?,?,?,?, 'agendada', ?,?, CURRENT_TIMESTAMP)
+        """, (d, hora, duracao, professor, local, body.plano_id, valor))
+        criadas += 1
+
+    for d, aulas_do_dia in por_data.items():
+        if d in alvo:
+            continue
+        for a in aulas_do_dia:
+            if a["status"] != "agendada" or a["n_ex"] > 0:
+                protegidas.append({"data": d, "motivo": "treino montado" if a["n_ex"] else a["status"]})
+                continue
+            await db.execute("DELETE FROM aulas WHERE id=?", (a["id"],))
+            removidas += 1
+    await db.commit()
+
+    cur = await db.execute(
+        "SELECT COUNT(*) n, COALESCE(SUM(COALESCE(valor,0)),0) v FROM aulas "
+        "WHERE data BETWEEN ? AND ? AND status <> 'cancelada'", (ini, fim))
+    r = await cur.fetchone()
+    return {"mes": body.mes, "criadas": criadas, "removidas": removidas,
+            "protegidas": protegidas, "aulas_no_mes": r["n"], "valor_previsto": round(r["v"], 2)}
 
 
 @app.patch("/api/aulas/{aid}")
@@ -703,11 +838,12 @@ async def listar_planos(user=Depends(get_current_user), db: aiosqlite.Connection
 async def criar_plano(body: PlanoIn, user=Depends(get_current_user),
                       db: aiosqlite.Connection = Depends(get_db)):
     cur = await db.execute("""
-        INSERT INTO planos (nome, inicio, fim, aulas_contratadas, valor, freq_semanal, professor, obs, ativo)
-        VALUES (?,?,?,?,?,?,?,?,?)
+        INSERT INTO planos (nome, inicio, fim, aulas_contratadas, valor, valor_hora,
+                            freq_semanal, professor, obs, ativo)
+        VALUES (?,?,?,?,?,?,?,?,?,?)
     """, (body.nome.strip(), _parse_data(body.inicio) if body.inicio else None,
           _parse_data(body.fim) if body.fim else None, body.aulas_contratadas or 0,
-          body.valor or 0, body.freq_semanal or 0, body.professor, body.obs,
+          body.valor or 0, body.valor_hora, body.freq_semanal or 0, body.professor, body.obs,
           1 if body.ativo else 0))
     await db.commit()
     return {"id": cur.lastrowid}
@@ -719,11 +855,11 @@ async def editar_plano(pid: int, body: PlanoIn, user=Depends(get_current_user),
     if not await (await db.execute("SELECT id FROM planos WHERE id=?", (pid,))).fetchone():
         raise HTTPException(404, "Plano não encontrado")
     await db.execute("""
-        UPDATE planos SET nome=?, inicio=?, fim=?, aulas_contratadas=?, valor=?, freq_semanal=?,
-                          professor=?, obs=?, ativo=? WHERE id=?
+        UPDATE planos SET nome=?, inicio=?, fim=?, aulas_contratadas=?, valor=?, valor_hora=?,
+                          freq_semanal=?, professor=?, obs=?, ativo=? WHERE id=?
     """, (body.nome.strip(), _parse_data(body.inicio) if body.inicio else None,
           _parse_data(body.fim) if body.fim else None, body.aulas_contratadas or 0,
-          body.valor or 0, body.freq_semanal or 0, body.professor, body.obs,
+          body.valor or 0, body.valor_hora, body.freq_semanal or 0, body.professor, body.obs,
           1 if body.ativo else 0, pid))
     await db.commit()
     return {"msg": "Plano atualizado"}
@@ -802,6 +938,26 @@ async def resumo(mes: Optional[str] = None, user=Depends(get_current_user),
             sequencia += 1
             s -= timedelta(weeks=1)
 
+    # Financeiro do mês.
+    #   previsto    = tudo que está na agenda e ainda pode acontecer (agendada + realizada + falta)
+    #   consolidado = o que já é devido: realizada + falta (cancelada com aviso não é cobrada)
+    cur = await db.execute("""
+        SELECT status, COUNT(*) n, COALESCE(SUM(COALESCE(valor,0)),0) v
+          FROM aulas WHERE data BETWEEN ? AND ? GROUP BY status
+    """, (ini, fim))
+    fin = {r["status"]: {"n": r["n"], "v": r["v"]} for r in await cur.fetchall()}
+    def _v(*sts):
+        return round(sum(fin.get(x, {}).get("v", 0) for x in sts), 2)
+    previsto = _v("agendada", "realizada", "falta")
+    consolidado = _v("realizada", "falta")
+
+    # Aulas sem treino montado (a fila de trabalho do personal)
+    sem_treino = (await (await db.execute("""
+        SELECT COUNT(*) FROM aulas a
+         WHERE a.data BETWEEN ? AND ? AND a.status IN ('agendada','realizada')
+           AND NOT EXISTS (SELECT 1 FROM aula_exercicios ae WHERE ae.aula_id = a.id)
+    """, (ini, fim))).fetchone())[0]
+
     return {
         "mes": ini[:7], "inicio": ini, "fim": fim,
         "realizadas": realizadas, "faltas": faltas, "canceladas": canceladas,
@@ -809,7 +965,53 @@ async def resumo(mes: Optional[str] = None, user=Depends(get_current_user),
         "aderencia": aderencia, "meta_mes": meta_mes,
         "volume_kg": round(volume, 1),
         "sequencia_semanas": sequencia,
+        "sem_treino": sem_treino,
         "proxima": _d(prox), "plano": plano,
+        "financeiro": {
+            "valor_hora": await _valor_hora(db, ini),
+            "aulas_previstas": sum(fin.get(x, {}).get("n", 0) for x in ("agendada", "realizada", "falta")),
+            "previsto": previsto,
+            "consolidado": consolidado,
+            "a_realizar": round(previsto - consolidado, 2),
+            "cancelado": _v("cancelada"),
+        },
+    }
+
+
+@app.get("/api/financeiro")
+async def financeiro(ano: Optional[int] = None, user=Depends(get_current_user),
+                     db: aiosqlite.Connection = Depends(get_db)):
+    """Fechamento mês a mês: quanto o aluno paga e quanto o personal recebe
+    (é o mesmo número, visto dos dois lados)."""
+    ano = ano or _hoje().year
+    ini, fim = date(ano, 1, 1).isoformat(), date(ano, 12, 31).isoformat()
+    meses = [{"mes": m, "aulas": 0, "previsto": 0.0, "consolidado": 0.0,
+              "realizadas": 0, "faltas": 0} for m in range(1, 13)]
+    cur = await db.execute("""
+        SELECT CAST(substr(data,6,2) AS INTEGER) m, status,
+               COUNT(*) n, COALESCE(SUM(COALESCE(valor,0)),0) v
+          FROM aulas WHERE data BETWEEN ? AND ? GROUP BY m, status
+    """, (ini, fim))
+    for r in await cur.fetchall():
+        if not (1 <= r["m"] <= 12):
+            continue
+        alvo = meses[r["m"] - 1]
+        if r["status"] == "cancelada":
+            continue
+        alvo["aulas"] += r["n"]
+        alvo["previsto"] += r["v"]
+        if r["status"] == "realizada":
+            alvo["realizadas"] = r["n"]; alvo["consolidado"] += r["v"]
+        elif r["status"] == "falta":
+            alvo["faltas"] = r["n"]; alvo["consolidado"] += r["v"]
+    for m in meses:
+        m["previsto"] = round(m["previsto"], 2)
+        m["consolidado"] = round(m["consolidado"], 2)
+    return {
+        "ano": ano, "meses": meses,
+        "total_previsto": round(sum(m["previsto"] for m in meses), 2),
+        "total_consolidado": round(sum(m["consolidado"] for m in meses), 2),
+        "valor_hora": await _valor_hora(db),
     }
 
 

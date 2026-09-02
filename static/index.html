@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="FITPLAN">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2316A34A'/%3E%3Cg stroke='white' stroke-width='9' stroke-linecap='round'%3E%3Cpath d='M30 32v36M70 32v36M18 42v16M82 42v16M30 50h40'/%3E%3C/g%3E%3C/svg%3E">
-<link rel="stylesheet" href="/static/css/style.css?v=1.2">
+<link rel="stylesheet" href="/static/css/style.css?v=1.4">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -54,9 +54,9 @@
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
       Frequência
     </button>
-    <button class="nav-item" data-page="planos" onclick="nav('planos')">
+    <button class="nav-item" data-page="financeiro" onclick="nav('financeiro')">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/></svg>
-      Planos
+      Financeiro
     </button>
     <button class="nav-item" data-page="config" onclick="nav('config')">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 008 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9c.14.36.43.65.79.79H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
@@ -76,6 +76,7 @@
     </button>
     <span class="title" id="page-title">Agenda</span>
     <button class="btn btn-sm btn-ghost" onclick="toggleTema()" title="Tema claro/escuro" id="btn-tema">🌙</button>
+    <button class="btn btn-sm" onclick="abrirDiasDoMes()" id="btn-dias">Dias do mês</button>
     <button class="btn btn-sm btn-primary" onclick="novaAula()">+ Aula</button>
   </div>
 
@@ -118,12 +119,15 @@
           <option value="falta">Falta</option>
           <option value="cancelada">Cancelada</option>
         </select>
+        <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:12px;color:var(--text)">
+          <input type="checkbox" id="f-sem-treino" onchange="renderLista()" style="width:auto"> só sem treino
+        </label>
       </div>
       <div class="table-wrap">
         <table>
           <thead><tr>
             <th>Data</th><th>Hora</th><th>Tipo</th><th>Foco / Descrição</th>
-            <th class="right">Exerc.</th><th>Status</th><th></th>
+            <th class="right">Exerc.</th><th class="right">Valor</th><th>Status</th><th></th>
           </tr></thead>
           <tbody id="lista-aulas"></tbody>
         </table>
@@ -203,28 +207,77 @@
     </div>
   </section>
 
-  <!-- ══ PLANOS ══ -->
-  <section class="page" id="page-planos">
+  <!-- ══ FINANCEIRO ══ -->
+  <section class="page" id="page-financeiro">
+    <div class="kpis" id="fin-kpis"></div>
+
     <div class="card">
       <div class="card-head">
-        <span class="card-title">Pacotes de aula contratados</span>
+        <span class="card-title">Fechamento mês a mês</span>
+        <div class="row">
+          <span class="muted" id="fin-hora"></span>
+          <select id="f-fin-ano" onchange="loadFinanceiro()" style="width:auto"></select>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Mês</th><th class="right">Aulas</th><th class="right">Realizadas</th>
+            <th class="right">Faltas</th><th class="right">Previsto</th><th class="right">A pagar (consolidado)</th>
+          </tr></thead>
+          <tbody id="lista-financeiro"></tbody>
+        </table>
+      </div>
+      <div class="card-body" style="border-top:1px solid var(--border);font-size:12px;color:var(--muted)">
+        <b>Previsto</b> = tudo que está na agenda (agendadas + realizadas + faltas).
+        <b>Consolidado</b> = o que já é devido: aulas realizadas + faltas. Aula <b>cancelada</b> não é cobrada.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">Pacotes contratados</span>
         <button class="btn btn-sm btn-primary" onclick="novoPlano()">+ Novo pacote</button>
       </div>
       <div class="table-wrap">
         <table>
           <thead><tr>
-            <th>Pacote</th><th>Vigência</th><th class="right">Contratadas</th><th class="right">Usadas</th>
-            <th class="right">Saldo</th><th class="right">Meta/sem</th><th class="right">Valor</th>
-            <th class="right">R$/aula</th><th></th>
+            <th>Pacote</th><th>Vigência</th><th class="right">R$/hora</th><th class="right">Contratadas</th>
+            <th class="right">Usadas</th><th class="right">Saldo</th><th class="right">Meta/sem</th><th></th>
           </tr></thead>
           <tbody id="lista-planos"></tbody>
         </table>
+      </div>
+      <div class="card-body" style="border-top:1px solid var(--border);font-size:12px;color:var(--muted)">
+        Opcional. Use se o combinado for pacote fechado (saldo de aulas). O <b>R$/hora</b> do pacote
+        vigente tem prioridade sobre o valor geral definido em Configurações.
       </div>
     </div>
   </section>
 
   <!-- ══ CONFIG ══ -->
   <section class="page" id="page-config">
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">Valor da hora-aula e padrões da agenda</span>
+        <span class="muted" id="cfg-aviso" style="font-size:12px"></span>
+      </div>
+      <div class="card-body">
+        <div class="form-grid" style="max-width:760px">
+          <div><label>Valor da hora-aula (R$) *</label><input id="cfg-valor" type="number" step="0.01" min="0"></div>
+          <div><label>Horário padrão</label><input id="cfg-hora" type="time"></div>
+          <div><label>Duração padrão (min)</label><input id="cfg-duracao" type="number" min="10" step="5"></div>
+          <div><label>Professor padrão</label><input id="cfg-prof"></div>
+          <div><label>Local padrão</label><input id="cfg-local"></div>
+          <div class="form-full"><button class="btn btn-primary" id="cfg-btn" onclick="salvarConfig()">Salvar</button></div>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-top:12px">
+          O valor é gravado em cada aula no momento em que ela entra na agenda. Reajuste depois
+          só vale para as aulas novas — o histórico e os meses já fechados não mudam.
+        </div>
+      </div>
+    </div>
+
     <div class="card">
       <div class="card-head"><span class="card-title">Minha senha</span></div>
       <div class="card-body">
@@ -292,6 +345,7 @@
         <div><label>Pacote</label><select id="a-plano"><option value="">—</option></select></div>
         <div><label>Modelo de treino</label><select id="a-modelo"><option value="">—</option></select></div>
         <div><label>PSE (esforço 1-10)</label><input id="a-pse" type="number" min="1" max="10"></div>
+        <div><label>Valor da aula (R$)</label><input id="a-valor" type="number" step="0.01" min="0"></div>
         <div class="form-full"><label>Descrição do treino</label><textarea id="a-descricao" placeholder="O que será feito na aula"></textarea></div>
         <div class="form-full"><label>Observações (como foi)</label><textarea id="a-obs"></textarea></div>
       </div>
@@ -336,6 +390,42 @@
       <button class="btn btn-danger" id="a-btn-del" onclick="excluirAula()" style="margin-right:auto;display:none">Excluir</button>
       <button class="btn" onclick="fecharModal('m-aula')">Cancelar</button>
       <button class="btn btn-primary" onclick="salvarAula()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Modal: dias do mês ══ -->
+<div class="modal-bg" id="m-dias">
+  <div class="modal" style="max-width:620px">
+    <div class="modal-head">
+      <span class="modal-title" id="m-dias-titulo">Dias de aula do mês</span>
+      <button class="btn btn-sm btn-ghost" onclick="fecharModal('m-dias')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--muted);margin-bottom:12px">
+        Marque os dias em que você fará aula. As aulas entram na agenda como <b>agendadas</b>,
+        prontas para o personal montar o treino.
+      </div>
+      <div class="row" style="margin-bottom:12px">
+        <button class="btn btn-sm" onclick="dmSemana([1,3,5])">Seg/Qua/Sex</button>
+        <button class="btn btn-sm" onclick="dmSemana([2,4])">Ter/Qui</button>
+        <button class="btn btn-sm" onclick="dmSemana([1,2,3,4,5])">Seg a Sex</button>
+        <button class="btn btn-sm" onclick="dmSemana([])">Limpar</button>
+      </div>
+      <div id="dm-grid" class="dm-grid"></div>
+      <div class="sec-title">Padrão das aulas criadas</div>
+      <div class="form-grid">
+        <div><label>Horário</label><input id="dm-hora" type="time"></div>
+        <div><label>Duração (min)</label><input id="dm-duracao" type="number" min="10" step="5"></div>
+        <div><label>Professor</label><input id="dm-prof"></div>
+        <div><label>Local</label><input id="dm-local"></div>
+        <div><label>Valor da aula (R$)</label><input id="dm-valor" type="number" step="0.01" min="0" oninput="dmTotal()"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <div id="dm-resumo" class="dm-resumo"></div>
+      <button class="btn" onclick="fecharModal('m-dias')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarDiasDoMes()">Salvar agenda do mês</button>
     </div>
   </div>
 </div>
@@ -426,7 +516,8 @@
         <div><label>Fim</label><input id="p-fim" type="date"></div>
         <div><label>Aulas contratadas</label><input id="p-aulas" type="number" min="0"></div>
         <div><label>Meta por semana</label><input id="p-freq" type="number" min="0" max="7"></div>
-        <div><label>Valor total (R$)</label><input id="p-valor" type="number" step="0.01" min="0"></div>
+        <div><label>Valor da hora-aula (R$)</label><input id="p-hora" type="number" step="0.01" min="0" placeholder="usa o valor geral"></div>
+        <div><label>Valor total do pacote (R$)</label><input id="p-valor" type="number" step="0.01" min="0"></div>
         <div><label>Professor</label><input id="p-prof"></div>
         <div class="form-full"><label>Observações</label><textarea id="p-obs"></textarea></div>
         <div class="form-full"><label><input type="checkbox" id="p-ativo" checked style="width:auto"> Pacote ativo</label></div>
@@ -466,6 +557,6 @@
 </div>
 
 <div class="toast-wrap" id="toasts"></div>
-<script src="/static/js/app.js?v=1.1"></script>
+<script src="/static/js/app.js?v=1.3"></script>
 </body>
 </html>

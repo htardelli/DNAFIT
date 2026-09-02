@@ -13,11 +13,30 @@ dos exercícios de cada treino.
 
 | Sua necessidade | Onde está |
 |---|---|
-| Calendário dos dias de aula | **Agenda** — calendário mensal + agendamento recorrente (ex.: seg/qua/sex por 8 semanas) |
-| Quantidade de aulas | **Planos** — pacote contratado, aulas usadas, **saldo** e custo por aula |
-| Frequência | **Agenda** (KPI de aderência e sequência) e **Frequência** (gráficos por mês/semana) |
+| Marcar os dias do mês em que farei aula | **Agenda → Dias do mês** — grade do mês, você clica nos dias e salva tudo de uma vez |
+| Valor da hora-aula | **Configurações** (valor geral) ou **Financeiro → Pacote** (valor daquele período) |
+| Quanto vou pagar / quanto o personal recebe | Calculado sozinho: KPI **A pagar/A receber no mês** + **Financeiro** (fechamento mês a mês) |
+| Quantidade de aulas | KPIs da Agenda e, se usar pacote fechado, o **saldo** em Financeiro |
+| Frequência | **Agenda** (aderência e sequência) e **Frequência** (gráficos por mês/semana) |
 | Tipo de exercício | **Treinos** — biblioteca por grupo muscular e equipamento; tipo da aula (Força, Hipertrofia, HIIT…) |
 | Descrição dos exercícios | **Treinos** (execução de cada exercício) e, na aula, séries/reps/carga/descanso/observação |
+
+---
+
+## O fluxo do mês (é assim que o app foi desenhado)
+
+1. **Você (aluno)** abre **Agenda → Dias do mês**, clica nos dias em que vai treinar
+   (ou usa os atalhos *Seg/Qua/Sex*, *Ter/Qui*, *Seg a Sex*) e vê **na hora** quanto vai custar:
+   `13 aulas × R$ 90,00 = R$ 1.170,00`. Salva.
+2. As aulas entram na agenda como **agendadas**, sem treino — e aparecem no KPI
+   **"Sem treino montado"** e no filtro *só sem treino*.
+3. **O personal** abre cada dia (ou aplica um **modelo** Treino A/B/C) e prescreve os exercícios.
+4. Depois da aula, qualquer um dos dois marca **Realizada** (ou falta/cancelada).
+5. O **Financeiro** fecha o mês sozinho: previsto × consolidado, no ano inteiro.
+
+Refazer os dias do mês é seguro: aula **já realizada, com falta, cancelada ou com treino
+montado nunca é apagada** — ela aparece travada (amarela) na grade e o app avisa quantas
+foram mantidas.
 
 ---
 
@@ -71,6 +90,15 @@ Crie o acesso do personal em **Configurações → Acessos → + Novo acesso**.
 - **Sequência** = semanas consecutivas (encerradas) em que você bateu a meta semanal do pacote.
 - **Volume de carga (kg)** = séries × repetições × carga, somado nas aulas realizadas.
   Reps em tempo ("30s") não entram no volume — só o que tem repetição contável.
+- **Dinheiro:** cada aula guarda o **valor da hora-aula do dia em que foi criada** (snapshot).
+  Reajuste de preço vale só para as aulas novas — mês fechado não se reescreve.
+  - **Previsto** = agendadas + realizadas + faltas (tudo que está na agenda).
+  - **Consolidado** = realizadas + faltas — o que já é devido.
+  - **Cancelada** não é cobrada.
+  - É o mesmo número para os dois lados: o rótulo muda para **"A pagar"** (aluno) ou
+    **"A receber"** (personal), conforme quem está logado.
+- **Quem define o preço:** só o aluno (dono). O personal **vê** o valor, mas não altera.
+- **Prioridade do valor:** pacote vigente com `R$/hora` preenchido > valor geral das Configurações.
 - **Modelo de treino** (Treino A/B/C) é um **molde**: ao aplicar numa aula, os exercícios são
   *copiados*. Editar a aula depois não altera o modelo, e vice-versa — o histórico não se
   reescreve quando o professor muda a prescrição.

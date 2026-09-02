@@ -4,6 +4,9 @@
 let _user = null;
 let _mesRef = new Date();              // mês exibido no calendário
 let _aulas = [], _exercicios = [], _modelos = [], _planos = [];
+let _cfg = {};                          // valor da hora-aula e padrões da agenda
+let _dmSel = new Set();                 // dias marcados no modal "dias do mês"
+let _dmTravados = {};                   // dia → motivo (aula que não pode ser desmarcada)
 let _chMensal, _chSemanal, _chGrupo, _chEvol;
 
 const Auth = {
@@ -79,7 +82,7 @@ function mostrarLogin() {
 }
 
 // ── Navegação ─────────────────────────────────────────────────────────────────
-const TITULOS = { agenda:'Agenda', treinos:'Treinos', frequencia:'Frequência', planos:'Planos', config:'Configurações' };
+const TITULOS = { agenda:'Agenda', treinos:'Treinos', frequencia:'Frequência', financeiro:'Financeiro', config:'Configurações' };
 
 function nav(page) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -91,8 +94,8 @@ function nav(page) {
   if (page === 'agenda') loadAgenda();
   if (page === 'treinos') { loadExercicios(); loadModelos(); }
   if (page === 'frequencia') loadFrequencia();
-  if (page === 'planos') loadPlanos();
-  if (page === 'config') loadUsuarios();
+  if (page === 'financeiro') { loadFinanceiro(); loadPlanos(); }
+  if (page === 'config') { loadConfig(); loadUsuarios(); }
 }
 
 function abrirMenu() { document.getElementById('sidebar').classList.add('open'); document.getElementById('overlay').classList.add('show'); }
@@ -113,7 +116,7 @@ async function iniciar() {
   document.getElementById('app').style.display = '';
   document.getElementById('side-user').textContent = `${_user.nome} · ${_user.role === 'aluno' ? 'Aluno' : 'Personal'}`;
   document.getElementById('card-usuarios').style.display = _user.role === 'aluno' ? '' : 'none';
-  await Promise.all([carregarExercicios(), carregarModelos(), carregarPlanos()]);
+  await Promise.all([carregarExercicios(), carregarModelos(), carregarPlanos(), carregarConfig()]);
   loadAgenda();
 }
 
@@ -155,6 +158,36 @@ async function carregarPlanos() {
     _planos.map(p => `<option value="${p.id}">${esc(p.nome)}</option>`).join('');
 }
 
+async function carregarConfig() {
+  _cfg = await api('GET', '/api/config');
+}
+
+function loadConfig() {
+  setVal('cfg-valor', _cfg.valor_hora || '');
+  setVal('cfg-hora', _cfg.hora_padrao || '');
+  setVal('cfg-duracao', _cfg.duracao_padrao || 60);
+  setVal('cfg-prof', _cfg.professor_padrao || '');
+  setVal('cfg-local', _cfg.local_padrao || '');
+  // O personal enxerga o valor (é o que ele recebe), mas quem define o preço é o dono
+  const dono = !!_cfg.pode_editar;
+  ['cfg-valor','cfg-hora','cfg-duracao','cfg-prof','cfg-local'].forEach(i => document.getElementById(i).disabled = !dono);
+  document.getElementById('cfg-btn').style.display = dono ? '' : 'none';
+  document.getElementById('cfg-aviso').textContent = dono ? '' : 'Somente o aluno (dono) altera estes valores';
+}
+
+async function salvarConfig() {
+  try {
+    _cfg = await api('PUT', '/api/config', {
+      valor_hora: num('cfg-valor') || 0,
+      hora_padrao: val('cfg-hora') || null,
+      duracao_padrao: num('cfg-duracao') || 60,
+      professor_padrao: val('cfg-prof'),
+      local_padrao: val('cfg-local')
+    });
+    toast('Configuração salva');
+  } catch (e) { toast(e.message, 'err'); }
+}
+
 // ══════════════════════════════ AGENDA ═══════════════════════════════════════
 function mesRefStr() { return `${_mesRef.getFullYear()}-${String(_mesRef.getMonth()+1).padStart(2,'0')}`; }
 
@@ -194,12 +227,29 @@ function renderKpis(r) {
     { l: 'Próxima aula', v: px ? fmtData(px.data).slice(0, 5) + (px.hora ? ' ' + px.hora : '') : '—',
       s: px ? `${diaSemana(px.data)} · ${esc(px.tipo || px.foco || 'aula')}` : 'nada agendado', sm: true },
   ];
+  // O mesmo dinheiro, visto dos dois lados: o aluno paga, o personal recebe
+  const f = r.financeiro || {};
+  const dono = !_user || _user.role === 'aluno';
+  cards.splice(1, 0, {
+    l: dono ? 'A pagar no mês' : 'A receber no mês',
+    v: fmtR(f.previsto || 0), sm: true,
+    s: `${f.aulas_previstas || 0} aulas × ${fmtR(f.valor_hora || 0)} · ${fmtR(f.consolidado || 0)} já devido`
+  });
+  if (r.sem_treino) {
+    cards.push({ l: 'Sem treino montado', v: r.sem_treino,
+                 s: 'aulas esperando o personal' });
+  }
   document.getElementById('kpis').innerHTML = cards.map(c => `
     <div class="kpi">
       <div class="kpi-label">${c.l}</div>
       <div class="kpi-value${c.sm ? ' sm' : ''}">${c.v}</div>
       <div class="kpi-sub">${c.s}</div>
     </div>`).join('');
+}
+
+// Aula que ainda espera o personal montar o treino
+function semTreino(a) {
+  return !a.qtd_exercicios && (a.status === 'agendada' || a.status === 'realizada');
 }
 
 function renderCal() {
@@ -219,8 +269,8 @@ function renderCal() {
     const fora = d.getMonth() !== mes;
     if (fora && i >= 35) continue;                     // não desenha a 6ª linha vazia
     const chips = (porDia[k] || []).map(a => `
-      <div class="chip chip-${a.status}" onclick="event.stopPropagation();abrirAula(${a.id})"
-           title="${esc((a.hora||'') + ' ' + (a.tipo||'') + ' ' + (a.foco||''))}">
+      <div class="chip chip-${a.status}${semTreino(a) ? ' pend' : ''}" onclick="event.stopPropagation();abrirAula(${a.id})"
+           title="${esc((a.hora||'') + ' ' + (a.tipo||a.foco||'Aula') + (semTreino(a) ? ' — sem treino montado' : ''))}">
         ${a.hora ? `<span class="chip-hora">${a.hora}</span> ` : ''}<span class="chip-txt">${esc(a.tipo || a.foco || 'Aula')}</span>
       </div>`).join('');
     html += `<div class="cal-day ${fora ? 'out' : ''} ${k === hojeIso ? 'today' : ''}" onclick="novaAula('${k}')">
@@ -232,10 +282,11 @@ function renderCal() {
 
 function renderLista() {
   const f = val('f-status');
-  const linhas = _aulas.filter(a => !f || a.status === f);
+  const soPend = document.getElementById('f-sem-treino').checked;
+  const linhas = _aulas.filter(a => (!f || a.status === f) && (!soPend || semTreino(a)));
   const tb = document.getElementById('lista-aulas');
   if (!linhas.length) {
-    tb.innerHTML = '<tr><td colspan="7"><div class="empty">Nenhuma aula neste mês. Clique em um dia do calendário para agendar.</div></td></tr>';
+    tb.innerHTML = '<tr><td colspan="8"><div class="empty">Nenhuma aula com esse filtro. Use "Dias do mês" para montar a agenda.</div></td></tr>';
     return;
   }
   tb.innerHTML = linhas.map(a => `
@@ -244,7 +295,8 @@ function renderLista() {
       <td>${a.hora || '—'}</td>
       <td>${esc(a.tipo || '—')}</td>
       <td>${esc(a.foco || a.descricao || '—')}</td>
-      <td class="right">${a.qtd_exercicios || 0}</td>
+      <td class="right">${a.qtd_exercicios || 0}${semTreino(a) ? ' <span style="color:var(--accent)" title="sem treino montado">•</span>' : ''}</td>
+      <td class="right">${a.valor ? fmtR(a.valor) : '—'}</td>
       <td><span class="badge b-${a.status}">${a.status}</span></td>
       <td class="right">
         ${a.status === 'agendada' ? `<button class="btn btn-sm btn-primary" onclick="marcar(${a.id},'realizada')">Realizada</button>` : ''}
@@ -263,7 +315,7 @@ async function marcar(id, status) {
 
 // ── Modal de aula ─────────────────────────────────────────────────────────────
 function limparAula() {
-  ['a-id','a-hora','a-foco','a-local','a-professor','a-pse','a-descricao','a-obs'].forEach(i => setVal(i, ''));
+  ['a-id','a-hora','a-foco','a-local','a-professor','a-pse','a-descricao','a-obs','a-valor'].forEach(i => setVal(i, ''));
   setVal('a-duracao', 60); setVal('a-status', 'agendada'); setVal('a-tipo', '');
   setVal('a-plano', ''); setVal('a-modelo', ''); setVal('a-repetir', 0);
   document.querySelectorAll('#a-dias input').forEach(c => c.checked = false);
@@ -275,7 +327,12 @@ function novaAula(dataIso) {
   limparAula();
   const planoAtivo = _planos.find(p => p.ativo);
   setVal('a-data', dataIso || iso(new Date()));
-  if (planoAtivo) { setVal('a-plano', planoAtivo.id); setVal('a-professor', planoAtivo.professor || ''); }
+  setVal('a-hora', _cfg.hora_padrao || '');
+  setVal('a-duracao', _cfg.duracao_padrao || 60);
+  setVal('a-professor', _cfg.professor_padrao || '');
+  setVal('a-local', _cfg.local_padrao || '');
+  setVal('a-valor', _cfg.valor_hora_vigente || _cfg.valor_hora || '');
+  if (planoAtivo) { setVal('a-plano', planoAtivo.id); if (planoAtivo.professor) setVal('a-professor', planoAtivo.professor); }
   document.getElementById('m-aula-titulo').textContent = 'Nova aula';
   document.getElementById('a-btn-del').style.display = 'none';
   document.getElementById('a-recorrencia').style.display = '';
@@ -292,6 +349,7 @@ async function abrirAula(id) {
     setVal('a-local', a.local || ''); setVal('a-professor', a.professor || '');
     setVal('a-plano', a.plano_id || ''); setVal('a-modelo', a.modelo_id || '');
     setVal('a-pse', a.pse || ''); setVal('a-descricao', a.descricao || ''); setVal('a-obs', a.obs || '');
+    setVal('a-valor', a.valor ?? '');
     (a.exercicios || []).forEach(it => addLinhaEx('a-ex', it));
     document.getElementById('m-aula-titulo').textContent = `Aula de ${fmtData(a.data)}`;
     document.getElementById('a-btn-del').style.display = '';
@@ -308,7 +366,8 @@ async function salvarAula() {
     tipo: val('a-tipo') || null, foco: val('a-foco') || null, local: val('a-local') || null,
     professor: val('a-professor') || null, status: val('a-status'),
     plano_id: num('a-plano'), modelo_id: num('a-modelo'),
-    descricao: val('a-descricao') || null, obs: val('a-obs') || null, pse: num('a-pse')
+    descricao: val('a-descricao') || null, obs: val('a-obs') || null, pse: num('a-pse'),
+    valor: num('a-valor')
   };
   try {
     let aulaId = id;
@@ -392,6 +451,94 @@ function coletarEx(containerId) {
       feito: feito ? feito.checked : false
     };
   }).filter(Boolean);
+}
+
+// ── Dias de aula do mês (o aluno define; o personal preenche o treino) ────────
+function abrirDiasDoMes() {
+  const ano = _mesRef.getFullYear(), mes = _mesRef.getMonth();
+  _dmSel = new Set();
+  _dmTravados = {};
+  _aulas.forEach(a => {
+    const d = Number(a.data.slice(8, 10));
+    _dmSel.add(d);
+    // Aula realizada/falta/cancelada ou já com treino montado não pode ser desmarcada aqui
+    if (a.status !== 'agendada' || a.qtd_exercicios) {
+      _dmTravados[d] = a.status !== 'agendada' ? a.status : 'treino montado';
+    }
+  });
+  document.getElementById('m-dias-titulo').textContent =
+    'Dias de aula — ' + _mesRef.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  setVal('dm-hora', _cfg.hora_padrao || '');
+  setVal('dm-duracao', _cfg.duracao_padrao || 60);
+  setVal('dm-prof', _cfg.professor_padrao || '');
+  setVal('dm-local', _cfg.local_padrao || '');
+  setVal('dm-valor', _cfg.valor_hora_vigente || _cfg.valor_hora || '');
+  dmGrid(ano, mes);
+  abrirModal('m-dias');
+}
+
+function dmGrid(ano, mes) {
+  const ult = new Date(ano, mes + 1, 0).getDate();
+  const offset = (new Date(ano, mes, 1).getDay() + 6) % 7;   // grade começa na segunda
+  let html = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'].map(d => `<div class="dm-dow">${d}</div>`).join('');
+  for (let i = 0; i < offset; i++) html += '<button class="dm-dia vazio" disabled></button>';
+  for (let d = 1; d <= ult; d++) {
+    const travado = _dmTravados[d];
+    html += `<button class="dm-dia ${_dmSel.has(d) ? 'on' : ''} ${travado ? 'travado' : ''}"
+                     onclick="dmToggle(${d})" ${travado ? `title="${esc(travado)} — não pode ser removida aqui"` : ''}>${d}</button>`;
+  }
+  document.getElementById('dm-grid').innerHTML = html;
+  dmTotal();
+}
+
+function dmToggle(d) {
+  if (_dmTravados[d]) { toast(`Dia ${d}: ${_dmTravados[d]} — abra a aula para alterar`, 'warn'); return; }
+  if (_dmSel.has(d)) _dmSel.delete(d); else _dmSel.add(d);
+  dmGrid(_mesRef.getFullYear(), _mesRef.getMonth());
+}
+
+// Atalho: marca todos os dias do mês que caem nos dias da semana escolhidos
+function dmSemana(dows) {
+  const ano = _mesRef.getFullYear(), mes = _mesRef.getMonth();
+  const ult = new Date(ano, mes + 1, 0).getDate();
+  _dmSel = new Set(Object.keys(_dmTravados).map(Number));
+  for (let d = 1; d <= ult; d++) {
+    if (dows.includes(new Date(ano, mes, d).getDay())) _dmSel.add(d);
+  }
+  dmGrid(ano, mes);
+}
+
+function dmTotal() {
+  const n = _dmSel.size;
+  const v = num('dm-valor') || 0;
+  const dono = !_user || _user.role === 'aluno';
+  document.getElementById('dm-resumo').innerHTML = n
+    ? `${n} aula${n > 1 ? 's' : ''} × ${fmtR(v)} = <b>${fmtR(n * v)}</b>` +
+      `<div style="font-weight:600;font-size:12px;opacity:.85">` +
+      (dono ? 'valor a pagar no mês, se todas acontecerem' : 'valor a receber no mês, se todas acontecerem') +
+      `</div>`
+    : 'Nenhum dia marcado.';
+}
+
+async function salvarDiasDoMes() {
+  const body = {
+    mes: mesRefStr(),
+    dias: [..._dmSel],
+    hora: val('dm-hora') || null,
+    duracao_min: num('dm-duracao') || 60,
+    professor: val('dm-prof'),
+    local: val('dm-local'),
+    valor: num('dm-valor')
+  };
+  try {
+    const r = await api('POST', '/api/aulas/mes', body);
+    fecharModal('m-dias');
+    toast(`Agenda do mês salva: ${r.criadas} criada(s), ${r.removidas} removida(s)`);
+    if (r.protegidas && r.protegidas.length) {
+      toast(`${r.protegidas.length} aula(s) mantida(s): já realizadas ou com treino montado`, 'warn');
+    }
+    loadAgenda();
+  } catch (e) { toast(e.message, 'err'); }
 }
 
 // ══════════════════════════════ TREINOS ══════════════════════════════════════
@@ -596,33 +743,65 @@ async function loadEvolucao(recarregarLista = false) {
   } catch (e) { toast(e.message, 'err'); }
 }
 
-// ══════════════════════════════ PLANOS ═══════════════════════════════════════
+// ══════════════════════════════ FINANCEIRO ═══════════════════════════════════
+async function loadFinanceiro() {
+  const sel = document.getElementById('f-fin-ano');
+  const ano = sel.value || new Date().getFullYear();
+  try {
+    const d = await api('GET', `/api/financeiro?ano=${ano}`);
+    if (!sel.options.length) {
+      const atual = new Date().getFullYear();
+      sel.innerHTML = [atual + 1, atual, atual - 1, atual - 2].map(a => `<option>${a}</option>`).join('');
+      sel.value = d.ano;
+    }
+    const dono = !_user || _user.role === 'aluno';
+    document.getElementById('fin-hora').textContent = `Hora-aula vigente: ${fmtR(d.valor_hora)}`;
+    document.getElementById('fin-kpis').innerHTML = [
+      { l: 'Previsto no ano', v: fmtR(d.total_previsto), s: 'toda a agenda do ano' },
+      { l: dono ? 'A pagar (consolidado)' : 'A receber (consolidado)', v: fmtR(d.total_consolidado),
+        s: 'aulas realizadas + faltas' },
+      { l: 'Aulas no ano', v: d.meses.reduce((t, m) => t + m.aulas, 0), s: 'canceladas não entram' },
+    ].map(c => `<div class="kpi"><div class="kpi-label">${c.l}</div>
+                  <div class="kpi-value sm">${c.v}</div><div class="kpi-sub">${c.s}</div></div>`).join('');
+    document.getElementById('lista-financeiro').innerHTML = d.meses.map((m, i) => m.aulas ? `
+      <tr>
+        <td><b>${MESES[i]}</b></td>
+        <td class="right">${m.aulas}</td>
+        <td class="right">${m.realizadas}</td>
+        <td class="right">${m.faltas || '—'}</td>
+        <td class="right">${fmtR(m.previsto)}</td>
+        <td class="right"><b>${fmtR(m.consolidado)}</b></td>
+      </tr>` : '').join('') ||
+      '<tr><td colspan="6"><div class="empty">Nenhuma aula neste ano.</div></td></tr>';
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+// ══════════════════════════════ PACOTES ══════════════════════════════════════
 async function loadPlanos() {
-  try { await carregarPlanos(); renderPlanos(); } catch (e) { toast(e.message, 'err'); }
+  try { await carregarPlanos(); await carregarConfig(); renderPlanos(); } catch (e) { toast(e.message, 'err'); }
 }
 
 function renderPlanos() {
   const tb = document.getElementById('lista-planos');
   if (!_planos.length) {
-    tb.innerHTML = '<tr><td colspan="9"><div class="empty">Nenhum pacote cadastrado. Cadastre para acompanhar saldo de aulas e custo por aula.</div></td></tr>';
+    tb.innerHTML = '<tr><td colspan="8"><div class="empty">Nenhum pacote cadastrado — opcional. Sem pacote, o cálculo usa o valor da hora-aula das Configurações.</div></td></tr>';
     return;
   }
   tb.innerHTML = _planos.map(p => `
     <tr>
       <td><b>${esc(p.nome)}</b>${p.ativo ? '' : ' <span class="muted">(encerrado)</span>'}</td>
       <td>${p.inicio ? fmtData(p.inicio) : '—'} → ${p.fim ? fmtData(p.fim) : '—'}</td>
+      <td class="right">${p.valor_hora ? fmtR(p.valor_hora) : (p.valor_aula ? fmtR(p.valor_aula) : '—')}</td>
       <td class="right">${p.aulas_contratadas || 0}</td>
       <td class="right">${p.usadas} <span class="muted">(${p.realizadas}R/${p.faltas}F)</span></td>
       <td class="right"><b style="color:${p.saldo === 0 ? 'var(--danger)' : 'var(--primary)'}">${p.saldo}</b></td>
       <td class="right">${p.freq_semanal || '—'}</td>
-      <td class="right">${p.valor ? fmtR(p.valor) : '—'}</td>
-      <td class="right">${p.valor_aula ? fmtR(p.valor_aula) : '—'}</td>
       <td class="right"><button class="btn btn-sm" onclick="abrirPlano(${p.id})">Editar</button></td>
     </tr>`).join('');
 }
 
 function novoPlano() {
-  ['p-id','p-nome','p-inicio','p-fim','p-aulas','p-freq','p-valor','p-prof','p-obs'].forEach(i => setVal(i, ''));
+  ['p-id','p-nome','p-inicio','p-fim','p-aulas','p-freq','p-valor','p-hora','p-prof','p-obs'].forEach(i => setVal(i, ''));
   document.getElementById('p-ativo').checked = true;
   document.getElementById('m-plano-titulo').textContent = 'Novo pacote';
   document.getElementById('p-btn-del').style.display = 'none';
@@ -635,6 +814,7 @@ function abrirPlano(id) {
   setVal('p-id', p.id); setVal('p-nome', p.nome); setVal('p-inicio', p.inicio || '');
   setVal('p-fim', p.fim || ''); setVal('p-aulas', p.aulas_contratadas || '');
   setVal('p-freq', p.freq_semanal || ''); setVal('p-valor', p.valor || '');
+  setVal('p-hora', p.valor_hora ?? '');
   setVal('p-prof', p.professor || ''); setVal('p-obs', p.obs || '');
   document.getElementById('p-ativo').checked = !!p.ativo;
   document.getElementById('m-plano-titulo').textContent = p.nome;
@@ -646,7 +826,7 @@ async function salvarPlano() {
   if (!val('p-nome')) return toast('Informe o nome do pacote', 'err');
   const body = {
     nome: val('p-nome'), inicio: val('p-inicio') || null, fim: val('p-fim') || null,
-    aulas_contratadas: num('p-aulas') || 0, valor: num('p-valor') || 0,
+    aulas_contratadas: num('p-aulas') || 0, valor: num('p-valor') || 0, valor_hora: num('p-hora'),
     freq_semanal: num('p-freq') || 0, professor: val('p-prof') || null,
     obs: val('p-obs') || null, ativo: document.getElementById('p-ativo').checked
   };

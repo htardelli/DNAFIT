@@ -51,13 +51,21 @@ CREATE TABLE IF NOT EXISTS usuarios (
 );
 
 -- Pacotes de aula contratados (controle de quantidade e saldo)
+-- Configuração geral (chave/valor). Guarda o valor da hora-aula vigente e os
+-- padrões usados ao marcar os dias do mês.
+CREATE TABLE IF NOT EXISTS config (
+    chave TEXT PRIMARY KEY,
+    valor TEXT
+);
+
 CREATE TABLE IF NOT EXISTS planos (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
     nome              TEXT NOT NULL,
     inicio            DATE,
     fim               DATE,
     aulas_contratadas INTEGER DEFAULT 0,
-    valor             REAL DEFAULT 0,       -- valor total do pacote
+    valor             REAL DEFAULT 0,       -- valor total do pacote (quando pré-pago)
+    valor_hora        REAL,                 -- valor da hora-aula deste período (tem prioridade sobre a config)
     freq_semanal      INTEGER DEFAULT 0,    -- meta de aulas por semana
     professor         TEXT,
     obs               TEXT,
@@ -120,6 +128,7 @@ CREATE TABLE IF NOT EXISTS aulas (
     descricao     TEXT,                      -- descrição do treino do dia
     obs           TEXT,                      -- como foi a aula
     pse           INTEGER,                   -- percepção de esforço (1-10)
+    valor         REAL,                      -- valor da hora-aula NO DIA (snapshot: reajuste não reescreve o passado)
     criado_em     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     atualizado_em TIMESTAMP,
     FOREIGN KEY (plano_id)  REFERENCES planos(id)  ON DELETE SET NULL,
@@ -189,6 +198,15 @@ SEED_EXERCICIOS = [
 ]
 
 
+DEFAULTS_CONFIG = {
+    "valor_hora": "0",        # R$ por aula — base do cálculo do mês
+    "hora_padrao": "06:30",
+    "duracao_padrao": "60",
+    "professor_padrao": "",
+    "local_padrao": "",
+}
+
+
 async def init_db(hash_fn):
     """Cria o schema, semeia a biblioteca de exercícios e o usuário dono.
 
@@ -196,6 +214,18 @@ async def init_db(hash_fn):
     """
     async with aiosqlite.connect(DB_PATH) as db:
         await db.executescript(SCHEMA)
+
+        # Migrações idempotentes (bancos criados antes destas colunas)
+        async def _add_col(tabela, coluna, tipo):
+            try:
+                await db.execute(f"ALTER TABLE {tabela} ADD COLUMN {coluna} {tipo}")
+            except Exception:
+                pass   # a coluna já existe
+        await _add_col("planos", "valor_hora", "REAL")
+        await _add_col("aulas", "valor", "REAL")
+
+        for chave, valor in DEFAULTS_CONFIG.items():
+            await db.execute("INSERT OR IGNORE INTO config (chave, valor) VALUES (?,?)", (chave, valor))
 
         n = (await (await db.execute("SELECT COUNT(*) FROM exercicios")).fetchone())[0]
         if n == 0:

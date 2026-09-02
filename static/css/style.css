@@ -210,3 +210,23 @@ tbody tr:hover { background: rgba(22,163,74,.05); }
   .ex-row .ex-nome { grid-column: 1 / -1; }
   .ex-row .ex-obs { grid-column: 1 / -1; }
 }
+
+/* ── Modal "dias do mês": grade de dias clicáveis ── */
+.dm-grid { display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap: 5px; }
+.dm-dow { text-align: center; font-size: 10px; font-weight: 800; color: var(--muted); text-transform: uppercase; }
+.dm-dia {
+  aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--card);
+  font-size: 13px; font-weight: 700; cursor: pointer; user-select: none; padding: 0;
+}
+.dm-dia:hover { border-color: var(--primary); }
+.dm-dia.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+.dm-dia.travado { background: var(--warn-l); border-color: var(--warn); color: var(--warn); cursor: not-allowed; }
+.dm-dia.vazio { border: none; background: none; cursor: default; }
+/* Fica no rodapé do modal: o total precisa estar sempre visível enquanto se
+   clica nos dias (no celular ele sumia abaixo da dobra). */
+.dm-resumo {
+  margin-right: auto; padding: 8px 14px; border-radius: 9px; background: var(--primary-l);
+  color: var(--primary-d); font-weight: 700; font-size: 14px; line-height: 1.35;
+}
+[data-theme="dark"] .dm-resumo { color: #86EFAC; }
