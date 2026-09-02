@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="FITPLAN">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2316A34A'/%3E%3Cg stroke='white' stroke-width='9' stroke-linecap='round'%3E%3Cpath d='M30 32v36M70 32v36M18 42v16M82 42v16M30 50h40'/%3E%3C/g%3E%3C/svg%3E">
-<link rel="stylesheet" href="/static/css/style.css?v=1.6">
+<link rel="stylesheet" href="/static/css/style.css?v=2.0">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -273,7 +273,7 @@
       <div class="card-body">
         <div class="form-grid" style="max-width:760px">
           <div><label>Valor da hora-aula (R$) *</label><input id="cfg-valor" type="number" step="0.01" min="0"></div>
-          <div><label>Horário padrão</label><input id="cfg-hora" type="time"></div>
+          <div class="form-dt"><label>Horário padrão</label><input id="cfg-hora" type="time"></div>
           <div><label>Duração padrão (min)</label><input id="cfg-duracao" type="number" min="10" step="5"></div>
           <div><label>Professor padrão</label><input id="cfg-prof"></div>
           <div><label>Local padrão</label><input id="cfg-local"></div>
@@ -329,8 +329,8 @@
     <div class="modal-body">
       <input type="hidden" id="a-id">
       <div class="form-grid">
-        <div><label>Data * <span style="font-weight:400;color:var(--muted)">(remarque dentro do mês)</span></label><input id="a-data" type="date"></div>
-        <div><label>Hora</label><input id="a-hora" type="time"></div>
+        <div class="form-dt"><label>Data *</label><input id="a-data" type="date"></div>
+        <div class="form-dt"><label>Hora</label><input id="a-hora" type="time"></div>
         <div><label>Duração (min)</label><input id="a-duracao" type="number" min="10" step="5" value="60"></div>
         <div><label>Status</label>
           <select id="a-status">
@@ -354,6 +354,9 @@
         <div><label>Modelo de treino</label><select id="a-modelo"><option value="">—</option></select></div>
         <div><label>PSE (esforço 1-10)</label><input id="a-pse" type="number" min="1" max="10"></div>
         <div><label>Valor da aula (R$)</label><input id="a-valor" type="number" step="0.01" min="0"></div>
+        <div class="form-full" style="margin-top:-4px">
+          <span style="font-size:11px;color:var(--muted)">Remarcação: mude a data para outro dia <b>do mesmo mês</b>. Outro mês é recusado — aquele mês já foi pago.</span>
+        </div>
         <div class="form-full"><label>Descrição do treino</label><textarea id="a-descricao" placeholder="O que será feito na aula"></textarea></div>
         <div class="form-full"><label>Observações (como foi)</label><textarea id="a-obs"></textarea></div>
       </div>
@@ -423,7 +426,7 @@
       <div id="dm-grid" class="dm-grid"></div>
       <div class="sec-title">Padrão das aulas criadas</div>
       <div class="form-grid">
-        <div><label>Horário</label><input id="dm-hora" type="time"></div>
+        <div class="form-dt"><label>Horário</label><input id="dm-hora" type="time"></div>
         <div><label>Duração (min)</label><input id="dm-duracao" type="number" min="10" step="5"></div>
         <div><label>Professor</label><input id="dm-prof"></div>
         <div><label>Local</label><input id="dm-local"></div>
@@ -520,8 +523,8 @@
       <input type="hidden" id="p-id">
       <div class="form-grid">
         <div class="form-full"><label>Nome *</label><input id="p-nome" placeholder="Pacote 12 aulas — Set/2026"></div>
-        <div><label>Início</label><input id="p-inicio" type="date"></div>
-        <div><label>Fim</label><input id="p-fim" type="date"></div>
+        <div class="form-dt"><label>Início</label><input id="p-inicio" type="date"></div>
+        <div class="form-dt"><label>Fim</label><input id="p-fim" type="date"></div>
         <div><label>Aulas contratadas</label><input id="p-aulas" type="number" min="0"></div>
         <div><label>Meta por semana</label><input id="p-freq" type="number" min="0" max="7"></div>
         <div><label>Valor da hora-aula (R$)</label><input id="p-hora" type="number" step="0.01" min="0" placeholder="usa o valor geral"></div>
@@ -565,6 +568,6 @@
 </div>
 
 <div class="toast-wrap" id="toasts"></div>
-<script src="/static/js/app.js?v=1.7"></script>
+<script src="/static/js/app.js?v=1.8"></script>
 </body>
 </html>
