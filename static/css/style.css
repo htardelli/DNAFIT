@@ -40,6 +40,35 @@ input, select, textarea {
   border-radius: 8px; padding: 8px 10px; outline: none;
 }
 input:focus, select:focus, textarea:focus { border-color: var(--primary); }
+
+/* Campos de data e hora no Safari/iOS.
+   Com a aparência nativa ligada, o iPhone dimensiona o campo pelo widget do
+   sistema: ele ignora a largura do container (estoura a borda do modal) e
+   centraliza o valor, destoando de todos os outros campos. Desligar a aparência
+   devolve o controle ao CSS — o seletor de data continua sendo o nativo quando o
+   campo é tocado, só o desenho da caixa passa a ser o nosso. */
+input[type="date"], input[type="time"], input[type="datetime-local"] {
+  -webkit-appearance: none;
+  appearance: none;
+  text-align: left;
+  min-height: 38px;              /* sem a aparência nativa o iOS colapsa a altura */
+  line-height: 1.2;
+}
+/* o valor renderizado dentro do campo tem alinhamento próprio no WebKit */
+input[type="date"]::-webkit-date-and-time-value,
+input[type="time"]::-webkit-date-and-time-value,
+input[type="datetime-local"]::-webkit-date-and-time-value {
+  text-align: left;
+  margin: 0;
+}
+/* empurra o ícone de calendário/relógio para a direita da caixa */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator { margin-left: auto; }
+
+/* Rede de segurança: nenhum campo pode ultrapassar a caixa que o contém,
+   qualquer que seja a largura intrínseca que o navegador atribua a ele. */
+.form-grid input, .form-grid select, .form-grid textarea,
+.modal-body input, .modal-body select, .modal-body textarea { max-width: 100%; }
 textarea { resize: vertical; min-height: 64px; }
 label { display: block; font-size: 12px; font-weight: 700; color: var(--muted); margin-bottom: 4px; }
 
