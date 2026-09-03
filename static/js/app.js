@@ -378,7 +378,7 @@ function renderLista() {
                      onclick="event.stopPropagation();marcar(${a.id},'realizada')">✅</button>` : ''}
         ${a.status === 'agendada' && !jaComecou(a.data, a.hora)
           ? `<button class="ic" title="Remarcar para outro dia do mês"
-                     onclick="event.stopPropagation();abrirAula(${a.id}, true)">📅</button>` : ''}
+                     onclick="event.stopPropagation();abrirAula(${a.id}, true)">🔁</button>` : ''}
       </td>
     </tr>`; }).join('');
 }
