@@ -373,9 +373,17 @@ function renderLista() {
 }
 
 async function marcar(id, status) {
+  // Treino feito é fato consumado — confirma antes, porque não se desfaz
+  if (status === 'realizada') {
+    const a = _aulas.find(x => x.id === id);
+    const quando = a ? `${fmtDataCurta(a.data)}${a.hora ? ' às ' + a.hora : ''}` : 'desta aula';
+    if (!confirm(`Confirmar que o treino de ${quando} foi feito?\n\n` +
+                 `Isso não pode ser desfeito. Depois só dá para registrar o esforço, ` +
+                 `as observações e a execução dos exercícios.`)) return;
+  }
   try {
     await api('PATCH', `/api/aulas/${id}`, { status });
-    toast('Aula marcada como ' + status);
+    toast(status === 'realizada' ? 'Treino registrado como feito' : 'Aula marcada como ' + status);
     loadAgenda();
   } catch (e) { toast(e.message, 'err'); }
 }
@@ -433,7 +441,12 @@ async function abrirAula(id) {
 // Aula com o personal, na visão do aluno: o treino é leitura; o que é dele são
 // data, status e feedback.
 function aplicarModoAula() {
-  const pode = podeMontarTreino(val('a-modalidade'));
+  // Aula já feita: só entram esforço, observações e a execução dos exercícios.
+  // Só trava se a aula realmente aconteceu — "feita" num horário futuro é dado
+  // inconsistente e precisa continuar corrigível.
+  const concluida = val('a-status') === 'realizada' && !!val('a-id')
+                    && jaComecou(val('a-data'), val('a-hora'));
+  const pode = podeMontarTreino(val('a-modalidade')) && !concluida;
   // "Realizada" e "Falta" afirmam que o horário passou — indisponíveis antes disso
   const passou = jaComecou(val('a-data'), val('a-hora'));
   const sel = document.getElementById('a-status');
@@ -443,7 +456,14 @@ function aplicarModoAula() {
     o.textContent = o.textContent.replace(/ — ainda não começou$/, '') + (futuro ? ' — ainda não começou' : '');
   });
   if (!passou && (sel.value === 'realizada' || sel.value === 'falta')) sel.value = 'agendada';
-  document.getElementById('a-aviso-futuro').style.display = passou ? 'none' : '';
+  document.getElementById('a-aviso-futuro').style.display = (passou || concluida) ? 'none' : '';
+  document.getElementById('a-aviso-feito').style.display = concluida ? '' : 'none';
+  // campos que descrevem QUANDO e COMO a aula foi contratada ficam congelados
+  ['a-data', 'a-hora', 'a-status', 'a-modalidade', 'a-valor'].forEach(i => {
+    document.getElementById(i).disabled = concluida;
+  });
+  document.getElementById('a-btn-del').style.display =
+    (val('a-id') && !concluida) ? '' : 'none';
   // Campos que pertencem ao personal. Ficam travados para o aluno em aula com o
   // personal — o backend também os recusa, e campo editável que não salva é pior
   // do que campo travado.
@@ -454,9 +474,12 @@ function aplicarModoAula() {
   document.getElementById('a-ex-acoes').style.display = pode ? '' : 'none';
   document.getElementById('a-ex-aviso').style.display = pode ? 'none' : '';
   // linhas de exercício viram somente leitura (o "feito" continua marcável)
+  // Prescrição (nome, séries, reps, descanso) x execução (carga, obs, feito).
+  // Quem não pode montar o treino ainda registra o que aconteceu.
   document.querySelectorAll('#a-ex .ex-row').forEach(row => {
     row.querySelectorAll('input, select').forEach(el => {
-      if (!el.classList.contains('ex-feito')) el.disabled = !pode;
+      const execucao = ['ex-feito', 'ex-carga', 'ex-obs'].some(c => el.classList.contains(c));
+      el.disabled = execucao ? false : !pode;
     });
     const del = row.querySelector('.ex-del');
     if (del) del.style.display = pode ? '' : 'none';
@@ -466,9 +489,14 @@ function aplicarModoAula() {
 async function salvarAula() {
   const id = val('a-id');
   if (!val('a-data')) return toast('Informe a data', 'err');
-  const pode = podeMontarTreino(val('a-modalidade'));
+  const concluida = val('a-status') === 'realizada' && !!id
+                    && jaComecou(val('a-data'), val('a-hora'));
+  const pode = podeMontarTreino(val('a-modalidade')) && !concluida;
+  // Aula já feita: só o registro do que aconteceu.
   // Numa aula do personal, o aluno só envia o que é dele — o backend recusa o resto
-  const body = pode ? {
+  const body = concluida ? {
+    obs: val('a-obs') || null, pse: num('a-pse')
+  } : pode ? {
     data: val('a-data'), hora: val('a-hora') || null, duracao_min: num('a-duracao') || 60,
     tipo: val('a-tipo') || null, foco: val('a-foco') || null, local: val('a-local') || null,
     professor: val('a-professor') || null, status: val('a-status'),
@@ -492,16 +520,33 @@ async function salvarAula() {
       if (r.criadas > 1) toast(`${r.criadas} aulas criadas na agenda`);
       if (r.ignoradas) toast(`${r.ignoradas} data(s) já tinham aula no mesmo horário`, 'warn');
     }
-    // Exercícios só são gravados na aula "base" (a recorrência copia o modelo, quando
-    // houver) e só por quem pode montar o treino
+    // Exercícios: quem monta o treino grava a lista inteira; quem não monta
+    // (aula do personal, ou aula já concluída) registra só a execução de cada item.
     if (pode) {
       const itens = coletarEx('a-ex');
       if (itens.length || id) await api('PUT', `/api/aulas/${aulaId}/exercicios`, itens);
+    } else if (id) {
+      await salvarExecucoes(aulaId);
     }
     fecharModal('m-aula');
     toast('Aula salva');
     loadAgenda();
   } catch (e) { toast(e.message, 'err'); }
+}
+
+// Envia só o que aconteceu em cada exercício — sem tocar na prescrição
+async function salvarExecucoes(aulaId) {
+  const linhas = [...document.querySelectorAll('#a-ex .ex-row')];
+  for (const row of linhas) {
+    const eid = row.dataset.itemId;
+    if (!eid) continue;
+    const carga = row.querySelector('.ex-carga').value.trim();
+    await api('PATCH', `/api/aulas/${aulaId}/exercicios/${eid}`, {
+      feito: !!row.querySelector('.ex-feito')?.checked,
+      carga: carga === '' ? null : Number(carga),
+      obs: row.querySelector('.ex-obs').value.trim() || null
+    });
+  }
 }
 
 async function excluirAula() {
@@ -535,6 +580,7 @@ function addLinhaEx(containerId, it = {}) {
   const wrap = document.getElementById(containerId);
   const div = document.createElement('div');
   div.className = 'ex-row';
+  if (it.id) div.dataset.itemId = it.id;
   const comFeito = containerId === 'a-ex';
   div.innerHTML = `
     <input class="ex-nome" list="dl-ex" placeholder="Exercício" value="${esc(it.nome || '')}">

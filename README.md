@@ -161,6 +161,15 @@ ano futuro que você for planejar.
     **"A receber no mês"** (personal), conforme quem está logado.
   - Cada aula guarda o **valor da hora-aula do dia em que foi criada** (snapshot).
     Reajuste vale só para as aulas novas — mês fechado não se reescreve.
+- **Treino feito não se desfaz.** Marcar como **feita** pede confirmação e é definitivo.
+  Depois disso, a aula só aceita o registro do que aconteceu: **percepção de esforço**,
+  **observações** e, em cada exercício, **carga usada**, observação e o que foi **feito**.
+  Data, hora, status, modalidade e valor ficam congelados, e a aula não pode ser excluída.
+  - A trava vale para aula que de fato aconteceu. Uma marcada como feita num horário
+    que ainda não chegou é dado inconsistente e continua corrigível.
+- **Prescrição × execução.** Nome, séries, repetições e descanso são prescrição (do
+  personal, nas aulas com ele). Carga usada, observação e "feito" são execução — quem
+  treinou registra, mesmo numa aula do personal.
 - **Só dá para finalizar o que já passou.** Uma aula só aceita **realizada** ou **falta**
   depois do seu horário — antes disso, os status possíveis são **agendada** ou
   **cancelada**. Aula sem horário conta a partir do início do dia. A regra vale também

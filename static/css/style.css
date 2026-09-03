@@ -444,3 +444,7 @@ input:disabled, select:disabled, textarea:disabled {
   .legenda .facult-sm { display: inline; }
 }
 .facult-sm { display: none; }
+
+/* aviso de aula concluída — verde, porque é confirmação, não alerta */
+.aviso-ok { background: var(--primary-l); border-left-color: var(--primary); color: var(--primary-d); }
+[data-theme="dark"] .aviso-ok { color: #86EFAC; }

@@ -308,6 +308,12 @@ def _ja_comecou(data_iso: str, hora: Optional[str]) -> bool:
     return inicio <= _agora()
 
 
+# Treino feito é fato consumado: não se desfaz. Depois de 'realizada', a aula só
+# aceita o registro do que aconteceu — esforço percebido, observações e a execução
+# dos exercícios (carga usada, o que foi feito).
+STATUS_IRREVERSIVEL = "realizada"
+CAMPOS_APOS_REALIZADA = {"obs", "pse"}
+
 # Status que afirmam que o horário da aula passou. Não dá para dizer que uma
 # aula de amanhã foi feita — nem que houve falta nela.
 STATUS_SO_PASSADO = ("realizada", "falta")
@@ -826,6 +832,18 @@ async def editar_aula(aid: int, body: AulaUpdate, user=Depends(get_current_user)
                 f"Remarcação só dentro do mesmo mês. Esta aula é de {atual['data'][5:7]}/{atual['data'][:4]}, "
                 f"que já está pago. Para mover para outro mês, exclua esta aula e crie uma nova lá.")
         data["data"] = nova
+    # Aula já realizada: só entra o registro do que aconteceu.
+    # A trava vale para aula que de fato aconteceu. Uma marcada como feita num
+    # horário que ainda não chegou é dado inconsistente — e precisa poder ser
+    # corrigida, senão fica presa para sempre.
+    if atual["status"] == STATUS_IRREVERSIVEL and _ja_comecou(atual["data"], atual["hora"]):
+        travados = set(data) - CAMPOS_APOS_REALIZADA
+        if travados:
+            raise HTTPException(400,
+                "Este treino já foi dado como feito e isso não se desfaz. "
+                "Dá para ajustar a percepção de esforço, as observações e a execução "
+                f"dos exercícios. Campos bloqueados: {', '.join(sorted(travados))}.")
+
     # Vale o estado final: mudar a data para o futuro numa aula já 'realizada'
     # criaria o mesmo absurdo que marcar 'realizada' numa aula futura.
     _valida_status_no_tempo(
@@ -886,6 +904,42 @@ async def salvar_exercicios_aula(aid: int, itens: List[ItemIn], user=Depends(get
     await db.execute("UPDATE aulas SET atualizado_em=CURRENT_TIMESTAMP WHERE id=?", (aid,))
     await db.commit()
     return await _itens_da_aula(db, aid)
+
+
+class ExecucaoIn(BaseModel):
+    """O que de fato aconteceu no exercício — separado da prescrição."""
+    feito: Optional[bool] = None
+    carga: Optional[float] = None
+    obs: Optional[str] = None
+
+
+@app.patch("/api/aulas/{aid}/exercicios/{eid}")
+async def registrar_execucao(aid: int, eid: int, body: ExecucaoIn,
+                             user=Depends(get_current_user),
+                             db: aiosqlite.Connection = Depends(get_db)):
+    """Registra a execução de um exercício: se foi feito, com que carga e como foi.
+
+    Liberado para os dois perfis, inclusive numa aula com o personal: quem treinou
+    é quem sabe o que saiu. O que o aluno não pode mexer é na PRESCRIÇÃO — nome,
+    séries, repetições e descanso — e isso continua valendo.
+    """
+    item = await (await db.execute(
+        "SELECT ae.* FROM aula_exercicios ae WHERE ae.id=? AND ae.aula_id=?", (eid, aid))).fetchone()
+    if not item:
+        raise HTTPException(404, "Exercício não encontrado nesta aula")
+    data = body.dict(exclude_unset=True)
+    if not data:
+        return dict(item)
+    sets, params = [], []
+    for k, v in data.items():
+        sets.append(f"{k}=?")
+        params.append(1 if (k == "feito" and v) else (0 if k == "feito" else v))
+    params.append(eid)
+    await db.execute(f"UPDATE aula_exercicios SET {', '.join(sets)} WHERE id=?", params)
+    await db.execute("UPDATE aulas SET atualizado_em=CURRENT_TIMESTAMP WHERE id=?", (aid,))
+    await db.commit()
+    row = await (await db.execute("SELECT * FROM aula_exercicios WHERE id=?", (eid,))).fetchone()
+    return dict(row)
 
 
 @app.post("/api/aulas/{aid}/aplicar-modelo/{mid}")

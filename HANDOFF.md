@@ -271,6 +271,12 @@ projeto (já está no `.gitignore`).
   - O personal monta o treino de qualquer aula.
   - `POST /api/aulas/mes` opera **por modalidade**: marcar os dias de uma agenda nunca
     remove aulas da outra (as da outra voltam em `outras_modalidades`).
+- **`realizada` é irreversível** (quando a aula já começou): `PATCH /api/aulas/{id}`
+  aceita apenas `obs` e `pse`; qualquer outro campo devolve **400**. Excluir a aula
+  também some da interface.
+- **Execução separada da prescrição:** `PATCH /api/aulas/{aid}/exercicios/{eid}` aceita
+  `feito`, `carga` e `obs` e é liberado para os dois perfis — inclusive para o aluno numa
+  aula com o personal, onde o `PUT` da lista continua **403**.
 - **Só o passado pode ser finalizado:** `realizada` e `falta` exigem que o início da
   aula já tenha ocorrido (data + hora; sem hora, o início do dia). Validado na criação,
   na mudança de status e na mudança de data — sempre sobre o **estado final**.
