@@ -91,10 +91,18 @@ const TITULOS = { agenda:'Agenda', treinos:'Treinos', frequencia:'Frequência', 
 
 function nav(page) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  // sidebar (desktop) e barra inferior (celular) compartilham o mesmo data-page
+  document.querySelectorAll('.nav-item, .tabbar-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-' + page).classList.add('active');
-  document.querySelector(`.nav-item[data-page="${page}"]`).classList.add('active');
+  document.querySelectorAll(`[data-page="${page}"]`).forEach(n => n.classList.add('active'));
   document.getElementById('page-title').textContent = TITULOS[page];
+  // as ações da barra superior pertencem à Agenda; nas outras páginas elas só
+  // roubavam largura do título
+  const naAgenda = page === 'agenda';
+  ['btn-dias', 'btn-nova-aula'].forEach(i => {
+    const el = document.getElementById(i);
+    if (el) el.style.display = naAgenda ? '' : 'none';
+  });
   fecharMenu();
   if (page === 'agenda') loadAgenda();
   if (page === 'treinos') { loadExercicios(); loadModelos(); }
