@@ -17,11 +17,15 @@
   --text: #0F172A;
   --muted: #64748B;
   --border: #E2E8F0;
+  --fer: #7C3AED;                /* feriado nacional */
+  --fer-l: #EDE9FE;
+  --fer-ink: #5B21B6;
   --radius: 12px;
   --shadow: 0 1px 2px rgba(15,23,42,.06), 0 2px 8px rgba(15,23,42,.06);
   --sidebar-w: 210px;
 }
 [data-theme="dark"] {
+  --fer: #A78BFA; --fer-l: #2A2145; --fer-ink: #C4B5FD;
   --bg: #0B1220; --card: #131C2E; --side: #080E1A; --side-2: #131C2E;
   --text: #E2E8F0; --muted: #94A3B8; --border: #24334A; --primary-l: #14361F;
   --danger-l: #3B1A1A; --warn-l: #3A2A10; --info-l: #10293D;
@@ -331,4 +335,36 @@ input:disabled, select:disabled, textarea:disabled {
   /* com a fonte maior, os campos compactos precisam de menos padding */
   .ex-row input, .ex-row select { padding: 8px 8px; }
   .sel-compacto { padding: 6px 8px; }
+}
+
+/* ── Feriados ──────────────────────────────────────────────────────────────
+   Roxo: não disputa com nenhum status (verde/azul/vermelho/cinza) nem com o
+   laranja que marca o dia de hoje. Feriado nacional tem preenchimento; ponto
+   facultativo (Carnaval, Cinzas, Corpus Christi) fica só com a borda, porque
+   não é feriado por lei — mas na prática a academia fecha. */
+.cal-day.fer  { background: var(--fer-l); border-color: var(--fer); }
+.cal-day.facu { border-color: var(--fer); border-style: dashed; }
+.cal-day.fer .cal-num, .cal-day.facu .cal-num { color: var(--fer-ink); }
+.cal-fer {
+  font-size: 9px; font-weight: 800; line-height: 1.1; color: var(--fer-ink);
+  text-transform: uppercase; letter-spacing: .02em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.dm-dia.fer  { background: var(--fer-l); border-color: var(--fer); color: var(--fer-ink); }
+.dm-dia.facu { border-color: var(--fer); border-style: dashed; color: var(--fer-ink); }
+/* dia selecionado continua verde mesmo sendo feriado — a escolha é do usuário,
+   o feriado é só informação; a borda roxa permanece para não perder o aviso */
+.dm-dia.on.fer, .dm-dia.on.facu { background: var(--primary); color: #fff; border-color: var(--fer); border-width: 2px; }
+
+.dm-alerta { font-weight: 700; font-size: 12px; margin-top: 6px; color: var(--fer-ink); }
+
+.legenda-fer { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
+.legenda-fer i { width: 12px; height: 12px; border-radius: 3px; display: inline-block;
+                 background: var(--fer-l); border: 1px solid var(--fer); }
+.legenda-fer i.facu { background: none; border-style: dashed; }
+
+@media (max-width: 900px) {
+  /* a célula do celular não comporta o nome; a cor e o toque (título) bastam */
+  .cal-fer { display: none; }
 }

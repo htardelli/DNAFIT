@@ -119,6 +119,28 @@ Crie o acesso do personal em **Configurações → Acessos → + Novo acesso**.
 
 ---
 
+## Feriados
+
+O calendário e a grade de "Dias do mês" destacam os feriados em **roxo**:
+
+- **preenchido** = feriado nacional (lei federal);
+- **borda tracejada** = ponto facultativo nacional (Carnaval, Quarta-feira de Cinzas,
+  Corpus Christi) — não é feriado por lei, mas na prática a academia fecha.
+
+Ao marcar os dias, se algum cair em feriado o app avisa no rodapé: *"⚠ 3 dia(s) em
+feriado: 16 (Carnaval), 17 (Carnaval), 18 (Quarta-feira de Cinzas)"*. Ele **não impede**
+— se você treina no feriado, é só marcar.
+
+As datas são **calculadas**, não consultadas em serviço externo: os fixos por data e os
+móveis a partir da Páscoa (algoritmo de Meeus). Funciona sem internet e para qualquer
+ano futuro que você for planejar.
+
+> **Só feriados nacionais.** Os estaduais e municipais não entram — em Fortaleza ficam
+> de fora, por exemplo, a Data Magna do Ceará (25/03) e Nossa Senhora da Assunção
+> (15/08). Dá para acrescentar se fizer diferença na sua agenda.
+
+---
+
 ## Conceitos que o app usa (para os números fazerem sentido)
 
 - **Status da aula:** `agendada` · `realizada` · `falta` (perdeu sem avisar) · `cancelada` (cancelada com aviso).

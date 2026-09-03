@@ -362,6 +362,77 @@ async def _valor_hora(db, dia: Optional[str] = None) -> float:
         return 0.0
 
 
+# ── Feriados nacionais ────────────────────────────────────────────────────────
+# Calculados, não consultados: os fixos por data e os móveis a partir da Páscoa.
+# Sem rede, sem chave de API, sem cadastro para manter — e funciona para
+# qualquer ano, inclusive os futuros que o usuário for planejar.
+
+def _pascoa(ano: int) -> date:
+    """Domingo de Páscoa (algoritmo de Meeus/Jones/Butcher, calendário gregoriano)."""
+    a, b, c = ano % 19, ano // 100, ano % 100
+    d, e = b // 4, b % 4
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i, k = c // 4, c % 4
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    mes = (h + l - 7 * m + 114) // 31
+    dia = ((h + l - 7 * m + 114) % 31) + 1
+    return date(ano, mes, dia)
+
+
+# (mês, dia, nome) — feriados nacionais de data fixa
+_FERIADOS_FIXOS = [
+    (1, 1, "Confraternização Universal"),
+    (4, 21, "Tiradentes"),
+    (5, 1, "Dia do Trabalho"),
+    (9, 7, "Independência do Brasil"),
+    (10, 12, "Nossa Senhora Aparecida"),
+    (11, 2, "Finados"),
+    (11, 15, "Proclamação da República"),
+    (12, 25, "Natal"),
+]
+
+
+def _feriados(ano: int) -> dict:
+    """{'YYYY-MM-DD': {'nome': ..., 'tipo': 'feriado'|'facultativo'}}
+
+    'feriado'     = feriado nacional (lei federal), o comércio e a academia param.
+    'facultativo' = ponto facultativo nacional (Carnaval, Cinzas, Corpus Christi):
+                    não é feriado por lei, mas na prática quase tudo fecha — o que
+                    importa para planejar treino.
+    """
+    out = {}
+    for mes, dia, nome in _FERIADOS_FIXOS:
+        out[date(ano, mes, dia).isoformat()] = {"nome": nome, "tipo": "feriado"}
+    # Consciência Negra virou feriado nacional pela Lei 14.759/2023
+    if ano >= 2024:
+        out[date(ano, 11, 20).isoformat()] = {"nome": "Consciência Negra", "tipo": "feriado"}
+
+    p = _pascoa(ano)
+    moveis = [
+        (p - timedelta(days=48), "Carnaval", "facultativo"),
+        (p - timedelta(days=47), "Carnaval", "facultativo"),
+        (p - timedelta(days=46), "Quarta-feira de Cinzas", "facultativo"),
+        (p - timedelta(days=2),  "Sexta-feira Santa", "feriado"),
+        (p,                      "Páscoa", "facultativo"),
+        (p + timedelta(days=60), "Corpus Christi", "facultativo"),
+    ]
+    for d, nome, tipo in moveis:
+        out.setdefault(d.isoformat(), {"nome": nome, "tipo": tipo})
+    return out
+
+
+@app.get("/api/feriados")
+async def listar_feriados(ano: Optional[int] = None, user=Depends(get_current_user)):
+    """Feriados do ano, para o calendário destacar na hora de planejar o mês."""
+    ano = ano or _hoje().year
+    if not (1900 <= ano <= 2200):
+        raise HTTPException(400, "Ano fora do intervalo suportado")
+    return {"ano": ano, "feriados": _feriados(ano)}
+
+
 # ── Schemas ───────────────────────────────────────────────────────────────────
 class AulaIn(BaseModel):
     data: str

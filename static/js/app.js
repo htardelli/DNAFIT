@@ -8,6 +8,8 @@ let _cfg = {};                          // valor da hora-aula e padrões da agen
 let _dmSel = new Set();                 // dias marcados no modal "dias do mês"
 let _dmTravados = {};                   // dia → motivo (aula que não pode ser desmarcada)
 let _dmMod = 'com_personal';            // modalidade sendo editada no modal
+let _feriados = {};                     // 'YYYY-MM-DD' → {nome, tipo}
+let _feriadosAno = null;                // ano já carregado (evita rebuscar)
 let _dmOutras = {};                     // dia → modalidade, para os dias da outra agenda
 let _chMensal, _chSemanal, _chGrupo, _chEvol;
 
@@ -195,8 +197,21 @@ async function salvarConfig() {
 // ══════════════════════════════ AGENDA ═══════════════════════════════════════
 function mesRefStr() { return `${_mesRef.getFullYear()}-${String(_mesRef.getMonth()+1).padStart(2,'0')}`; }
 
+// Feriados do ano, para o calendário destacar no planejamento do mês
+async function carregarFeriados(ano) {
+  if (_feriadosAno === ano) return;
+  try {
+    const d = await api('GET', `/api/feriados?ano=${ano}`);
+    _feriados = d.feriados || {};
+    _feriadosAno = ano;
+  } catch (e) { _feriados = {}; }
+}
+
+function feriadoDe(iso) { return _feriados[iso] || null; }
+
 async function loadAgenda() {
   const mes = mesRefStr();
+  await carregarFeriados(_mesRef.getFullYear());
   document.getElementById('cal-mes').textContent =
     _mesRef.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).replace(/^./, c => c.toUpperCase());
   try {
@@ -293,8 +308,12 @@ function renderCal() {
            title="${esc((a.hora||'') + ' ' + (a.tipo||a.foco||'Aula') + ' · ' + rotuloModalidade(a.modalidade) + (semTreino(a) ? ' — sem treino montado' : ''))}">
         ${a.hora ? `<span class="chip-hora">${a.hora}</span> ` : ''}<span class="chip-txt">${esc(a.tipo || a.foco || 'Aula')}</span>
       </div>`).join('');
-    html += `<div class="cal-day ${fora ? 'out' : ''} ${k === hojeIso ? 'today' : ''}" onclick="novaAula('${k}')">
-               <div class="cal-num">${d.getDate()}</div>${chips}
+    const f = feriadoDe(k);
+    const clsF = f ? (f.tipo === 'feriado' ? ' fer' : ' facu') : '';
+    html += `<div class="cal-day ${fora ? 'out' : ''} ${k === hojeIso ? 'today' : ''}${clsF}"
+                  onclick="novaAula('${k}')" ${f ? `title="${esc(f.nome)}"` : ''}>
+               <div class="cal-num">${d.getDate()}</div>
+               ${f ? `<div class="cal-fer">${esc(f.nome)}</div>` : ''}${chips}
              </div>`;
   }
   document.getElementById('cal').innerHTML = html;
@@ -511,7 +530,8 @@ function coletarEx(containerId) {
 }
 
 // ── Dias de aula do mês (o aluno define; o personal preenche o treino) ────────
-function abrirDiasDoMes(mod) {
+async function abrirDiasDoMes(mod) {
+  await carregarFeriados(_mesRef.getFullYear());
   _dmMod = mod || 'com_personal';
   document.querySelectorAll('#m-dias .tm-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.mod === _dmMod));
@@ -554,10 +574,15 @@ function dmGrid(ano, mes) {
   for (let d = 1; d <= ult; d++) {
     const travado = _dmTravados[d];
     const outra = _dmOutras[d];
-    const cls = outra ? 'outra' : (travado ? 'travado' : '') + (_dmSel.has(d) ? ' on' : '');
-    const tit = outra ? `já tem aula ${rotuloModalidade(outra).toLowerCase()} neste dia`
-                      : (travado ? `${travado} — não pode ser removida aqui` : '');
-    html += `<button class="dm-dia ${cls}" onclick="dmToggle(${d})" ${tit ? `title="${esc(tit)}"` : ''}>${d}</button>`;
+    const f = feriadoDe(`${ano}-${String(mes + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+    let cls = outra ? 'outra' : (travado ? 'travado' : '') + (_dmSel.has(d) ? ' on' : '');
+    if (f) cls += f.tipo === 'feriado' ? ' fer' : ' facu';
+    const tits = [];
+    if (f) tits.push(f.nome);
+    if (outra) tits.push(`já tem aula ${rotuloModalidade(outra).toLowerCase()}`);
+    else if (travado) tits.push(`${travado} — não pode ser removida aqui`);
+    html += `<button class="dm-dia ${cls}" onclick="dmToggle(${d})"
+                     ${tits.length ? `title="${esc(tits.join(' · '))}"` : ''}>${d}</button>`;
   }
   document.getElementById('dm-grid').innerHTML = html;
   dmTotal();
@@ -585,14 +610,22 @@ function dmTotal() {
   const n = _dmSel.size;
   const v = num('dm-valor') || 0;
   const dono = !_user || _user.role === 'aluno';
+  // dias marcados que caem em feriado — o motivo de eles estarem no calendário
+  const ano = _mesRef.getFullYear(), mes = String(_mesRef.getMonth() + 1).padStart(2, '0');
+  const nosFeriados = [..._dmSel]
+    .map(d => ({ d, f: feriadoDe(`${ano}-${mes}-${String(d).padStart(2, '0')}`) }))
+    .filter(x => x.f);
+  const alerta = nosFeriados.length
+    ? `<div class="dm-alerta">⚠ ${nosFeriados.length} dia(s) em feriado: ${nosFeriados.map(x => `${x.d} (${esc(x.f.nome)})`).join(', ')}</div>`
+    : '';
   document.getElementById('dm-resumo').innerHTML = n
     ? (_dmMod === 'sozinho'
         ? `${n} treino${n > 1 ? 's' : ''} sozinho` +
-          `<div style="font-weight:600;font-size:12px;opacity:.85">não entra no valor pago ao personal</div>`
+          `<div style="font-weight:600;font-size:12px;opacity:.85">não entra no valor pago ao personal</div>` + alerta
         : `${n} aula${n > 1 ? 's' : ''} × ${fmtR(v)} = <b>${fmtR(n * v)}</b>` +
           `<div style="font-weight:600;font-size:12px;opacity:.85">` +
           (dono ? 'valor do mês — pago ao agendar' : 'valor do mês — recebido no agendamento') +
-          `</div>`)
+          `</div>`) + alerta
     : 'Nenhum dia marcado.';
 }
 

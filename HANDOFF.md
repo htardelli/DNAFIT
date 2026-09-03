@@ -248,6 +248,7 @@ projeto (já está no `.gitignore`).
 | GET | `/api/frequencia?ano=` | séries para os gráficos |
 | GET | `/api/evolucao?exercicio=` | carga máxima por data |
 | GET | `/api/financeiro?ano=` | fechamento mês a mês |
+| GET | `/api/feriados?ano=` | feriados nacionais calculados (fixos + móveis pela Páscoa) |
 | GET | `/health` | healthcheck |
 
 ### Perfis
