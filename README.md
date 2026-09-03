@@ -167,6 +167,10 @@ ano futuro que você for planejar.
   Data, hora, status, modalidade e valor ficam congelados, e a aula não pode ser excluída.
   - A trava vale para aula que de fato aconteceu. Uma marcada como feita num horário
     que ainda não chegou é dado inconsistente e continua corrigível.
+  - **Correção automática:** a cada start, toda aula futura marcada como feita volta
+    para **agendada**. É idempotente e só toca no que é impossível — funciona como
+    guarda-corpo contra dado antigo. As futuras marcadas como *falta* são apenas
+    reportadas no log, não alteradas.
 - **Prescrição × execução.** Nome, séries, repetições e descanso são prescrição (do
   personal, nas aulas com ele). Carga usada, observação e "feito" são execução — quem
   treinou registra, mesmo numa aula do personal.

@@ -101,6 +101,32 @@ def _hash(pw: str) -> str:
     return _pwd.hash(pw)
 
 
+async def _corrigir_aulas_futuras():
+    """Devolve para 'agendada' toda aula futura marcada como feita.
+
+    Uma aula que ainda não começou não pode ter sido realizada. Esse estado só
+    existe por dado criado antes da regra entrar em vigor. Roda a cada start:
+    é idempotente e só toca no que é impossível, então funciona como guarda-corpo.
+    Também reporta as marcadas como falta no futuro, que têm o mesmo problema.
+    """
+    import aiosqlite as _aio
+    agora = _agora().strftime("%Y-%m-%d %H:%M")
+    async with _aio.connect(DB_PATH) as db:
+        db.row_factory = _aio.Row
+        cond = ("(data || ' ' || COALESCE(NULLIF(hora,''), '00:00')) > ?")
+        cur = await db.execute(
+            f"UPDATE aulas SET status='agendada', atualizado_em=CURRENT_TIMESTAMP "
+            f"WHERE status='realizada' AND {cond}", (agora,))
+        n = cur.rowcount or 0
+        faltas = (await (await db.execute(
+            f"SELECT COUNT(*) FROM aulas WHERE status='falta' AND {cond}", (agora,))).fetchone())[0]
+        await db.commit()
+    if n:
+        print(f"[FIX] {n} aula(s) futura(s) marcadas como feitas voltaram para 'agendada'")
+    if faltas:
+        print(f"[FIX] atenção: {faltas} aula(s) futura(s) constam como 'falta' — mesmo problema, não alteradas")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global SECRET_KEY
@@ -108,6 +134,7 @@ async def lifespan(app: FastAPI):
     SECRET_KEY = await obter_secret_key()
     if not SECRET_KEY:
         raise RuntimeError("Não foi possível obter a chave de assinatura dos tokens")
+    await _corrigir_aulas_futuras()
     yield
 
 
