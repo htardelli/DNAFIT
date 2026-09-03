@@ -226,6 +226,7 @@ projeto (já está no `.gitignore`).
 | `FITPLAN_ADMIN_NOME` | `Tardelli` | |
 | `FITPLAN_TOKEN_HORAS` | `720` | 30 dias, para não relogar no celular |
 | `FITPLAN_SECRET_KEY` | — | **não definir**: sorteada no 1º start e guardada no banco |
+| `FITPLAN_UTC_OFFSET` | `-3` | fuso do usuário; o contêiner roda em UTC |
 | `FITPLAN_DATA_DIR` | — | força a pasta do banco |
 
 ### Endpoints
@@ -270,6 +271,11 @@ projeto (já está no `.gitignore`).
   - O personal monta o treino de qualquer aula.
   - `POST /api/aulas/mes` opera **por modalidade**: marcar os dias de uma agenda nunca
     remove aulas da outra (as da outra voltam em `outras_modalidades`).
+- **Só o passado pode ser finalizado:** `realizada` e `falta` exigem que o início da
+  aula já tenha ocorrido (data + hora; sem hora, o início do dia). Validado na criação,
+  na mudança de status e na mudança de data — sempre sobre o **estado final**.
+- **Fuso horário:** o app usa `TZ_APP` = UTC-3 (env `FITPLAN_UTC_OFFSET`), nunca a hora
+  do contêiner. `_hoje()` e `_agora()` são os únicos pontos de entrada de tempo.
 - **Toda** aula na agenda consome o pacote — o valor pago nunca é devolvido.
 - **Aderência** = realizadas ÷ (realizadas + faltas + agendadas já vencidas).
   Canceladas ficam fora **desta métrica** (mede disciplina de treino, não dinheiro).

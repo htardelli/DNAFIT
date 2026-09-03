@@ -12,7 +12,7 @@ Módulos:
 import os
 import re
 import calendar as _cal
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional, List
 
 import aiosqlite
@@ -33,6 +33,16 @@ from db import DB_PATH, get_db, init_db, obter_secret_key
 # a chave que está no repositório aceitaria tokens forjados por qualquer um.
 SECRET_KEY = ""
 ALGORITHM = "HS256"
+
+# Fuso do usuário. O contêiner roda em UTC: sem isto, das 21h à meia-noite o
+# servidor já está no dia seguinte e "hoje" sai errado — o que contamina a
+# próxima aula, a aderência, a sequência e a checagem de aula futura.
+# Fortaleza é UTC-3 o ano inteiro (o Brasil não tem mais horário de verão).
+try:
+    _OFFSET_H = int(os.environ.get("FITPLAN_UTC_OFFSET", "-3"))
+except ValueError:
+    _OFFSET_H = -3
+TZ_APP = timezone(timedelta(hours=_OFFSET_H))
 TOKEN_EXPIRE_HOURS = int(os.environ.get("FITPLAN_TOKEN_HORAS", "720"))  # 30 dias (uso em celular)
 
 _pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -279,8 +289,37 @@ def _d(row) -> dict:
     return dict(row) if row is not None else None
 
 
+def _agora() -> datetime:
+    """Agora no fuso do usuário, sem tzinfo (para comparar com datas do banco)."""
+    return datetime.now(TZ_APP).replace(tzinfo=None)
+
+
 def _hoje() -> date:
-    return date.today()
+    return _agora().date()
+
+
+def _ja_comecou(data_iso: str, hora: Optional[str]) -> bool:
+    """A aula já começou? Aula sem horário conta a partir do início do dia."""
+    try:
+        h, m = (hora or "00:00").split(":")[:2]
+        inicio = datetime.fromisoformat(data_iso[:10]).replace(hour=int(h), minute=int(m))
+    except (ValueError, TypeError):
+        inicio = datetime.fromisoformat(data_iso[:10])
+    return inicio <= _agora()
+
+
+# Status que afirmam que o horário da aula passou. Não dá para dizer que uma
+# aula de amanhã foi feita — nem que houve falta nela.
+STATUS_SO_PASSADO = ("realizada", "falta")
+
+
+def _valida_status_no_tempo(status: Optional[str], data_iso: str, hora: Optional[str]):
+    if status in STATUS_SO_PASSADO and not _ja_comecou(data_iso, hora):
+        quando = f"{data_iso[8:10]}/{data_iso[5:7]}" + (f" às {hora}" if hora else "")
+        raise HTTPException(400,
+            f"A aula de {quando} ainda não começou. Só dá para marcar como "
+            f"'{status}' depois do horário — antes disso, o status é 'agendada' "
+            f"(ou 'cancelada', se você já sabe que não vai).")
 
 
 def _parse_data(s: str) -> str:
@@ -636,6 +675,7 @@ async def criar_aula(body: AulaIn, user=Depends(get_current_user),
     if modalidade not in MODALIDADES:
         raise HTTPException(400, f"Modalidade deve ser um de: {', '.join(MODALIDADES)}")
     d0 = date.fromisoformat(_parse_data(body.data))
+    _valida_status_no_tempo(body.status, d0.isoformat(), body.hora)
 
     # Datas a criar: a própria + a recorrência semanal, se pedida
     datas = [d0]
@@ -786,6 +826,13 @@ async def editar_aula(aid: int, body: AulaUpdate, user=Depends(get_current_user)
                 f"Remarcação só dentro do mesmo mês. Esta aula é de {atual['data'][5:7]}/{atual['data'][:4]}, "
                 f"que já está pago. Para mover para outro mês, exclua esta aula e crie uma nova lá.")
         data["data"] = nova
+    # Vale o estado final: mudar a data para o futuro numa aula já 'realizada'
+    # criaria o mesmo absurdo que marcar 'realizada' numa aula futura.
+    _valida_status_no_tempo(
+        data.get("status", atual["status"]),
+        data.get("data", atual["data"]),
+        data["hora"] if "hora" in data else atual["hora"])
+
     trocou_modelo = "modelo_id" in data and data["modelo_id"] and data["modelo_id"] != atual["modelo_id"]
     sets = [f"{k}=?" for k in data]
     params = list(data.values())

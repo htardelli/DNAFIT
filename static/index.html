@@ -334,8 +334,8 @@
     <div class="modal-body">
       <input type="hidden" id="a-id">
       <div class="form-grid">
-        <div class="form-dt"><label>Data *</label><input id="a-data" type="date"></div>
-        <div class="form-dt"><label>Hora</label><input id="a-hora" type="time"></div>
+        <div class="form-dt"><label>Data *</label><input id="a-data" type="date" onchange="aplicarModoAula()"></div>
+        <div class="form-dt"><label>Hora</label><input id="a-hora" type="time" onchange="aplicarModoAula()"></div>
         <div><label>Duração (min)</label><input id="a-duracao" type="number" min="10" step="5" value="60"></div>
         <div><label>Como vai treinar *</label>
           <select id="a-modalidade" onchange="aplicarModoAula()">
@@ -370,6 +370,12 @@
         </div>
         <div class="form-full"><label>Descrição do treino</label><textarea id="a-descricao" placeholder="O que será feito na aula"></textarea></div>
         <div class="form-full"><label>Observações (como foi)</label><textarea id="a-obs"></textarea></div>
+      </div>
+
+      <div id="a-aviso-futuro" class="aviso" style="display:none">
+        Aula <b>ainda não começou</b>. Ela só pode ser marcada como feita ou como falta
+        depois do horário — antes disso vale <b>agendada</b>, ou <b>cancelada</b> se você
+        já sabe que não vai.
       </div>
 
       <div id="a-recorrencia">
@@ -585,6 +591,6 @@
 </div>
 
 <div class="toast-wrap" id="toasts"></div>
-<script src="/static/js/app.js?v=3.1"></script>
+<script src="/static/js/app.js?v=3.3"></script>
 </body>
 </html>

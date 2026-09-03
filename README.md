@@ -161,6 +161,13 @@ ano futuro que você for planejar.
     **"A receber no mês"** (personal), conforme quem está logado.
   - Cada aula guarda o **valor da hora-aula do dia em que foi criada** (snapshot).
     Reajuste vale só para as aulas novas — mês fechado não se reescreve.
+- **Só dá para finalizar o que já passou.** Uma aula só aceita **realizada** ou **falta**
+  depois do seu horário — antes disso, os status possíveis são **agendada** ou
+  **cancelada**. Aula sem horário conta a partir do início do dia. A regra vale também
+  ao criar a aula e ao mudar a data: empurrar para o futuro uma aula já marcada como
+  feita é recusado.
+- **Fuso:** o app trabalha em **UTC-3** (Fortaleza), não no fuso do servidor. Ajuste pela
+  variável `FITPLAN_UTC_OFFSET` se você mudar de fuso.
 - **Remarcação só dentro do mesmo mês** — e é a única forma de não perder o valor.
   Precisou trocar um dia? Abra a aula e mude a data para outro dia **do mesmo mês**. Mover para outro mês é recusado pelo sistema:
   aquele mês já foi pago, e a aula não pode migrar de fechamento. Se precisar mesmo,

@@ -281,6 +281,13 @@ const ICONE_STATUS = {
   cancelada: { i: '🚫', t: 'Cancelada' },
 };
 
+// A aula já começou? Só depois disso ela pode ser dada como feita ou como falta.
+// Aula sem horário conta a partir do início do dia.
+function jaComecou(dataIso, hora) {
+  if (!dataIso) return false;
+  return new Date(`${dataIso.slice(0, 10)}T${(hora || '00:00')}:00`) <= new Date();
+}
+
 // O personal monta qualquer treino; o aluno monta só o que treina sozinho.
 function podeMontarTreino(modalidade) {
   if (_user && _user.role === 'personal') return true;
@@ -358,7 +365,7 @@ function renderLista() {
       <td class="c-treino">${treino}${nEx}</td>
       <td class="c-st"><span class="st b-${a.status}" title="${st.t}">${st.i}</span></td>
       <td class="right c-acoes">
-        ${a.status === 'agendada'
+        ${a.status === 'agendada' && jaComecou(a.data, a.hora)
           ? `<button class="ic" title="Marcar treino como feito"
                      onclick="event.stopPropagation();marcar(${a.id},'realizada')">✅</button>` : ''}
       </td>
@@ -427,6 +434,16 @@ async function abrirAula(id) {
 // data, status e feedback.
 function aplicarModoAula() {
   const pode = podeMontarTreino(val('a-modalidade'));
+  // "Realizada" e "Falta" afirmam que o horário passou — indisponíveis antes disso
+  const passou = jaComecou(val('a-data'), val('a-hora'));
+  const sel = document.getElementById('a-status');
+  [...sel.options].forEach(o => {
+    const futuro = !passou && (o.value === 'realizada' || o.value === 'falta');
+    o.disabled = futuro;
+    o.textContent = o.textContent.replace(/ — ainda não começou$/, '') + (futuro ? ' — ainda não começou' : '');
+  });
+  if (!passou && (sel.value === 'realizada' || sel.value === 'falta')) sel.value = 'agendada';
+  document.getElementById('a-aviso-futuro').style.display = passou ? 'none' : '';
   // Campos que pertencem ao personal. Ficam travados para o aluno em aula com o
   // personal — o backend também os recusa, e campo editável que não salva é pior
   // do que campo travado.
