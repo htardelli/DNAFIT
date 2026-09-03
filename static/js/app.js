@@ -351,8 +351,7 @@ function renderLista() {
     <tr class="linha-aula" onclick="abrirAula(${a.id})" title="Abrir a aula">
       <td class="c-quando">
         <b>${fmtDataCurta(a.data)}</b>
-        <span class="muted">${diaSemana(a.data)}</span>
-        <b>${a.hora || '—'}</b>
+        <div class="q-sub"><span class="muted">${diaSemana(a.data)}</span><b>${a.hora || '—'}</b></div>
       </td>
       <td class="c-modo"><span class="modo ${solo ? 'modo-i' : 'modo-p'}"
             title="${solo ? 'Individual — você treina sozinho' : 'Com o personal'}">${solo ? 'I' : 'P'}</span></td>
