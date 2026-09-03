@@ -28,9 +28,13 @@
   --shadow: 0 1px 2px rgba(0,0,0,.3), 0 2px 8px rgba(0,0,0,.25);
 }
 * { box-sizing: border-box; }
+/* Nenhum elemento solto pode alargar a página: no celular isso vira rolagem
+   lateral e a sensação de que o app "abriu maior que a tela". */
+html, body { max-width: 100%; overflow-x: hidden; }
 body {
   margin: 0; background: var(--bg); color: var(--text);
   font-family: 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif; font-size: 14px;
+  -webkit-text-size-adjust: 100%;   /* impede o iOS de reajustar o texto sozinho */
 }
 a { color: var(--primary); }
 button, input, select, textarea { font-family: inherit; font-size: 14px; color: var(--text); }
@@ -313,4 +317,18 @@ tbody tr:hover { background: rgba(22,163,74,.05); }
 /* campos travados quando o treino é prescrição do personal */
 input:disabled, select:disabled, textarea:disabled {
   background: var(--bg); color: var(--muted); cursor: not-allowed; opacity: 1;
+}
+
+/* ── iOS: campo com menos de 16px dispara zoom automático ao ser tocado ──
+   O Safari amplia a página inteira e NÃO desfaz o zoom depois — o app fica
+   maior que a tela até o usuário pinçar. A única prevenção é o campo ter
+   fonte de 16px ou mais no celular. Vale para todo controle, inclusive os
+   compactos das linhas de exercício. */
+@media (max-width: 900px) {
+  input, select, textarea,
+  .ex-row input, .ex-row select,
+  .sel-compacto { font-size: 16px; }
+  /* com a fonte maior, os campos compactos precisam de menos padding */
+  .ex-row input, .ex-row select { padding: 8px 8px; }
+  .sel-compacto { padding: 6px 8px; }
 }
