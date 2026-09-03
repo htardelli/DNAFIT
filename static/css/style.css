@@ -431,3 +431,16 @@ input:disabled, select:disabled, textarea:disabled {
   .c-quando .muted { margin: 0 3px; }
   .ic { width: 32px; height: 32px; margin-left: 2px; }
 }
+
+/* ── Legenda do calendário ──────────────────────────────────────────────────
+   Seis itens numa linha só em 390px de tela: os rótulos já são curtos
+   ("feita", "cancel"), então o que sobra é apertar espaçamento e preenchimento. */
+@media (max-width: 560px) {
+  .legenda { gap: 5px; font-size: 10px; }
+  .legenda .badge { padding: 2px 6px; font-size: 10px; }
+  .legenda .legenda-fer { gap: 4px; font-size: 10px; }
+  .legenda .legenda-fer i { width: 10px; height: 10px; }
+  .legenda .facult-lg { display: none; }
+  .legenda .facult-sm { display: inline; }
+}
+.facult-sm { display: none; }
