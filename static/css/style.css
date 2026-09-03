@@ -261,8 +261,14 @@ tbody tr:hover { background: rgba(22,163,74,.05); }
   .content { padding: 12px; }
   .cal-day { min-height: 62px; padding: 4px; }
   /* No celular a célula não comporta texto: cada aula vira uma barra colorida
-     pelo status (o detalhe fica na lista abaixo do calendário). */
+     pelo status (o detalhe fica na lista abaixo do calendário). A barra usa a cor
+     CHEIA, não o tom claro: sobre o fundo lilás de um feriado, o tom claro
+     desaparecia. */
   .chip { font-size: 0; padding: 0; height: 9px; border-radius: 4px; border-left-width: 0; }
+  .chip-agendada  { background: var(--info); }
+  .chip-realizada { background: var(--primary); }
+  .chip-falta     { background: var(--danger); }
+  .chip-cancelada { background: #94A3B8; }
   .cal-num { font-size: 11px; }
   .kpi-value { font-size: 22px; }
   .ex-row, .ex-head { grid-template-columns: 1fr 1fr 1fr; }
@@ -367,4 +373,62 @@ input:disabled, select:disabled, textarea:disabled {
 @media (max-width: 900px) {
   /* a célula do celular não comporta o nome; a cor e o toque (título) bastam */
   .cal-fer { display: none; }
+}
+
+/* ── Lista de aulas compacta ───────────────────────────────────────────────
+   O foco da tela é o treino, não o dinheiro (que vive na aba Financeiro).
+   Data, dia da semana e hora ocupam uma coluna só; status e ações viram
+   ícones — a cor de fundo continua carregando o significado, como no
+   calendário, e o ícone acrescenta uma segunda leitura. */
+.c-quando { white-space: nowrap; }
+.c-quando b { font-variant-numeric: tabular-nums; }
+.c-quando .muted { margin: 0 4px; font-size: 12px; }
+.c-modo, .c-st { width: 1%; white-space: nowrap; }
+.c-treino { min-width: 70px; }
+.c-acoes { white-space: nowrap; width: 1%; }
+.linha-aula { cursor: pointer; }
+/* rótulo curto do cabeçalho — visível só no celular (ver media query abaixo) */
+.th-sm { display: none; }
+.ex-tag {
+  display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 6px;
+  background: var(--bg); color: var(--muted); font-size: 11px; font-weight: 700;
+  white-space: nowrap;
+}
+.ex-tag.pend { background: var(--warn-l); color: var(--warn); }
+
+.modo {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border-radius: 7px;
+  font-size: 12px; font-weight: 800; letter-spacing: 0;
+}
+.modo-p { background: var(--primary-l); color: var(--primary-d); }
+.modo-i { background: var(--info-l); color: #0369A1; }
+[data-theme="dark"] .modo-i { color: #7DD3FC; }
+
+.st {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 9px; font-size: 15px; line-height: 1;
+}
+.pend-dot { color: var(--accent); font-weight: 800; margin-left: 3px; }
+
+.ic {
+  background: none; border: 1px solid var(--border); border-radius: 8px;
+  width: 34px; height: 34px; font-size: 16px; line-height: 1; cursor: pointer;
+  padding: 0; margin-left: 4px;
+}
+.ic:hover { border-color: var(--primary); background: var(--primary-l); }
+
+@media (max-width: 560px) {
+  th, td { padding: 9px 5px; }
+  .c-quando { font-size: 13px; }
+  /* a etiqueta de exercícios desce para a linha de baixo: a coluna fica estreita
+     sem esconder informação */
+  .c-treino { font-size: 13px; min-width: 62px; }
+  .c-treino .ex-tag { display: block; margin: 3px 0 0; width: fit-content; }
+  /* cabeçalhos abreviados: "MODO" e "STATUS" eram mais largos que o próprio
+     conteúdo das colunas e empurravam a tabela para fora da tela */
+  .th-lg { display: none; }
+  .th-sm { display: inline; }
+  .c-quando .muted { margin: 0 3px; }
+  .ic { width: 32px; height: 32px; margin-left: 2px; }
 }

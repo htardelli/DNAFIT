@@ -41,6 +41,7 @@ function fmtN(n, d = 0) { return Number(n ?? 0).toLocaleString('pt-BR', { minimu
 function fmtR(n) { return 'R$ ' + fmtN(n, 2); }
 function iso(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function fmtData(s) { if (!s) return '—'; const [a,m,d] = s.slice(0,10).split('-'); return `${d}/${m}/${a}`; }
+function fmtDataCurta(s) { if (!s) return '—'; const [a,m,d] = s.slice(0,10).split('-'); return `${d}/${m}/${a.slice(2)}`; }
 function diaSemana(s) {
   const D = ['dom','seg','ter','qua','qui','sex','sáb'];
   return D[new Date(s + 'T12:00:00').getDay()];
@@ -271,6 +272,15 @@ function renderKpis(r) {
     </div>`).join('');
 }
 
+// Ícone e rótulo de cada status — a cor continua sendo a mesma do calendário,
+// então o ícone acrescenta leitura sem substituir a que já existia.
+const ICONE_STATUS = {
+  agendada:  { i: '📅', t: 'Agendada' },
+  realizada: { i: '✅', t: 'Treino feito' },
+  falta:     { i: '❌', t: 'Falta' },
+  cancelada: { i: '🚫', t: 'Cancelada' },
+};
+
 // O personal monta qualquer treino; o aluno monta só o que treina sozinho.
 function podeMontarTreino(modalidade) {
   if (_user && _user.role === 'personal') return true;
@@ -325,23 +335,35 @@ function renderLista() {
   const linhas = _aulas.filter(a => (!f || a.status === f) && (!soPend || semTreino(a)));
   const tb = document.getElementById('lista-aulas');
   if (!linhas.length) {
-    tb.innerHTML = '<tr><td colspan="8"><div class="empty">Nenhuma aula com esse filtro. Use "Dias do mês" para montar a agenda.</div></td></tr>';
+    tb.innerHTML = '<tr><td colspan="5"><div class="empty">Nenhuma aula com esse filtro. Use "Dias do mês" para montar a agenda.</div></td></tr>';
     return;
   }
-  tb.innerHTML = linhas.map(a => `
-    <tr>
-      <td><b>${fmtData(a.data)}</b> <span class="muted">${diaSemana(a.data)}</span></td>
-      <td>${a.hora || '—'}</td>
-      <td><span class="badge ${a.modalidade === 'sozinho' ? 'badge-solo' : 'b-realizada'}">${a.modalidade === 'sozinho' ? 'sozinho' : 'personal'}</span></td>
-      <td>${esc(a.tipo || a.foco || a.descricao || '—')}</td>
-      <td class="right">${a.qtd_exercicios || 0}${semTreino(a) ? ' <span style="color:var(--accent)" title="sem treino montado">•</span>' : ''}</td>
-      <td class="right">${a.valor ? fmtR(a.valor) : '—'}</td>
-      <td><span class="badge b-${a.status}">${a.status}</span></td>
-      <td class="right">
-        ${a.status === 'agendada' ? `<button class="btn btn-sm btn-primary" onclick="marcar(${a.id},'realizada')">Realizada</button>` : ''}
-        <button class="btn btn-sm" onclick="abrirAula(${a.id})">Abrir</button>
+  tb.innerHTML = linhas.map(a => {
+    const st = ICONE_STATUS[a.status] || { i: '•', t: a.status };
+    const solo = a.modalidade === 'sozinho';
+    // A linha inteira abre a aula — dispensa um botão e devolve a largura à
+    // coluna do treino, que é o conteúdo que interessa.
+    const treino = esc(a.tipo || a.foco || a.descricao || '—');
+    const nEx = a.qtd_exercicios
+      ? `<span class="ex-tag">${a.qtd_exercicios} ex</span>`
+      : (semTreino(a) ? '<span class="ex-tag pend" title="sem treino montado">sem treino</span>' : '');
+    return `
+    <tr class="linha-aula" onclick="abrirAula(${a.id})" title="Abrir a aula">
+      <td class="c-quando">
+        <b>${fmtDataCurta(a.data)}</b>
+        <span class="muted">${diaSemana(a.data)}</span>
+        <b>${a.hora || '—'}</b>
       </td>
-    </tr>`).join('');
+      <td class="c-modo"><span class="modo ${solo ? 'modo-i' : 'modo-p'}"
+            title="${solo ? 'Individual — você treina sozinho' : 'Com o personal'}">${solo ? 'I' : 'P'}</span></td>
+      <td class="c-treino">${treino}${nEx}</td>
+      <td class="c-st"><span class="st b-${a.status}" title="${st.t}">${st.i}</span></td>
+      <td class="right c-acoes">
+        ${a.status === 'agendada'
+          ? `<button class="ic" title="Marcar treino como feito"
+                     onclick="event.stopPropagation();marcar(${a.id},'realizada')">✅</button>` : ''}
+      </td>
+    </tr>`; }).join('');
 }
 
 async function marcar(id, status) {
