@@ -368,6 +368,9 @@ function renderLista() {
         ${a.status === 'agendada' && jaComecou(a.data, a.hora)
           ? `<button class="ic" title="Marcar treino como feito"
                      onclick="event.stopPropagation();marcar(${a.id},'realizada')">✅</button>` : ''}
+        ${a.status === 'agendada' && !jaComecou(a.data, a.hora)
+          ? `<button class="ic" title="Remarcar para outro dia do mês"
+                     onclick="event.stopPropagation();abrirAula(${a.id}, true)">📅</button>` : ''}
       </td>
     </tr>`; }).join('');
 }
@@ -416,7 +419,7 @@ function novaAula(dataIso) {
   abrirModal('m-aula');
 }
 
-async function abrirAula(id) {
+async function abrirAula(id, remarcar) {
   try {
     const a = await api('GET', `/api/aulas/${id}`);
     limparAula();
@@ -434,6 +437,13 @@ async function abrirAula(id) {
     document.getElementById('a-recorrencia').style.display = 'none';   // recorrência só na criação
     aplicarModoAula();
     abrirModal('m-aula');
+    // veio do botão de remarcar: leva direto ao campo da data
+    if (remarcar) setTimeout(() => {
+      const d = document.getElementById('a-data');
+      d.scrollIntoView({ block: 'center' });
+      d.focus();
+      try { d.showPicker(); } catch (e) {}
+    }, 150);
   } catch (e) { toast(e.message, 'err'); }
 }
 

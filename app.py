@@ -102,29 +102,26 @@ def _hash(pw: str) -> str:
 
 
 async def _corrigir_aulas_futuras():
-    """Devolve para 'agendada' toda aula futura marcada como feita.
+    """Devolve para 'agendada' toda aula futura marcada como feita ou como falta.
 
-    Uma aula que ainda não começou não pode ter sido realizada. Esse estado só
-    existe por dado criado antes da regra entrar em vigor. Roda a cada start:
-    é idempotente e só toca no que é impossível, então funciona como guarda-corpo.
-    Também reporta as marcadas como falta no futuro, que têm o mesmo problema.
+    Nenhuma das duas é possível numa aula que ainda não começou: não se faz nem
+    se falta a algo que não aconteceu. Quem já sabe que não vai, remarca para
+    outro dia do mês. Esse estado só existe por dado criado antes da regra.
+    Roda a cada start: idempotente e restrita ao que é impossível, funciona como
+    guarda-corpo.
     """
     import aiosqlite as _aio
     agora = _agora().strftime("%Y-%m-%d %H:%M")
     async with _aio.connect(DB_PATH) as db:
-        db.row_factory = _aio.Row
-        cond = ("(data || ' ' || COALESCE(NULLIF(hora,''), '00:00')) > ?")
-        cur = await db.execute(
-            f"UPDATE aulas SET status='agendada', atualizado_em=CURRENT_TIMESTAMP "
-            f"WHERE status='realizada' AND {cond}", (agora,))
-        n = cur.rowcount or 0
-        faltas = (await (await db.execute(
-            f"SELECT COUNT(*) FROM aulas WHERE status='falta' AND {cond}", (agora,))).fetchone())[0]
+        cond = "(data || ' ' || COALESCE(NULLIF(hora,''), '00:00')) > ?"
+        for status in STATUS_SO_PASSADO:
+            cur = await db.execute(
+                f"UPDATE aulas SET status='agendada', atualizado_em=CURRENT_TIMESTAMP "
+                f"WHERE status=? AND {cond}", (status, agora))
+            if cur.rowcount:
+                print(f"[FIX] {cur.rowcount} aula(s) futura(s) marcadas como "
+                      f"'{status}' voltaram para 'agendada'")
         await db.commit()
-    if n:
-        print(f"[FIX] {n} aula(s) futura(s) marcadas como feitas voltaram para 'agendada'")
-    if faltas:
-        print(f"[FIX] atenção: {faltas} aula(s) futura(s) constam como 'falta' — mesmo problema, não alteradas")
 
 
 @asynccontextmanager

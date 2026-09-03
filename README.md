@@ -167,10 +167,10 @@ ano futuro que você for planejar.
   Data, hora, status, modalidade e valor ficam congelados, e a aula não pode ser excluída.
   - A trava vale para aula que de fato aconteceu. Uma marcada como feita num horário
     que ainda não chegou é dado inconsistente e continua corrigível.
-  - **Correção automática:** a cada start, toda aula futura marcada como feita volta
-    para **agendada**. É idempotente e só toca no que é impossível — funciona como
-    guarda-corpo contra dado antigo. As futuras marcadas como *falta* são apenas
-    reportadas no log, não alteradas.
+  - **Correção automática:** a cada start, toda aula futura marcada como **feita** ou
+    como **falta** volta para **agendada** — nenhuma das duas é possível antes do
+    horário. É idempotente e só toca no que é impossível, funcionando como
+    guarda-corpo contra dado antigo.
 - **Prescrição × execução.** Nome, séries, repetições e descanso são prescrição (do
   personal, nas aulas com ele). Carga usada, observação e "feito" são execução — quem
   treinou registra, mesmo numa aula do personal.
@@ -181,6 +181,9 @@ ano futuro que você for planejar.
   feita é recusado.
 - **Fuso:** o app trabalha em **UTC-3** (Fortaleza), não no fuso do servidor. Ajuste pela
   variável `FITPLAN_UTC_OFFSET` se você mudar de fuso.
+- **Já sabe que não vai? Remarque.** Não existe faltar a algo que ainda não aconteceu.
+  Na lista, as aulas futuras têm o botão **📅**, que abre a aula direto no campo da data.
+  Remarcar preserva o valor já pago; cancelar é o último caso, e o valor não volta.
 - **Remarcação só dentro do mesmo mês** — e é a única forma de não perder o valor.
   Precisou trocar um dia? Abra a aula e mude a data para outro dia **do mesmo mês**. Mover para outro mês é recusado pelo sistema:
   aquele mês já foi pago, e a aula não pode migrar de fechamento. Se precisar mesmo,
