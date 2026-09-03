@@ -187,7 +187,8 @@ Entregar ao usuário:
 ### Stack
 
 Python 3.11 · FastAPI · SQLite (aiosqlite) · JWT (`python-jose`) · bcrypt
-(`passlib`) · SPA em HTML/CSS/JS puro · Chart.js 4.4 via CDN.
+(`passlib`) · SPA em HTML/CSS/JS puro · Chart.js 4.4 via CDN · fonte **Ruda**
+auto-hospedada em `static/fonts` (variável: um arquivo por subset cobre 400–900).
 
 ### Arquivos
 
@@ -203,6 +204,7 @@ fitplan/
 └── static/
     ├── index.html
     ├── css/style.css
+    ├── fonts/            # Ruda (variável, latin + latin-ext) servida pelo app
     └── js/app.js
 ```
 
