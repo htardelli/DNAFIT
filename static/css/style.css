@@ -1,3 +1,29 @@
+/* ── Ruda ──────────────────────────────────────────────────────────────────
+   Servida pelo próprio app (static/fonts), não pelo Google. Assim não depende
+   de CDN externo, funciona se a rede da academia bloquear o Google e não
+   entrega o IP de quem usa para terceiros. É fonte VARIÁVEL: um arquivo cobre
+   todos os pesos de 400 a 900. */
+@font-face {
+  font-family: 'Ruda';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('/static/fonts/ruda-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+                 U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122,
+                 U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Ruda';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('/static/fonts/ruda-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+                 U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF,
+                 U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
 /* FITPLAN — visual inspirado no app da academia: verde vivo, superfícies escuras
    com um toque de verde, cartões de raio grande e navegação por barra inferior no
    celular. Os dois temas (claro e escuro) seguem o mesmo sistema de tokens. */
@@ -23,6 +49,10 @@
   --text: #0E1A14;
   --muted: #63756B;
   --border: #E1E9E4;
+
+  /* Ruda vem do próprio app (ver @font-face acima). A pilha de reserva mantém
+     o texto legível enquanto ela carrega. */
+  --font: 'Ruda', 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
 
   --radius: 18px;
   --radius-sm: 12px;
@@ -59,7 +89,7 @@
 html, body { max-width: 100%; overflow-x: hidden; }
 body {
   margin: 0; background: var(--bg); color: var(--text);
-  font-family: 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
+  font-family: var(--font);
   font-size: 14px; -webkit-text-size-adjust: 100%;
 }
 a { color: var(--primary); }
@@ -189,7 +219,7 @@ input[type="time"]::-webkit-calendar-picker-indicator { margin-left: auto; }
   background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
   box-shadow: var(--shadow); padding: 16px 18px;
 }
-.kpi-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.kpi-label { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
 .kpi-value {
   font-size: 27px; font-weight: 800; margin-top: 6px; line-height: 1.15; letter-spacing: -.5px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums;
@@ -209,7 +239,7 @@ input[type="time"]::-webkit-calendar-picker-indicator { margin-left: auto; }
 /* ── Tabelas ──────────────────────────────────────────────────────────────── */
 table { width: 100%; border-collapse: collapse; }
 th {
-  text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em;
+  text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .04em;
   color: var(--muted); padding: 12px; border-bottom: 1px solid var(--border); white-space: nowrap;
 }
 td { padding: 13px 12px; border-bottom: 1px solid var(--border); }
