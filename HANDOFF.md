@@ -1,11 +1,10 @@
-# HANDOFF — finalizar a publicação do FITPLAN
+# HANDOFF — FITPLAN
 
-Documento de passagem para uma sessão do Claude Code rodando **na máquina do
-usuário** (rede sem restrição, navegador disponível, CLI do Railway instalável).
-
-A sessão anterior rodou no Claude Code na web, cujo proxy de saída **bloqueia
-`railway.app`** — por isso a verificação do app publicado não pôde ser feita lá.
-Essa é a única razão deste handoff.
+Documento de referência do projeto: o que o sistema é, em que estado está, o que
+não pode ser tocado e o que ficou em aberto. Escrito para uma sessão do Claude
+Code que pegue o trabalho daqui — em especial uma rodando **na máquina do
+usuário**, já que o Claude Code na web tem o proxy de saída bloqueando
+`railway.app` e por isso nunca conseguiu testar o app publicado de fora.
 
 ---
 
@@ -16,13 +15,18 @@ Essa é a única razão deste handoff.
 
 Fluxo desenhado:
 
-1. O aluno marca no calendário os dias do mês em que fará aula (**Agenda → Dias do mês**)
-   e vê na hora quanto vai custar (`N aulas × valor da hora-aula`).
+1. O aluno abre **Agenda → Dias do mês**, escolhe **com o personal** ou **sozinho**,
+   marca os dias e vê na hora quanto vai custar (`N aulas × valor da hora-aula`).
+   As duas modalidades são agendas independentes no mesmo mês.
 2. As aulas entram como `agendada`, **sem treino**.
 3. O personal abre cada dia e prescreve os exercícios (ou aplica um modelo A/B/C).
-4. Depois da aula, marcam `realizada` / `falta` / `cancelada`.
-5. A página **Financeiro** fecha o mês. **Pré-pago:** o valor do mês é definido no
-   agendamento; mudar o status depois só redistribui (treinado / a treinar / perdido).
+   Nas aulas com ele, o aluno só lê a prescrição.
+4. Depois do horário, marcam `realizada` (com confirmação — **não se desfaz**),
+   `falta` ou `cancelada`. Antes do horário nenhuma das duas primeiras é possível:
+   quem já sabe que não vai, **remarca** para outro dia do mesmo mês.
+5. A página **Financeiro** fecha o mês. **Pré-pago e sem devolução:** o valor é
+   definido no agendamento e nenhum status o altera — só redistribui entre
+   treinado, a treinar e perdido.
 
 Aplicação **independente** do PLANGEST (o sistema de sell-out farmacêutico que
 vive na raiz deste mesmo repositório). Banco, login e deploy próprios; nenhum
@@ -30,7 +34,7 @@ código compartilhado.
 
 ---
 
-## 2. Estado atual — verificado em 02/09/2026
+## 2. Estado atual — 04/09/2026
 
 ### Código
 
@@ -38,7 +42,7 @@ código compartilhado.
 |---|---|
 | Repositório | `htardelli/planges` (privado) |
 | Branch | `claude/aulas-control-app-a0wprp` |
-| Último commit | `db0cbe5` — "FITPLAN: modelo pre-pago e remarcacao restrita ao mes" |
+| Último commit | `c0ed7d1` |
 | Pasta do app | `fitplan/` |
 
 ### Railway
@@ -51,36 +55,41 @@ código compartilhado.
 | Source Repo | `htardelli/planges` |
 | Root Directory | `fitplan` |
 | Branch | `claude/aulas-control-app-a0wprp` |
-| Volume | montado em **`/data`** |
+| Volume | montado em **`/data`** (nome do volume: `d100-challenge-volume`, herdado) |
 | Domínio | **https://dna-academia.up.railway.app** |
 | Porta | 8080 (injetada pelo Railway via `PORT`) |
-| Último deploy | verde |
+| Deploy | verde, automático a cada push na branch |
 
-Log do start confirmando que o volume pegou:
+### Já resolvido
 
-```
-Mounting volume on: /var/lib/containers/railwayapp/bind-mounts/.../vol_j54pxyy4a8b4ojnf
-Starting Container
-[DB] FITPLAN em: /data/fitplan.db
-[DB] Biblioteca inicial: 38 exercícios
-[DB] Usuário dono criado: htardelli@gmail.com (troque a senha no primeiro acesso)
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://0.0.0.0:8080
-```
-
-### Já resolvido pelo usuário
-
-- [x] Serviço renomeado para `fitplan`; domínio gerado e app acessado pelo Chrome.
+- [x] Serviço criado, apontado para `fitplan/` e renomeado para `fitplan`.
+- [x] Volume em `/data` — o log do start confirma `[DB] FITPLAN em: /data/fitplan.db`.
+- [x] Domínio público gerado; app usado pelo Chrome e pelo iPhone.
 - [x] Auto-deploy pelo GitHub funcionando (push na branch → republica sozinho).
+- [x] **Persistência comprovada na prática:** foram mais de vinte deploys desde que o
+      usuário criou as aulas de setembro, e os dados seguem lá.
 
-### O que ficou pendente
+### Pendente — ações do usuário
 
-- [ ] Confirmar se a variável `FITPLAN_ADMIN_SENHA` foi criada. Se não foi, a senha do
-      dono é `fitplan123` e o app mostra uma faixa amarela de aviso.
-- [ ] Persistência do volume não comprovada por teste explícito (o log confirma o mount).
-- [ ] `Healthcheck Path` = `/health` não configurado.
-- [ ] Acesso do personal ainda não criado.
-- [ ] Backups do volume (a aba **Backups** do serviço permite agendar) não configurados.
+| # | O quê | Onde | Urgência |
+|---|---|---|---|
+| 1 | **Trocar a senha inicial** | app → Configurações → Minha senha | **Alta** — a faixa amarela ainda aparece, então a senha é `fitplan123` num endereço público |
+| 2 | Criar o acesso do personal | app → Configurações → Acessos | Alta — sem isso ele não monta os treinos |
+| 3 | `Healthcheck Path` = `/health` | Railway → Settings → Deploy | Média |
+| 4 | Backups do volume | Railway → aba **Backups** | Média |
+| 5 | Conferir o valor da hora-aula | app → Configurações | Baixa — se estiver zerado, aulas novas nascem sem valor |
+
+### Decisões em aberto (perguntar antes de implementar)
+
+- **Feriados de Fortaleza** — 25/03 (Data Magna do Ceará) e 15/08 (N. Sra. da
+  Assunção). Hoje só entram os nacionais.
+- **Cancelamento deve pesar na frequência?** Hoje não pesa: a métrica mede
+  disciplina de treino, não dinheiro.
+- **Treino sozinho deve ter valor?** Hoje nasce R$ 0 e fica fora do financeiro.
+- **Registro de pagamento** — o app diz quanto é devido, não o que foi pago. Sem
+  isso, desmarcar um dia já pago derruba o valor do mês sem o sistema saber.
+- **Multi-aluno** — o sistema assume um aluno; incluir a esposa é mudança de
+  estrutura.
 
 ---
 
@@ -95,90 +104,47 @@ INFO:     Uvicorn running on http://0.0.0.0:8080
 4. **Não** escrever senhas, tokens ou a `FITPLAN_SECRET_KEY` em commits, logs ou
    no chat. Se precisar de uma senha, peça ao usuário digitá-la no painel do
    Railway ou passe por variável de ambiente local.
-5. Antes de qualquer push, rodar as verificações da seção 6.
+5. O app está **em uso real**. Antes de qualquer push, rodar as verificações da
+   seção 4 e testar localmente com `FITPLAN_DATA_DIR` apontando para um banco
+   descartável — nunca contra o banco de produção.
 
 ---
 
-## 4. Tarefas a executar
+## 4. Como verificar uma mudança
 
-### A. Verificação funcional do app publicado
+### A. Localmente, antes do push
 
-Base: `https://dna-academia.up.railway.app`
+```bash
+cd fitplan
+FITPLAN_DATA_DIR=/tmp/fitplan-teste python -m uvicorn app:app --port 8090
+```
 
-1. **Health**
-   ```bash
-   curl -s https://dna-academia.up.railway.app/health
-   # esperado: {"ok":true,"db":"/data/fitplan.db"}
-   ```
-   Se `db` não for `/data/fitplan.db`, o volume não está montado — pare e reporte.
+Cobrir o que a mudança toca, e sempre estes invariantes:
 
-2. **Login e senha padrão**
-   ```bash
-   curl -s -X POST https://dna-academia.up.railway.app/auth/login \
-     -d "username=htardelli@gmail.com&password=<SENHA>"
-   ```
-   Com o token, `GET /auth/me` devolve `senha_padrao: true|false`.
-   Se vier `true`, avise o usuário: a senha ainda é a inicial e precisa ser trocada
-   em **Configurações → Minha senha** (mínimo 8 caracteres).
+| Verificação | Esperado |
+|---|---|
+| `GET /health` | `{"ok":true,...}` |
+| `POST /api/aulas/mes` com duas modalidades no mesmo mês | uma agenda não apaga a outra |
+| `PATCH` status `realizada` numa aula futura | **400** |
+| `PATCH` data para outro mês | **400** |
+| `PATCH` qualquer campo fora de `obs`/`pse` numa aula já realizada e passada | **400** |
+| Aluno: `PUT /api/aulas/{id}/exercicios` numa aula `com_personal` | **403** |
+| Aluno: `PATCH /api/aulas/{aid}/exercicios/{eid}` (execução) | **200** |
+| Personal: `GET /api/usuarios` e `PUT /api/config` | **403** |
+| 6 logins errados seguidos | **429** |
+| Layout a 390px | sem rolagem lateral; nenhum campo abaixo de 16px |
 
-3. **Configuração de preço** — `GET /api/config` deve trazer `valor_hora`.
-   Se estiver `0`, peça ao usuário o valor real da hora-aula e grave via
-   `PUT /api/config` (ou peça que ele preencha na tela de Configurações).
+### B. No app publicado, depois do deploy
 
-4. **Ciclo completo de uma aula**, via API ou navegador:
-   - `POST /api/aulas/mes` com `{"mes":"2026-09","dias":[2,4,6]}` → cria 3 aulas
-   - `GET /api/resumo?mes=2026-09` → confere `financeiro.valor_mes` = 3 × valor_hora
-   - `PUT /api/aulas/{id}/exercicios` → grava exercícios
-   - `PATCH /api/aulas/{id}` com `{"status":"realizada"}` → `valor_mes` **não muda**;
-     migra de `a_treinar` para `treinado`
-   - `PATCH /api/aulas/{id}` com uma `data` de outro mês → deve devolver **400**
-   - `DELETE` das aulas de teste ao final — **não deixar lixo no banco**
+O push republica sozinho em ~2 min. Conferir em
+`https://dna-academia.up.railway.app`:
 
-5. **Isolamento do perfil `personal`** — criar um usuário de teste com
-   `POST /api/usuarios` (role `personal`), logar com ele e confirmar:
-   - `GET /api/usuarios` → **403**
-   - `PUT /api/config` → **403**
-   - `GET /api/aulas` → **200**
-   Depois **apagar o usuário de teste**.
+1. `/health` responde `{"ok":true,"db":"/data/fitplan.db"}` — se o caminho não for
+   `/data/`, o volume não montou.
+2. O log de Deploy não traz erro de migração.
+3. Uma aula existente continua lá (persistência).
 
-6. **Força bruta** — 6 tentativas de login com senha errada; a 6ª deve devolver
-   **429**. Use um e-mail inexistente para não bloquear a conta real.
-
-### B. Teste de persistência (o mais importante)
-
-Com dados de teste no ar:
-
-1. `Deployments → ⋮ → Redeploy` no Railway (ou `railway redeploy`).
-2. Esperar subir.
-3. `GET /api/aulas?mes=2026-09` — **as aulas têm que continuar lá**.
-
-Se sumirem, o volume não está guardando de verdade: confira o mount path
-(`/data`, exatamente) e reporte antes de o usuário começar a usar para valer.
-
-### C. Ajustes finais no Railway
-
-Preferir a CLI (`npm i -g @railway/cli`, `railway login`, `railway link` no
-projeto FIT_DNA). Se algum passo não existir na CLI, instruir o usuário com o
-caminho exato de cliques.
-
-1. **Renomear o serviço** de `d100-challenge` para `fitplan`.
-2. **Healthcheck Path** = `/health` (Settings → Deploy).
-3. Confirmar a variável `FITPLAN_ADMIN_SENHA`. Se faltar, pedir ao usuário que
-   defina no painel — **não invente uma senha nem escreva a dele em lugar nenhum**.
-4. Opcional, se o usuário quiser economizar crédito: **App Sleeping**.
-
-### D. Criar o acesso do personal
-
-Pelo app: **Configurações → Acessos → + Novo acesso**, perfil **Personal**.
-Peça ao usuário o nome, e-mail e senha do professor — não escolha por ele.
-
-### E. Relatório final
-
-Entregar ao usuário:
-- resultado item a item das seções A e B;
-- o que foi ajustado em C;
-- qualquer risco encontrado;
-- confirmação de que os dados de teste foram removidos.
+**Limpe todo dado de teste** que criar no ambiente publicado.
 
 ---
 
@@ -303,6 +269,31 @@ projeto (já está no `.gitignore`).
   aula depois não altera o modelo.
 - Redefinir os dias do mês **nunca apaga** aula realizada, com falta, cancelada ou
   já com treino montado — elas voltam em `protegidas` na resposta.
+- **Correção automática no start** (`_corrigir_aulas_futuras`): toda aula futura
+  marcada como `realizada` ou `falta` volta para `agendada`. Idempotente e restrita
+  ao que é impossível; roda a cada start como guarda-corpo contra dado antigo.
+- **Feriados calculados, não consultados** (`_feriados`): os fixos por data e os
+  móveis a partir da Páscoa (Meeus). Distingue feriado nacional de ponto
+  facultativo (Carnaval, Cinzas, Corpus Christi). Consciência Negra a partir de
+  2024. Só nacionais — estaduais e municipais ficam de fora.
+
+### Interface
+
+- SPA de página única com **sidebar no desktop** e **barra de navegação inferior no
+  celular** — as duas compartilham o mesmo `data-page`, e `nav()` acende ambas.
+- Temas claro e escuro por **tokens CSS**; o escuro é quase preto puxando para o
+  verde, com texto escuro sobre o acento (`--on-primary`).
+- Cuidados de celular que precisam ser preservados em qualquer mudança de CSS:
+  - todo campo com **16px ou mais** — abaixo disso o iOS dá zoom na página e não
+    desfaz;
+  - `appearance: none` nos campos `date`/`time`, que no Safari ignoram a largura
+    do container;
+  - `min-width: 0` nas células do grid de formulário, senão os mesmos campos
+    estouram a coluna;
+  - a tabela de aulas cabe exatamente na largura de 390px — mexer em colunas exige
+    remedir.
+- Ícones: status usa 📅 ✅ ❌ 🚫; ações usam ✅ (concluir) e 🔁 (remarcar). **Nenhum
+  ícone de ação pode repetir o ícone de status da mesma linha.**
 
 ### Segurança já implementada
 
@@ -316,5 +307,8 @@ projeto (já está no `.gitignore`).
 ### Ainda não existe (candidatos a próximo passo, se o usuário pedir)
 
 - Registro de **pagamento** ("pago em tal data") — hoje só há "devido".
-- **Backup** automático do `fitplan.db`.
+- **Backup** dentro do app. O Railway oferece backup do volume na aba *Backups*,
+  que resolve o essencial e ainda não foi ativado.
 - Multi-aluno: o sistema assume **um** aluno.
+- Feriados estaduais e municipais.
+- Nenhuma suíte de testes automatizados: a verificação é a da seção 4.
