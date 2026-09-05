@@ -503,8 +503,13 @@ function aplicarModoAula() {
   const comecou = jaComecou(val('a-data'), val('a-hora'));
   document.getElementById('w-status').style.display = novo ? 'none' : '';
   document.getElementById('w-pse').style.display = (novo || !comecou) ? 'none' : '';
-  document.getElementById('w-valor').style.display =
-    (novo || val('a-modalidade') === 'sozinho') ? 'none' : '';
+  // Treino sozinho não tem professor, não consome pacote e não custa nada: os três
+  // campos só existem no acordo com o personal. Deixá-los na tela pedindo resposta
+  // convida a preencher um dado que o app depois trata como zero.
+  const solo = val('a-modalidade') === 'sozinho';
+  document.getElementById('w-valor').style.display = (novo || solo) ? 'none' : '';
+  document.getElementById('w-professor').style.display = solo ? 'none' : '';
+  document.getElementById('w-plano').style.display = solo ? 'none' : '';
   // Aula já feita: só entram esforço, observações e a execução dos exercícios.
   // Só trava se a aula realmente aconteceu — "feita" num horário futuro é dado
   // inconsistente e precisa continuar corrigível.
@@ -563,8 +568,13 @@ async function salvarAula() {
   } : pode ? {
     data: val('a-data'), hora: val('a-hora') || null, duracao_min: num('a-duracao') || 60,
     tipo: val('a-tipo') || null, foco: val('a-foco') || null, local: val('a-local') || null,
-    professor: val('a-professor') || null, status: val('a-status'),
-    modalidade: val('a-modalidade'), plano_id: num('a-plano'), modelo_id: num('a-modelo'),
+    // Campos escondidos no modo sozinho vão nulos: campo oculto que continua
+    // enviando o valor antigo é como o dado fica inconsistente sem ninguém ver.
+    professor: val('a-modalidade') === 'sozinho' ? null : (val('a-professor') || null),
+    status: val('a-status'),
+    modalidade: val('a-modalidade'),
+    plano_id: val('a-modalidade') === 'sozinho' ? null : num('a-plano'),
+    modelo_id: num('a-modelo'),
     descricao: val('a-descricao') || null, obs: val('a-obs') || null, pse: num('a-pse'),
     valor: num('a-valor')
   } : {
@@ -703,7 +713,9 @@ async function abrirDiasDoMes(mod) {
     'Dias de aula — ' + _mesRef.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
   setVal('dm-hora', _cfg.hora_padrao || '');
   setVal('dm-duracao', _cfg.duracao_padrao || 60);
-  preencherCad('dm-prof', 'professor', _cfg.professor_padrao || '');
+  preencherCad('dm-prof', 'professor', _dmMod === 'sozinho' ? '' : (_cfg.professor_padrao || ''));
+  document.getElementById('dm-prof').closest('div').style.display =
+    _dmMod === 'sozinho' ? 'none' : '';
   preencherCad('dm-local', 'local', _cfg.local_padrao || '');
   setVal('dm-valor', _dmMod === 'sozinho' ? 0 : (_cfg.valor_hora_vigente || _cfg.valor_hora || ''));
   dmGrid(_mesRef.getFullYear(), _mesRef.getMonth());
@@ -784,7 +796,7 @@ async function salvarDiasDoMes() {
     dias: [..._dmSel],
     hora: val('dm-hora') || null,
     duracao_min: num('dm-duracao') || 60,
-    professor: val('dm-prof'),
+    professor: _dmMod === 'sozinho' ? null : (val('dm-prof') || null),
     local: val('dm-local'),
     valor: num('dm-valor')
   };

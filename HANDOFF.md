@@ -303,6 +303,10 @@ projeto (já está no `.gitignore`).
     do container;
   - `min-width: 0` nas células do grid de formulário, senão os mesmos campos
     estouram a coluna;
+  - em treino **sozinho**, `Professor`, `Pacote` e `valor` ficam ocultos — os três só
+    existem no acordo com o personal. E, ao salvar, vão **nulos**: campo escondido
+    que continua enviando o valor antigo é como o dado fica inconsistente sem
+    ninguém ver. Vale no modal da aula e em *Dias do mês*;
   - na tela de **marcar** aula (`novaAula`), `status`, `PSE` e `valor` ficam ocultos:
     aula nova nasce agendada, PSE só existe depois do treino e o valor vem da
     configuração vigente. Eles voltam ao **editar** — e o PSE só depois que a aula

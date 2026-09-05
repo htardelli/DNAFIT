@@ -39,6 +39,7 @@ sendo a do *status* (agendada, feita, falta).
 
 | | **Com o personal** | **Sozinho** |
 |---|---|---|
+| Campos que aparecem | professor, pacote e valor | nenhum dos três — treino sozinho não tem professor, não consome pacote e não custa |
 | Quem monta o treino | o personal | você |
 | Você pode editar o treino | não, só acompanha | sim |
 | O que é seu na aula | status (realizada/falta/cancelada), remarcação e o feedback em Observações | tudo |
