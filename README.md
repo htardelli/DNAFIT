@@ -20,6 +20,9 @@ dos exercícios de cada treino.
 | Frequência | **Agenda** (aderência e sequência) e **Frequência** (gráficos por mês/semana) |
 | Tipo de exercício | **Treinos** — biblioteca por grupo muscular e equipamento; tipo da aula (Força, Hipertrofia, HIIT…) |
 | Descrição dos exercícios | **Treinos** (execução de cada exercício) e, na aula, séries/reps/carga/descanso/observação |
+| Registrar o treino **enquanto treino** | **Agenda → Treinar agora** — modo treino, uma série por toque |
+| Saber quanto levantei da última vez | Aparece sozinho no modo treino: *última: 55 kg × 10 · 28/08* |
+| Acompanhar peso e medidas | **Progresso → Corpo** — peso, IMC, meta, ritmo real e gráfico |
 
 ---
 
@@ -50,12 +53,49 @@ também na API — não é só a tela que esconde.
 2. As aulas entram na agenda como **agendadas**, sem treino — e aparecem no KPI
    **"Sem treino montado"** e no filtro *só sem treino*.
 3. **O personal** abre cada dia (ou aplica um **modelo** Treino A/B/C) e prescreve os exercícios.
-4. Depois da aula, qualquer um dos dois marca **Realizada** (ou falta/cancelada).
-5. O **Financeiro** fecha o mês sozinho: previsto × consolidado, no ano inteiro.
+4. **No dia**, você abre o app e o treino de hoje já está no topo. **Treinar agora**
+   abre o modo treino (veja abaixo).
+5. Depois da aula, qualquer um dos dois marca **Realizada** (ou falta/cancelada) —
+   o botão *Concluir treino*, no fim do modo treino, faz isso.
+6. O **Financeiro** fecha o mês sozinho: previsto × consolidado, no ano inteiro.
 
 Refazer os dias do mês é seguro: aula **já realizada, com falta, cancelada ou com treino
 montado nunca é apagada** — ela aparece travada (amarela) na grade e o app avisa quantas
 foram mantidas.
+
+---
+
+## Modo treino — a tela para usar na academia
+
+No topo da Agenda fica o **treino de hoje**. Um toque em **Treinar agora** abre a
+tela cheia: um exercício por vez, botões grandes, nada de calendário.
+
+- **Carga e repetições já vêm preenchidas.** A carga é a que você usou da última vez
+  naquele exercício; as repetições são as que o personal prescreveu. Se o peso for o
+  mesmo de sempre, **o único toque da série é o ✓**.
+- Precisa mudar? **−** e **+** ajustam de 2,5 em 2,5 kg (metade de uma anilha de 5).
+  Para um salto maior, toque no número: abre uma **régua** de rolagem — sem teclado,
+  sem zoom, com uma mão só.
+- Marcou a série? O **descanso começa sozinho**, com o tempo que está na prescrição.
+  Vibra e apita quando zera.
+- No fim, **Concluir treino** marca a aula como feita. Como sempre, isso pede
+  confirmação e **não pode ser desfeito**.
+- **Treino futuro não é registrável.** Os botões ficam travados até o horário chegar —
+  a mesma regra que já valia para o status.
+
+## Progresso → Corpo
+
+Registre o peso quando quiser (**Registrar peso**) e o app mostra:
+
+- peso atual e a variação desde a última pesagem;
+- **IMC** — precisa da sua altura em *Ajustes*;
+- **meta** e quanto falta — a meta também fica em *Ajustes*;
+- **ritmo real**: quantos quilos por semana, calculado pela reta dos seus pontos
+  dos últimos 90 dias. Ele **só aparece com 3 pesagens em pelo menos 2 semanas** —
+  antes disso não é previsão, é chute, e o app prefere dizer que não sabe;
+- previsão de quando você bate a meta, **mantendo esse ritmo**.
+
+Só você (aluno) registra medidas. O personal vê.
 
 ---
 

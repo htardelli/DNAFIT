@@ -34,7 +34,7 @@ código compartilhado.
 
 ---
 
-## 2. Estado atual — 04/09/2026
+## 2. Estado atual — 05/09/2026
 
 ### Código
 
@@ -42,7 +42,7 @@ código compartilhado.
 |---|---|
 | Repositório | `htardelli/planges` (privado) |
 | Branch | `claude/aulas-control-app-a0wprp` |
-| Último commit | `c0ed7d1` |
+| Último commit | `2a6cda0` |
 | Pasta do app | `fitplan/` |
 
 ### Railway
@@ -208,9 +208,15 @@ projeto (já está no `.gitignore`).
 | GET/PUT | `/api/config` | leitura livre; escrita **só o dono** |
 | GET/POST/PATCH/DELETE | `/api/aulas*` | agenda |
 | POST | `/api/aulas/mes` | marca os dias do mês em lote |
+| GET | `/api/aulas/hoje` | treino de hoje (ou o próximo agendado), já com exercícios |
 | PUT | `/api/aulas/{id}/exercicios` | substitui a lista de exercícios |
+| PATCH | `/api/aulas/{aid}/exercicios/{eid}/series/{ordem}` | registra UMA série (carga, reps, feito) |
 | POST | `/api/aulas/{id}/aplicar-modelo/{mid}` | copia um modelo para a aula |
 | GET/POST/PATCH/DELETE | `/api/exercicios*` | biblioteca |
+| GET | `/api/exercicios/catalogo` | contagem por grupo muscular e por equipamento |
+| POST | `/api/exercicios/{id}/favorito` | alterna favorito |
+| GET/POST/DELETE | `/api/medidas*` | medidas corporais — **escrita só o dono** |
+| GET | `/api/corpo` | peso, IMC, meta, ritmo e série do gráfico |
 | GET/POST/PUT/DELETE | `/api/modelos*` | treinos A/B/C |
 | GET/POST/PUT/DELETE | `/api/planos*` | pacotes |
 | GET | `/api/resumo?mes=` | KPIs do mês + bloco financeiro |
@@ -295,6 +301,51 @@ projeto (já está no `.gitignore`).
 - Ícones: status usa 📅 ✅ ❌ 🚫; ações usam ✅ (concluir) e 🔁 (remarcar). **Nenhum
   ícone de ação pode repetir o ícone de status da mesma linha.**
 
+### Modo treino (a tela da academia)
+
+Overlay de tela cheia (`#modo-treino`, `z-index: 120`), um exercício por vez.
+
+- **Carga e repetições já chegam preenchidas**: carga vem da *última carga*
+  registrada naquele exercício (ou da prescrição, se não houver histórico);
+  repetições vêm da prescrição. No caso comum — mesmo peso da última vez — o
+  único toque da série é o ✓. Isso é o ponto do desenho, não um detalhe: cada
+  toque a mais é um toque que não acontece com o celular na mão, suado, em pé.
+- Marcar a série **congela na série o que está na tela** (a sugestão vira registro).
+- O ✓ e os botões ± ficam **desabilitados enquanto o treino não começou** — mesma
+  regra do status da aula, aplicada também no backend (HTTP 400).
+- Descanso: começa sozinho ao marcar a série, usa `descanso_seg` da prescrição,
+  vibra e apita no zero (`navigator.vibrate` + `AudioContext`, sem arquivo externo).
+- `Concluir treino` marca a aula como `realizada` — com a mesma confirmação
+  irreversível de sempre, e informando quantos exercícios ficaram sem marcar.
+
+**Os modais estão em `z-index: 200`, ACIMA do modo treino.** Se alguém baixar esse
+valor, a régua de carga abre atrás da tela cheia e trava a série no meio — foi um
+defeito real, encontrado em teste antes do deploy.
+
+### Régua de valores
+
+Seletor por rolagem (`#m-regua`) no lugar do teclado numérico: campo numérico no
+celular abre teclado, o iOS dá zoom e o alvo fica menor. A fita é um **gradiente
+com traços posicionados por JS**, não elementos — 600 posições sem 600 nós no DOM.
+A escala é montada com recuo de `metadeDaLargura` em cada ponta; é isso que faz o
+valor escolhido parar exatamente sob a agulha. Se mexer na largura da caixa,
+`rgMontar()` precisa rodar de novo.
+
+### Prescrição × execução × séries
+
+Três camadas que não se misturam:
+
+| Camada | Onde mora | Quem mexe |
+|---|---|---|
+| Prescrição | `aula_exercicios` (nome, séries, repetições, descanso) | personal (ou o aluno em aula `sozinho`) |
+| Execução por série | `aula_series` (carga, repetições, feito) | quem treinou, os dois perfis |
+| Resumo do item | `aula_exercicios.carga` / `.feito` | **derivado** — `_sincronizar_item()` |
+
+`carga` do item = **maior carga executada**; `feito` = todas as séries marcadas.
+É isso que mantém `/api/evolucao`, o volume do mês e as telas antigas funcionando
+sem saberem que séries existem. Ponto de atenção conhecido: marcar `feito` pelo
+modal antigo da aula **não** marca as séries; o inverso funciona.
+
 ### Segurança já implementada
 
 - Chave de assinatura dos tokens sorteada no 1º start e guardada no banco
@@ -307,6 +358,8 @@ projeto (já está no `.gitignore`).
 ### Ainda não existe (candidatos a próximo passo, se o usuário pedir)
 
 - Registro de **pagamento** ("pago em tal data") — hoje só há "devido".
+- **Sem foto de progresso** e sem histórico de medidas na tela (o banco guarda
+  cintura/quadril/peito/braço/coxa; a tela só mostra o peso).
 - **Backup** dentro do app. O Railway oferece backup do volume na aba *Backups*,
   que resolve o essencial e ainda não foi ativado.
 - Multi-aluno: o sistema assume **um** aluno.
