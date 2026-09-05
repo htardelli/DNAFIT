@@ -462,6 +462,43 @@ aluno" não foi implementado: `aluno` é o papel de DONO da conta, então um per
 que criasse um aluno criaria um segundo dono — escalada de privilégio num sistema
 que assume um aluno só. Isso só faz sentido junto com multi-aluno, que não existe.
 
+### Três modalidades, três formas de treino
+
+`MODALIDADES = ("com_personal", "sozinho", "aerobico")`. A modalidade decide
+**quem prescreve**, **se custa** e **qual a forma do treino**:
+
+| | com_personal | sozinho | aerobico |
+|---|---|---|---|
+| Quem monta | o personal | o aluno | outro treinador, fora do app |
+| Forma | série × reps × carga | idem | **texto corrido** em `descricao` |
+| Registro | carga por série | idem | `distancia_km` + `tempo_min` |
+| Entra no valor do mês | **sim** | não | não |
+
+`MODALIDADES_PROPRIAS = ("sozinho", "aerobico")` é o que o aluno pode montar e o
+que não custa — use essa constante em vez de comparar com `"sozinho"` solto.
+
+**Por que aeróbico não virou só um `tipo`:** a prescrição de corrida chega pronta
+("2km trote aquecendo; 2x 1km progressivo a cada 250m…") e não tem série,
+repetição nem carga. Espremê-la em linhas de exercício inventaria uma estrutura
+que o treino não tem, e o registro (distância, tempo, ritmo) não caberia em lugar
+nenhum. Por isso o modal da aula troca o bloco de exercícios (`#a-ex-bloco`) pelo
+bloco de corrida (`#a-aer-bloco`), e o modo treino tem uma tela própria
+(`tmRenderAerobico`) que mostra a prescrição e nada mais — não há série para
+marcar nem descanso para contar.
+
+Ritmo é derivado, nunca gravado: `_pace()` no backend e `paceStr()` no front, em
+**min/km no formato 5:42** — é assim que corredor lê. No gráfico mensal o eixo do
+ritmo é **invertido**: ritmo menor é melhor, e sem inverter a melhora apareceria
+como queda.
+
+`/api/aerobico` só conta treinos **realizados com distância registrada** — ponto
+sem ritmo é ruído. Os realizados sem distância aparecem como `sem_registro`, com
+aviso na tela: pendência escondida é o que faz o gráfico mentir.
+
+⚠️ Ao mexer em `aplicarModoAula()`, cuidado com a ordem: o bloco da modalidade
+roda **antes** de `const pode` existir. Usar `pode` ali dá *"Cannot access before
+initialization"* e o modal simplesmente não abre.
+
 ### Conclusão do treino (energia · fadiga · esforço)
 
 Marcar como feita — pelo ✅ da lista ou pelo *Concluir treino* do modo treino —

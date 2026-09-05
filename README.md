@@ -27,6 +27,25 @@ dos exercícios de cada treino.
 
 ---
 
+## Corrida (treino aeróbico)
+
+Os treinos que vêm do seu **treinador de corrida** entram como modalidade
+**Aeróbico** — ele não tem conta no app, então quem cola a prescrição é você.
+
+1. Marque o dia na agenda como **Aeróbico** (em *Dias do mês* ou em *+ Aula*).
+2. Cole o texto do treinador exatamente como ele manda — *"6km / 2km trote
+   aquecendo; 2x 1km progressivo a cada 250m; 2km de trote, desaquecendo."*
+   Não há série nem carga aqui: corrida não tem essa forma, e o app não finge que tem.
+3. Na hora de correr, **Treinar agora** mostra a prescrição em tela cheia.
+4. Ao concluir, informe **distância** e **tempo**. O app calcula o **ritmo** (min/km).
+
+Em **Progresso → Corrida** você vê o volume do ano, o tempo total, o ritmo médio,
+o seu melhor ritmo e a lista treino a treino. O gráfico do mês cruza **km em
+barras** com **ritmo em linha** — e o eixo do ritmo é invertido de propósito,
+porque em corrida um número menor é melhor.
+
+Corrida **não entra no valor pago ao personal** — é outro profissional.
+
 ## Com o personal ou sozinho
 
 Ao marcar os dias, você diz **como** vai treinar. São duas agendas independentes no

@@ -82,20 +82,32 @@ def _login_falhou(chave: str):
 STATUS_CONSOME = STATUS_VALIDOS
 
 # Como a aula acontece. Define quem monta o treino e se ela é cobrada.
-MODALIDADES = ("com_personal", "sozinho")
+# Três naturezas de treino, não duas. A modalidade decide QUEM prescreve, SE
+# custa e QUAL a forma do treino:
+#   com_personal — prescrição do personal contratado, entra no valor do mês;
+#   sozinho      — ele monta, série × carga, fora do valor;
+#   aerobico     — corrida prescrita por OUTRO treinador, que não tem conta aqui.
+#                  A prescrição chega pronta em texto ("2km trote aquecendo; 2x
+#                  1km progressivo…") e o resultado é distância e tempo. Forçar
+#                  isso em linhas de série × repetição × carga seria inventar uma
+#                  estrutura que o treino não tem.
+MODALIDADES = ("com_personal", "sozinho", "aerobico")
+MODALIDADES_PROPRIAS = ("sozinho", "aerobico")   # o aluno é quem monta
+MODALIDADE_AEROBICA = "aerobico"
 
 # Numa aula COM O PERSONAL, o treino é prescrição do professor: o aluno só lê.
 # Ele continua dono do registro do dia — pode remarcar, dizer se aconteceu e
 # lançar o feedback. Estes são os campos que ele pode mexer nessas aulas.
 CAMPOS_ALUNO_EM_AULA_DO_PERSONAL = {"data", "hora", "status", "obs", "pse", "valor",
-                                    "modalidade", "energia", "fadiga"}
+                                    "modalidade", "energia", "fadiga",
+                                    "distancia_km", "tempo_min"}
 
 
 def _pode_montar_treino(user, aula) -> bool:
     """O personal monta qualquer treino. O aluno monta só o que treina sozinho."""
     if user["role"] == "personal":
         return True
-    return (aula["modalidade"] or "com_personal") == "sozinho"
+    return (aula["modalidade"] or "com_personal") in MODALIDADES_PROPRIAS
 
 
 def _hash(pw: str) -> str:
@@ -337,7 +349,7 @@ def _ja_comecou(data_iso: str, hora: Optional[str]) -> bool:
 # aceita o registro do que aconteceu — esforço percebido, observações e a execução
 # dos exercícios (carga usada, o que foi feito).
 STATUS_IRREVERSIVEL = "realizada"
-CAMPOS_APOS_REALIZADA = {"obs", "pse", "energia", "fadiga"}
+CAMPOS_APOS_REALIZADA = {"obs", "pse", "energia", "fadiga", "distancia_km", "tempo_min"}
 
 # Escalas de 1 a 5, iguais para energia e fadiga: simétricas em torno de "Normal"
 # e monotônicas. Escala com dois rótulos que significam quase a mesma coisa
@@ -540,6 +552,8 @@ class AulaIn(BaseModel):
 class AulaUpdate(BaseModel):
     energia: Optional[int] = None
     fadiga: Optional[int] = None
+    distancia_km: Optional[float] = None
+    tempo_min: Optional[float] = None
     data: Optional[str] = None
     hora: Optional[str] = None
     duracao_min: Optional[int] = None
@@ -864,7 +878,7 @@ async def criar_aula(body: AulaIn, user=Depends(get_current_user),
         # Treino sozinho não envolve o personal, então não entra na conta do mês
         if body.valor is not None:
             valor = body.valor
-        elif modalidade == "sozinho":
+        elif modalidade in MODALIDADES_PROPRIAS:
             valor = 0
         else:
             valor = await _valor_hora(db, d.isoformat())
@@ -927,7 +941,7 @@ async def definir_dias_do_mes(body: DiasDoMesIn, user=Depends(get_current_user),
     for d in sorted(alvo - set(minhas)):
         if body.valor is not None:
             valor = body.valor
-        elif modalidade == "sozinho":
+        elif modalidade in MODALIDADES_PROPRIAS:
             valor = 0            # treino sozinho não é cobrado
         else:
             valor = await _valor_hora(db, d)
@@ -969,6 +983,10 @@ async def editar_aula(aid: int, body: AulaUpdate, user=Depends(get_current_user)
         raise HTTPException(400, f"Status deve ser um de: {', '.join(STATUS_VALIDOS)}")
     if "modalidade" in data and data["modalidade"] not in MODALIDADES:
         raise HTTPException(400, f"Modalidade deve ser um de: {', '.join(MODALIDADES)}")
+    for campo, teto in (("distancia_km", 500), ("tempo_min", 1440)):
+        v = data.get(campo)
+        if v is not None and not (0 < float(v) <= teto):
+            raise HTTPException(400, f"Valor fora do esperado em {campo}.")
     for campo in ("energia", "fadiga"):
         v = data.get(campo)
         if v is not None and not (1 <= int(v) <= NIVEIS_1A5):
@@ -1678,6 +1696,76 @@ async def remover_cadastro(cid: int, user=Depends(get_current_user),
     await db.commit()
 
 
+# ── Aeróbico (corrida) ────────────────────────────────────────────────────────
+def _pace(dist, tempo) -> Optional[str]:
+    """min/km no formato 5:42 — é assim que corredor lê ritmo, não em decimal."""
+    if not dist or not tempo or dist <= 0:
+        return None
+    total = tempo / dist
+    m = int(total)
+    seg = round((total - m) * 60)
+    if seg == 60:
+        m, seg = m + 1, 0
+    return f"{m}:{seg:02d}"
+
+
+@app.get("/api/aerobico")
+async def aerobico(ano: Optional[int] = None, user=Depends(get_current_user),
+                   db: aiosqlite.Connection = Depends(get_db)):
+    """Acompanhamento da corrida: volume por mês e ritmo ao longo do tempo.
+
+    Só entram treinos REALIZADOS com distância registrada — sem distância não há
+    ritmo, e um ponto sem ritmo no gráfico é ruído, não informação.
+    """
+    ano = ano or _hoje().year
+    ini, fim = date(ano, 1, 1).isoformat(), date(ano, 12, 31).isoformat()
+
+    cur = await db.execute("""
+        SELECT data, foco, tipo, distancia_km, tempo_min, pse
+          FROM aulas
+         WHERE modalidade = ? AND status = 'realizada' AND data BETWEEN ? AND ?
+           AND distancia_km IS NOT NULL AND distancia_km > 0
+      ORDER BY data
+    """, (MODALIDADE_AEROBICA, ini, fim))
+    treinos = []
+    mensal = [{"mes": m, "km": 0.0, "min": 0.0, "treinos": 0} for m in range(1, 13)]
+    for r in await cur.fetchall():
+        d = dict(r)
+        d["pace"] = _pace(d["distancia_km"], d["tempo_min"])
+        treinos.append(d)
+        m = int(d["data"][5:7])
+        if 1 <= m <= 12:
+            alvo = mensal[m - 1]
+            alvo["km"] += d["distancia_km"] or 0
+            alvo["min"] += d["tempo_min"] or 0
+            alvo["treinos"] += 1
+    for m in mensal:
+        m["km"] = round(m["km"], 1)
+        m["min"] = round(m["min"])
+        m["pace"] = _pace(m["km"], m["min"])
+
+    com_tempo = [t for t in treinos if t["tempo_min"]]
+    total_km = round(sum(t["distancia_km"] or 0 for t in treinos), 1)
+    total_min = round(sum(t["tempo_min"] or 0 for t in com_tempo))
+
+    # Quantos treinos aeróbicos ficaram sem distância lançada — a fila de
+    # registro pendente, que é o que faz o gráfico mentir se ficar escondida.
+    sem_registro = (await (await db.execute("""
+        SELECT COUNT(*) FROM aulas
+         WHERE modalidade = ? AND status = 'realizada' AND data BETWEEN ? AND ?
+           AND (distancia_km IS NULL OR distancia_km <= 0)
+    """, (MODALIDADE_AEROBICA, ini, fim))).fetchone())[0]
+
+    return {
+        "ano": ano, "mensal": mensal, "treinos": treinos[-40:],
+        "total_km": total_km, "total_min": total_min,
+        "pace_medio": _pace(round(sum(t["distancia_km"] for t in com_tempo), 2), total_min),
+        "melhor_pace": min((t["pace"] for t in com_tempo), default=None,
+                           key=lambda p: int(p.split(":")[0]) * 60 + int(p.split(":")[1])),
+        "treinos_no_ano": len(treinos), "sem_registro": sem_registro,
+    }
+
+
 # ── Corpo (peso e medidas) ────────────────────────────────────────────────────
 class MedidaIn(BaseModel):
     data: Optional[str] = None     # None → hoje
@@ -1943,6 +2031,7 @@ async def resumo(mes: Optional[str] = None, user=Depends(get_current_user),
         "sem_treino": sem_treino,
         "com_personal": por_modalidade.get("com_personal", 0),
         "sozinho": por_modalidade.get("sozinho", 0),
+        "aerobico": por_modalidade.get("aerobico", 0),
         "proxima": _d(prox), "plano": plano,
         "financeiro": {
             "valor_hora": await _valor_hora(db, ini),

@@ -727,3 +727,22 @@ tbody tr:hover { background: var(--card-2); }
   padding: 7px 10px; margin-bottom: 6px; font-size: 13px; font-weight: 600;
   background: var(--card-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
 }
+
+/* ── Aeróbico ─────────────────────────────────────────────────────────────
+   Terceira modalidade: laranja e losango. Junto com P (azul, redondo) e
+   I (verde, quadrado), as três se distinguem por cor E por forma. */
+.modo-a { background: var(--warn); border-radius: 6px; transform: rotate(45deg); }
+.modo-a > * { transform: rotate(-45deg); }
+.legenda-modo .modo-a { border-radius: 4px; }
+/* No calendário a cor da barrinha é do status; a modalidade entra na textura:
+   lisa = personal, listrada = individual, pontilhada = corrida. */
+.chip.aer {
+  background-image: repeating-linear-gradient(90deg,
+    rgba(255,255,255,.65) 0 2px, transparent 2px 6px);
+}
+/* Prescrição de corrida no modo treino: texto do treinador, como ele escreveu. */
+.tm-aer {
+  margin: 0; padding: 14px; white-space: pre-wrap; word-break: break-word;
+  font-family: var(--font); font-size: 16px; line-height: 1.7; color: var(--text);
+  background: var(--card-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+}

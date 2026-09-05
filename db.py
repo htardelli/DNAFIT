@@ -330,6 +330,10 @@ async def init_db(hash_fn):
         # hora de concluir — é o único momento em que a resposta é confiável.
         await _add_col("aulas", "energia", "INTEGER")
         await _add_col("aulas", "fadiga", "INTEGER")
+        # Treino aeróbico: a prescrição é texto corrido (vem pronta do treinador
+        # de corrida) e o resultado é distância e tempo — não série × carga.
+        await _add_col("aulas", "distancia_km", "REAL")
+        await _add_col("aulas", "tempo_min", "REAL")
         # aulas criadas antes desta coluna eram todas com o personal
         await db.execute("UPDATE aulas SET modalidade='com_personal' "
                          "WHERE modalidade IS NULL OR modalidade=''")

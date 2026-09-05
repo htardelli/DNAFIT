@@ -324,12 +324,21 @@ function jaComecou(dataIso, hora) {
 // O personal monta qualquer treino; o aluno monta só o que treina sozinho.
 function podeMontarTreino(modalidade) {
   if (_user && _user.role === 'personal') return true;
-  return (modalidade || 'com_personal') === 'sozinho';
+  return podeMontarMod(modalidade);
 }
 
-function rotuloModalidade(m) {
-  return (m || 'com_personal') === 'sozinho' ? 'Sozinho' : 'Com o personal';
-}
+// Letra + cor + forma por modalidade: P azul redondo, I verde quadrado,
+// A laranja losango. Cor sozinha falha de relance e para quem enxerga mal cor.
+const MODO_BADGE = {
+  com_personal: { l: 'P', cls: 'modo-p', t: 'Com o personal' },
+  sozinho:      { l: 'I', cls: 'modo-i', t: 'Individual — você treina sozinho' },
+  aerobico:     { l: 'A', cls: 'modo-a', t: 'Aeróbico — corrida prescrita pelo treinador' }
+};
+
+const ROTULO_MOD = { com_personal: 'Com o personal', sozinho: 'Sozinho', aerobico: 'Aeróbico' };
+function rotuloModalidade(m) { return ROTULO_MOD[m || 'com_personal'] || 'Com o personal'; }
+function ehAerobico(m) { return (m || '') === 'aerobico'; }
+function podeMontarMod(m) { return ['sozinho', 'aerobico'].includes(m || 'com_personal'); }
 
 // Aula que ainda espera o personal montar o treino
 function semTreino(a) {
@@ -354,7 +363,7 @@ function renderCal() {
     const fora = d.getMonth() !== mes;
     if (fora && i >= 35) continue;                     // não desenha a 6ª linha vazia
     const chips = (porDia[k] || []).map(a => `
-      <div class="chip chip-${a.status}${semTreino(a) ? ' pend' : ''}${(a.modalidade === 'sozinho') ? ' solo' : ''}" onclick="event.stopPropagation();abrirAula(${a.id})"
+      <div class="chip chip-${a.status}${semTreino(a) ? ' pend' : ''}${(a.modalidade === 'sozinho') ? ' solo' : ''}${ehAerobico(a.modalidade) ? ' aer' : ''}" onclick="event.stopPropagation();abrirAula(${a.id})"
            title="${esc((a.hora||'') + ' ' + (a.tipo||a.foco||'Aula') + ' · ' + rotuloModalidade(a.modalidade) + (semTreino(a) ? ' — sem treino montado' : ''))}">
         ${a.hora ? `<span class="chip-hora">${a.hora}</span> ` : ''}<span class="chip-txt">${esc(a.tipo || a.foco || 'Aula')}</span>
       </div>`).join('');
@@ -380,7 +389,7 @@ function renderLista() {
   }
   tb.innerHTML = linhas.map(a => {
     const st = ICONE_STATUS[a.status] || { i: '•', t: a.status };
-    const solo = a.modalidade === 'sozinho';
+    const mod = MODO_BADGE[a.modalidade || 'com_personal'] || MODO_BADGE.com_personal;
     // A linha inteira abre a aula — dispensa um botão e devolve a largura à
     // coluna do treino, que é o conteúdo que interessa.
     const treino = esc(a.tipo || a.foco || a.descricao || '—');
@@ -393,8 +402,7 @@ function renderLista() {
         <b>${fmtDataCurta(a.data)}</b>
         <div class="q-sub"><span class="muted">${diaSemana(a.data)}</span><b>${a.hora || '—'}</b></div>
       </td>
-      <td class="c-modo"><span class="modo ${solo ? 'modo-i' : 'modo-p'}"
-            title="${solo ? 'Individual — você treina sozinho' : 'Com o personal'}">${solo ? 'I' : 'P'}</span></td>
+      <td class="c-modo"><span class="modo ${mod.cls}" title="${mod.t}"><span>${mod.l}</span></span></td>
       <td class="c-treino">${treino}${nEx}</td>
       <td class="c-st"><span class="st b-${a.status}" title="${st.t}">${st.i}</span></td>
       <td class="right c-acoes">
@@ -424,7 +432,8 @@ async function marcar(id, status) {
 function limparAula() {
   const sg = document.getElementById('a-aviso-sugestao');
   if (sg) sg.style.display = 'none';
-  ['a-id','a-hora','a-foco','a-descricao','a-obs','a-valor'].forEach(i => setVal(i, ''));
+  ['a-id','a-hora','a-foco','a-descricao','a-obs','a-valor',
+   'a-aer-texto','a-distancia','a-tempo'].forEach(i => setVal(i, ''));
   document.getElementById('a-pse').innerHTML = opcoesEscala(PSE_ESCALA, '');
   document.getElementById('a-energia').innerHTML = opcoesEscala(NIVEIS, '');
   document.getElementById('a-fadiga').innerHTML = opcoesEscala(NIVEIS, '');
@@ -473,6 +482,8 @@ async function abrirAula(id, remarcar) {
     document.getElementById('a-energia').innerHTML = opcoesEscala(NIVEIS, a.energia);
     document.getElementById('a-fadiga').innerHTML = opcoesEscala(NIVEIS, a.fadiga);
     setVal('a-descricao', a.descricao || ''); setVal('a-obs', a.obs || '');
+    setVal('a-aer-texto', a.descricao || '');
+    setVal('a-distancia', a.distancia_km ?? ''); setVal('a-tempo', a.tempo_min ?? '');
     setVal('a-valor', a.valor ?? '');
     setVal('a-modalidade', a.modalidade || 'com_personal');
     (a.exercicios || []).forEach(it => addLinhaEx('a-ex', it));
@@ -508,13 +519,19 @@ function aplicarModoAula() {
   // aconteceu. Na hora de marcar a aula não há resposta possível.
   ['w-pse', 'w-energia', 'w-fadiga'].forEach(i =>
     document.getElementById(i).style.display = (novo || !comecou) ? 'none' : '');
-  // Treino sozinho não tem professor, não consome pacote e não custa nada: os três
-  // campos só existem no acordo com o personal. Deixá-los na tela pedindo resposta
-  // convida a preencher um dado que o app depois trata como zero.
-  const solo = val('a-modalidade') === 'sozinho';
-  document.getElementById('w-valor').style.display = (novo || solo) ? 'none' : '';
-  document.getElementById('w-professor').style.display = solo ? 'none' : '';
-  document.getElementById('w-plano').style.display = solo ? 'none' : '';
+  // Regra única: treino que não é com o personal contratado não tem professor,
+  // não consome pacote e não custa.
+  const proprio = podeMontarMod(val('a-modalidade'));
+  const aer = ehAerobico(val('a-modalidade'));
+  document.getElementById('w-valor').style.display = (novo || proprio) ? 'none' : '';
+  document.getElementById('w-professor').style.display = proprio ? 'none' : '';
+  document.getElementById('w-plano').style.display = proprio ? 'none' : '';
+  // Corrida não tem série × carga: troca o bloco de exercícios pela prescrição
+  // em texto, que é a forma em que ela chega do treinador.
+  document.getElementById('a-aer-bloco').style.display = aer ? '' : 'none';
+  document.getElementById('a-ex-bloco').style.display = aer ? 'none' : '';
+  document.getElementById('a-aer-result').style.display = (novo || !comecou) ? 'none' : '';
+  atualizarPace();
   // Aula já feita: só entram esforço, observações e a execução dos exercícios.
   // Só trava se a aula realmente aconteceu — "feita" num horário futuro é dado
   // inconsistente e precisa continuar corrigível.
@@ -561,6 +578,7 @@ function aplicarModoAula() {
     const el = document.getElementById(i);
     if (el) el.disabled = !pode || (concluida && !['a-tipo','a-foco','a-descricao','a-modelo'].includes(i));
   });
+  document.getElementById('a-aer-texto').disabled = !pode;
   document.getElementById('a-ex-acoes').style.display = pode ? '' : 'none';
   // "Aplicar modelo" troca a lista inteira e apagaria as cargas já lançadas —
   // some depois de a aula ser concluída. "+ Exercício" continua.
@@ -591,15 +609,19 @@ async function salvarAula() {
   // Aula já feita: só o registro do que aconteceu.
   // Numa aula do personal, o aluno só envia o que é dele — o backend recusa o resto
   // Como o corpo estava ao fim do treino — do aluno, em qualquer modalidade
+  const aer = ehAerobico(val('a-modalidade'));
   const feedback = {
     obs: val('a-obs') || null, pse: num('a-pse'),
     energia: num('a-energia'), fadiga: num('a-fadiga')
   };
+  if (aer) { feedback.distancia_km = num('a-distancia'); feedback.tempo_min = num('a-tempo'); }
+  // A prescrição da corrida mora em descricao — é o mesmo campo, em outra caixa.
+  const descricao = aer ? (val('a-aer-texto') || null) : (val('a-descricao') || null);
   const body = concluida ? (pode ? {
     // Autor do treino corrigindo o que de fato foi feito
     ...feedback,
     tipo: val('a-tipo') || null, foco: val('a-foco') || null,
-    descricao: val('a-descricao') || null, modelo_id: num('a-modelo')
+    descricao, modelo_id: num('a-modelo')
   } : { ...feedback }) : pode ? {
     data: val('a-data'), hora: val('a-hora') || null, duracao_min: num('a-duracao') || 60,
     tipo: val('a-tipo') || null, foco: val('a-foco') || null, local: val('a-local') || null,
@@ -610,7 +632,7 @@ async function salvarAula() {
     modalidade: val('a-modalidade'),
     plano_id: val('a-modalidade') === 'sozinho' ? null : num('a-plano'),
     modelo_id: num('a-modelo'),
-    descricao: val('a-descricao') || null, valor: num('a-valor'), ...feedback
+    descricao, valor: num('a-valor'), ...feedback
   } : {
     data: val('a-data'), hora: val('a-hora') || null, status: val('a-status'),
     modalidade: val('a-modalidade'), valor: num('a-valor'), ...feedback
@@ -629,7 +651,7 @@ async function salvarAula() {
     }
     // Exercícios: quem monta o treino grava a lista inteira; quem não monta
     // (aula do personal, ou aula já concluída) registra só a execução de cada item.
-    if (pode) {
+    if (pode && !aer) {
       const itens = coletarEx('a-ex');
       if (itens.length || id) await api('PUT', `/api/aulas/${aulaId}/exercicios`, itens);
     } else if (id) {
@@ -1042,6 +1064,7 @@ function novoChart(ref, ctxId, config) {
 
 async function loadFrequencia() {
   loadCorpo();
+  loadAerobico();
   if (typeof Chart === 'undefined') {
     toast('Gráficos indisponíveis (sem conexão com o CDN do Chart.js)', 'warn');
     return;
@@ -1370,10 +1393,11 @@ async function carregarHoje() {
     const n = (a.exercicios || []).length;
     const feitos = (a.exercicios || []).filter(e => e.feito).length;
     const quando = d.eh_hoje ? 'Hoje' : `${diaSemana(a.data)} ${fmtDataCurta(a.data)}`;
-    const titulo = a.foco || a.tipo || (a.modalidade === 'sozinho' ? 'Treino individual' : 'Treino com o personal');
+    const titulo = a.foco || a.tipo || (ehAerobico(a.modalidade) ? 'Treino de corrida'
+      : a.modalidade === 'sozinho' ? 'Treino individual' : 'Treino com o personal');
     const linhas = [
       a.hora ? `${a.hora}` : null,
-      a.modalidade === 'sozinho' ? 'individual' : 'com o personal',
+      rotuloModalidade(a.modalidade).toLowerCase(),
       n ? `${n} ${n === 1 ? 'exercício' : 'exercícios'}${feitos ? ` · ${feitos} ${feitos === 1 ? 'feito' : 'feitos'}` : ''}`
         : 'treino ainda não montado'
     ].filter(Boolean).join(' · ');
@@ -1414,7 +1438,7 @@ function renderPainel(r) {
 // Uma tela para usar EM PÉ. Carga e repetições já chegam preenchidas (última
 // carga e prescrição): no caso comum — mesmo peso da última vez — o único toque
 // da série é o ✓.
-let _tm = { aula: null, idx: 0, timer: null, restam: 0, pend: {} };
+let _tm = { aula: null, idx: 0, timer: null, restam: 0, pend: {}, aerobico: false };
 
 const TM_PASSO_CARGA = 2.5;   // metade de uma anilha de 5 kg: o ajuste real
 
@@ -1422,6 +1446,14 @@ async function tmAbrir(aulaId) {
   try {
     _tm.aula = await api('GET', `/api/aulas/${aulaId}`);
   } catch (e) { return toast(e.message, 'err'); }
+  _tm.aerobico = ehAerobico(_tm.aula.modalidade);
+  if (_tm.aerobico) {
+    if (!(_tm.aula.descricao || '').trim())
+      return toast('Este treino de corrida ainda não tem prescrição', 'warn');
+    document.getElementById('modo-treino').classList.add('open');
+    document.body.style.overflow = 'hidden';
+    return tmRenderAerobico();
+  }
   if (!(_tm.aula.exercicios || []).length) return toast('Este treino ainda não tem exercícios', 'warn');
   // Abre no primeiro exercício que ainda não terminou — retomar de onde parou
   const i = _tm.aula.exercicios.findIndex(e => !e.feito);
@@ -1441,6 +1473,7 @@ function tmFechar() {
 function tmAbrirAula() { const id = _tm.aula.id; tmFechar(); abrirAula(id); }
 
 function tmIr(delta) {
+  if (_tm.aerobico) return tmConcluir();
   const n = _tm.aula.exercicios.length;
   if (delta > 0 && _tm.idx === n - 1) return tmConcluir();
   _tm.idx = Math.max(0, Math.min(n - 1, _tm.idx + delta));
@@ -1455,8 +1488,11 @@ function tmRepsPrescritas(it) {
 
 function tmRender() {
   const a = _tm.aula, it = a.exercicios[_tm.idx];
+  document.querySelector('#modo-treino .tm-rot').style.display = '';
+  document.getElementById('tm-ant').style.display = '';
   document.getElementById('tm-titulo').textContent = a.foco || a.tipo ||
-    (a.modalidade === 'sozinho' ? 'Treino individual' : 'Treino com o personal');
+    (ehAerobico(a.modalidade) ? 'Treino de corrida'
+      : a.modalidade === 'sozinho' ? 'Treino individual' : 'Treino com o personal');
   document.getElementById('tm-subtitulo').textContent =
     `${fmtDataCurta(a.data)}${a.hora ? ' · ' + a.hora : ''} · exercício ${_tm.idx + 1} de ${a.exercicios.length}`;
 
@@ -1610,12 +1646,34 @@ function tmAviso() {
   } catch (e) {}
 }
 
-async function tmConcluir() {
+// Tela do treino de corrida: a prescrição inteira, legível de longe, e nada mais.
+// Não há série para marcar nem descanso para contar — inventar controles aqui
+// seria dar trabalho sem devolver informação.
+function tmRenderAerobico() {
+  const a = _tm.aula;
+  document.getElementById('tm-titulo').textContent = a.foco || a.tipo || 'Treino de corrida';
+  document.getElementById('tm-subtitulo').textContent =
+    `${fmtDataCurta(a.data)}${a.hora ? ' · ' + a.hora : ''} · corrida`;
+  document.getElementById('tm-passos').innerHTML = '<i class="now"></i>';
+  document.getElementById('tm-ex-nome').textContent = 'Prescrição do treinador';
+  document.getElementById('tm-ex-meta').innerHTML = a.ja_comecou ? ''
+    : '<span class="tm-chip">treino ainda não começou</span>';
+  document.querySelector('#modo-treino .tm-rot').style.display = 'none';
+  document.getElementById('tm-series').innerHTML =
+    `<pre class="tm-aer">${esc(a.descricao || '')}</pre>`;
+  document.getElementById('tm-como').style.display = 'none';
+  document.getElementById('tm-ant').style.display = 'none';
+  document.getElementById('tm-proximo').textContent = 'Concluir treino';
+}
+
+function tmConcluir() {
   const a = _tm.aula;
   if (a.status === 'realizada') { toast('Treino já estava marcado como feito'); return tmFechar(); }
   if (!a.ja_comecou) { toast('Este treino ainda não começou', 'err'); return; }
-  const total = a.exercicios.length, feitos = a.exercicios.filter(e => e.feito).length;
-  abrirConclusao(a.id, feitos < total ? `Você marcou ${feitos} de ${total} exercícios.` : '',
+  const ex = a.exercicios || [];
+  const feitos = ex.filter(e => e.feito).length;
+  abrirConclusao(a.id, (ex.length && feitos < ex.length)
+                   ? `Você marcou ${feitos} de ${ex.length} exercícios.` : '',
                  () => tmFechar());
 }
 
@@ -2044,6 +2102,11 @@ function abrirConclusao(id, aviso, depois) {
   document.getElementById('cc-aviso').innerHTML =
     `${aviso ? `<b>${esc(aviso)}</b> ` : ''}Confirmar que o treino de <b>${quando}</b> foi feito?
      <b>Isso não pode ser desfeito.</b>`;
+  const aer = ehAerobico(a && a.modalidade);
+  document.getElementById('cc-aerobico').style.display = aer ? '' : 'none';
+  setVal('cc-distancia', (a && a.distancia_km) ?? '');
+  setVal('cc-tempo', (a && a.tempo_min) ?? '');
+  _cc.aerobico = aer;
   document.getElementById('cc-energia').innerHTML = opcoesEscala(NIVEIS, a && a.energia);
   document.getElementById('cc-fadiga').innerHTML = opcoesEscala(NIVEIS, a && a.fadiga);
   document.getElementById('cc-pse').innerHTML = opcoesEscala(PSE_ESCALA, a && a.pse);
@@ -2057,6 +2120,10 @@ async function confirmarConclusao() {
     energia: num('cc-energia'), fadiga: num('cc-fadiga'), pse: num('cc-pse'),
     obs: val('cc-obs') || null
   };
+  if (_cc.aerobico) {
+    body.distancia_km = num('cc-distancia');
+    body.tempo_min = num('cc-tempo');
+  }
   try {
     await api('PATCH', `/api/aulas/${_cc.id}`, body);
     fecharModal('m-concluir');
@@ -2064,4 +2131,93 @@ async function confirmarConclusao() {
     if (_cc.depois) _cc.depois();
     loadAgenda();
   } catch (e) { toast(e.message, 'err'); }
+}
+
+// ══════════════════════════ AERÓBICO (CORRIDA) ═══════════════════════════════
+// Ritmo em min/km — é assim que corredor lê, não em decimal.
+function paceStr(km, min) {
+  if (!km || !min || km <= 0) return null;
+  const t = min / km, m = Math.floor(t);
+  let s = Math.round((t - m) * 60), mm = m;
+  if (s === 60) { mm += 1; s = 0; }
+  return `${mm}:${String(s).padStart(2, '0')}`;
+}
+
+function atualizarPace() {
+  const box = document.getElementById('a-aer-pace');
+  if (!box) return;
+  const p = paceStr(num('a-distancia'), num('a-tempo'));
+  box.textContent = p ? `Ritmo: ${p} min/km` : '';
+}
+
+let _chAer = null;
+
+async function loadAerobico() {
+  const box = document.getElementById('aer-painel');
+  const card = document.getElementById('card-aer-gr');
+  let d;
+  try { d = await api('GET', `/api/aerobico?ano=${_mesRef.getFullYear()}`); }
+  catch (e) { box.innerHTML = '<div class="empty">Não foi possível carregar.</div>'; return; }
+  document.getElementById('aer-ano').textContent = d.ano;
+
+  if (!d.treinos_no_ano) {
+    box.innerHTML = `<div class="empty">Nenhuma corrida registrada em ${d.ano}.<br>
+      Marque o dia como <b>Aeróbico</b> na agenda, cole a prescrição do treinador
+      e registre distância e tempo ao concluir.</div>`;
+    card.style.display = 'none';
+    return;
+  }
+
+  const fatos = [
+    { k: 'Volume no ano', v: `${fmtN(d.total_km, 1)} km`, o: `${d.treinos_no_ano} treinos` },
+    { k: 'Tempo total', v: `${Math.floor(d.total_min / 60)}h${String(d.total_min % 60).padStart(2, '0')}`, o: 'correndo' },
+    { k: 'Ritmo médio', v: d.pace_medio ? `${d.pace_medio}/km` : '—', o: 'no ano' },
+    { k: 'Melhor ritmo', v: d.melhor_pace ? `${d.melhor_pace}/km` : '—', o: 'num treino' }
+  ];
+  box.innerHTML = `<div class="corpo-fatos">${fatos.map(f => `
+      <div class="corpo-fato"><div class="k">${esc(f.k)}</div>
+        <div class="v">${esc(f.v)}</div><div class="o">${esc(f.o)}</div></div>`).join('')}
+    </div>
+    ${d.sem_registro ? `<div class="aviso" style="margin-top:12px">
+      <b>${d.sem_registro} ${d.sem_registro === 1 ? 'corrida' : 'corridas'} sem distância lançada.</b>
+      Elas ficam fora dos números acima — abra a aula e registre para o gráfico
+      contar a história inteira.</div>` : ''}
+    <div class="table-wrap" style="margin-top:12px">
+      <table><thead><tr><th>Data</th><th>Treino</th><th class="right">km</th>
+        <th class="right">tempo</th><th class="right">ritmo</th></tr></thead>
+      <tbody>${d.treinos.slice().reverse().map(t => `
+        <tr><td><b>${fmtDataCurta(t.data)}</b></td>
+          <td>${esc(t.foco || t.tipo || 'Corrida')}</td>
+          <td class="right">${fmtN(t.distancia_km, 1)}</td>
+          <td class="right">${t.tempo_min ? fmtN(t.tempo_min, 0) + ' min' : '—'}</td>
+          <td class="right"><b>${t.pace ? t.pace : '—'}</b></td></tr>`).join('')}
+      </tbody></table>
+    </div>`;
+
+  if (typeof Chart === 'undefined') { card.style.display = 'none'; return; }
+  card.style.display = '';
+  // Volume em barras e ritmo em linha no eixo invertido: no gráfico de corrida,
+  // ritmo MENOR é melhor — sem inverter, a melhora apareceria como queda.
+  const paceMin = d.mensal.map(m => m.pace
+    ? Number(m.pace.split(':')[0]) + Number(m.pace.split(':')[1]) / 60 : null);
+  _chAer = novoChart(_chAer, 'ch-aer', {
+    type: 'bar',
+    data: {
+      labels: MESES,
+      datasets: [
+        { label: 'km', data: d.mensal.map(m => m.km), backgroundColor: CORES.verde,
+          borderRadius: 6, yAxisID: 'y' },
+        { label: 'ritmo (min/km)', data: paceMin, type: 'line', borderColor: CORES.laranja,
+          backgroundColor: CORES.laranja, tension: .3, spanGaps: true, yAxisID: 'y1' }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        y: { beginAtZero: true, title: { display: true, text: 'km' } },
+        y1: { position: 'right', reverse: true, grid: { drawOnChartArea: false },
+              title: { display: true, text: 'min/km (menor é melhor)' } }
+      }
+    }
+  });
 }

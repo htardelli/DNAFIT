@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="FITPLAN">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2316A34A'/%3E%3Cg stroke='white' stroke-width='9' stroke-linecap='round'%3E%3Cpath d='M30 32v36M70 32v36M18 42v16M82 42v16M30 50h40'/%3E%3C/g%3E%3C/svg%3E">
-<link rel="stylesheet" href="/static/css/style.css?v=5.7">
+<link rel="stylesheet" href="/static/css/style.css?v=5.8">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -115,6 +115,7 @@
           <span class="badge b-cancelada" title="cancelada">cancel</span>
           <span class="legenda-modo"><i class="modo modo-p">P</i>personal</span>
           <span class="legenda-modo"><i class="modo modo-i">I</i>individual</span>
+          <span class="legenda-modo"><i class="modo modo-a"><span>A</span></i>corrida</span>
           <span class="legenda-fer"><i></i>feriado</span>
           <span class="legenda-fer" title="ponto facultativo"><i class="facu"></i><span class="facult-lg">facultativo</span><span class="facult-sm">facult.</span></span>
         </div>
@@ -220,6 +221,19 @@
         <button class="btn btn-sm btn-primary" id="btn-pesar" onclick="abrirMedida()">Registrar peso</button>
       </div>
       <div class="card-body" id="corpo-painel"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">Corrida</span>
+        <span class="muted" id="aer-ano" style="font-size:12px"></span>
+      </div>
+      <div class="card-body" id="aer-painel"></div>
+    </div>
+
+    <div class="card" id="card-aer-gr" style="display:none">
+      <div class="card-head"><span class="card-title">Volume e ritmo por mês</span></div>
+      <div class="card-body"><div class="chart-wrap"><canvas id="ch-aer"></canvas></div></div>
     </div>
 
     <div class="card" id="card-peso" style="display:none">
@@ -451,6 +465,12 @@
     </div>
     <div class="modal-body">
       <div class="aviso" id="cc-aviso" style="margin-bottom:14px"></div>
+      <div class="grid g2" id="cc-aerobico" style="display:none">
+        <div><label>Distância (km)</label>
+          <input type="number" step="0.1" min="0" id="cc-distancia" inputmode="decimal"></div>
+        <div><label>Tempo (min)</label>
+          <input type="number" step="1" min="0" id="cc-tempo" inputmode="numeric"></div>
+      </div>
       <div><label>Nível de energia</label><select id="cc-energia"></select></div>
       <div><label>Nível de fadiga</label><select id="cc-fadiga"></select></div>
       <div><label>Percepção de esforço (PSE)</label><select id="cc-pse"></select></div>
@@ -647,6 +667,7 @@
           <select id="a-modalidade" onchange="aplicarModoAula()">
             <option value="com_personal">Com o personal</option>
             <option value="sozinho">Sozinho</option>
+            <option value="aerobico">Aeróbico (corrida)</option>
           </select>
         </div>
         <div id="w-status"><label>Status</label>
@@ -704,6 +725,23 @@
         </div>
       </div>
 
+      <!-- Treino aeróbico: a prescrição chega pronta, em texto, do treinador de
+           corrida. O bloco de séries × carga fica escondido — não é essa a forma
+           deste treino. -->
+      <div id="a-aer-bloco" style="display:none">
+        <div class="sec-title">Treino de corrida</div>
+        <div><label>Prescrição do treinador</label>
+          <textarea id="a-aer-texto" rows="7" style="font-family:var(--font);line-height:1.6"
+            placeholder="6km&#10;2km trote aquecendo;&#10;2x 1km progressivo a cada 250m (leve, moderado, forte e muito forte);&#10;2km de trote, desaquecendo."></textarea></div>
+        <div class="grid g2" id="a-aer-result">
+          <div><label>Distância (km)</label>
+            <input type="number" step="0.1" min="0" id="a-distancia" inputmode="decimal" oninput="atualizarPace()"></div>
+          <div><label>Tempo (min)</label>
+            <input type="number" step="1" min="0" id="a-tempo" inputmode="numeric" oninput="atualizarPace()"></div>
+        </div>
+        <div class="muted" id="a-aer-pace" style="font-size:12px;margin-top:6px"></div>
+      </div>
+
       <div id="a-ex-bloco">
         <div class="sec-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
           <span>Exercícios da aula</span>
@@ -742,6 +780,7 @@
       <div class="toggle-modalidade">
         <button type="button" class="tm-btn active" data-mod="com_personal" onclick="dmModalidade('com_personal')">Com o personal</button>
         <button type="button" class="tm-btn" data-mod="sozinho" onclick="dmModalidade('sozinho')">Sozinho</button>
+        <button type="button" class="tm-btn" data-mod="aerobico" onclick="dmModalidade('aerobico')">Aeróbico</button>
       </div>
       <div id="dm-ajuda" style="font-size:13px;color:var(--muted);margin-bottom:12px"></div>
       <div class="row" style="margin-bottom:12px">
@@ -897,6 +936,6 @@
 </div>
 
 <div class="toast-wrap" id="toasts"></div>
-<script src="/static/js/app.js?v=5.7"></script>
+<script src="/static/js/app.js?v=5.8"></script>
 </body>
 </html>
