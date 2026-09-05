@@ -87,7 +87,7 @@ function mostrarLogin() {
 }
 
 // ── Navegação ─────────────────────────────────────────────────────────────────
-const TITULOS = { agenda:'Agenda', treinos:'Treinos', frequencia:'Frequência', financeiro:'Financeiro', config:'Configurações' };
+const TITULOS = { agenda:'Agenda', treinos:'Treinos', frequencia:'Progresso', financeiro:'Financeiro', config:'Configurações' };
 
 function nav(page) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -150,11 +150,13 @@ document.addEventListener('DOMContentLoaded', () => {
 async function carregarExercicios() {
   _exercicios = await api('GET', '/api/exercicios');
   document.getElementById('dl-ex').innerHTML = _exercicios.map(e => `<option value="${esc(e.nome)}">`).join('');
-  const grupos = [...new Set(_exercicios.map(e => e.grupo).filter(Boolean))].sort();
-  const sel = document.getElementById('f-grupo');
-  const atual = sel.value;
-  sel.innerHTML = '<option value="">Todos os grupos</option>' + grupos.map(g => `<option>${esc(g)}</option>`).join('');
-  sel.value = atual;
+  const sel = document.getElementById('f-grupo');   // some quando a biblioteca usa o catálogo
+  if (sel) {
+    const grupos = [...new Set(_exercicios.map(e => e.grupo).filter(Boolean))].sort();
+    const atual = sel.value;
+    sel.innerHTML = '<option value="">Todos os grupos</option>' + grupos.map(g => `<option>${esc(g)}</option>`).join('');
+    sel.value = atual;
+  }
 }
 
 async function carregarModelos() {
@@ -183,9 +185,12 @@ function loadConfig() {
   setVal('cfg-duracao', _cfg.duracao_padrao || 60);
   setVal('cfg-prof', _cfg.professor_padrao || '');
   setVal('cfg-local', _cfg.local_padrao || '');
+  setVal('cfg-altura', _cfg.altura_cm || '');
+  setVal('cfg-meta', _cfg.peso_meta || '');
   // O personal enxerga o valor (é o que ele recebe), mas quem define o preço é o dono
   const dono = !!_cfg.pode_editar;
-  ['cfg-valor','cfg-hora','cfg-duracao','cfg-prof','cfg-local'].forEach(i => document.getElementById(i).disabled = !dono);
+  ['cfg-valor','cfg-hora','cfg-duracao','cfg-prof','cfg-local','cfg-altura','cfg-meta']
+    .forEach(i => document.getElementById(i).disabled = !dono);
   document.getElementById('cfg-btn').style.display = dono ? '' : 'none';
   document.getElementById('cfg-aviso').textContent = dono ? '' : 'Somente o aluno (dono) altera estes valores';
 }
@@ -197,7 +202,9 @@ async function salvarConfig() {
       hora_padrao: val('cfg-hora') || null,
       duracao_padrao: num('cfg-duracao') || 60,
       professor_padrao: val('cfg-prof'),
-      local_padrao: val('cfg-local')
+      local_padrao: val('cfg-local'),
+      altura_cm: num('cfg-altura') || 0,
+      peso_meta: num('cfg-meta') || 0
     });
     toast('Configuração salva');
   } catch (e) { toast(e.message, 'err'); }
@@ -230,8 +237,10 @@ async function loadAgenda() {
     ]);
     _aulas = aulas;
     renderKpis(resumo);
+    renderPainel(resumo);
     renderCal();
     renderLista();
+    carregarHoje();
   } catch (e) { toast(e.message, 'err'); }
 }
 
@@ -826,18 +835,78 @@ async function excluirModelo() {
 
 // ── Exercícios ────────────────────────────────────────────────────────────────
 async function loadExercicios() {
-  try { await carregarExercicios(); renderExercicios(); } catch (e) { toast(e.message, 'err'); }
+  try {
+    await carregarExercicios();
+    _cat.dados = await api('GET', '/api/exercicios/catalogo');
+    renderExercicios();
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+// Catálogo: escolher "Peito" e ver 5 opções é mais rápido do que rolar 38 nomes.
+// _cat.aba = grupo | equipamento | favoritos | todos; _cat.sel = valor escolhido.
+let _cat = { aba: 'grupo', sel: null, dados: null };
+
+function catAba(aba) {
+  _cat.aba = aba; _cat.sel = null;
+  document.querySelectorAll('[data-cat]').forEach(t => t.classList.toggle('active', t.dataset.cat === aba));
+  renderExercicios();
+}
+
+function catVoltar() { _cat.sel = null; renderExercicios(); }
+
+function catEscolher(v) { _cat.sel = v; renderExercicios(); }
+
+async function toggleFavorito(id) {
+  try {
+    await api('POST', `/api/exercicios/${id}/favorito`);
+    await carregarExercicios();
+    _cat.dados = await api('GET', '/api/exercicios/catalogo');
+    renderExercicios();
+  } catch (e) { toast(e.message, 'err'); }
 }
 
 function renderExercicios() {
-  const g = val('f-grupo'), b = val('f-ex-busca').toLowerCase();
-  const linhas = _exercicios.filter(e =>
-    (!g || e.grupo === g) &&
-    (!b || (e.nome + ' ' + (e.equipamento || '') + ' ' + (e.descricao || '')).toLowerCase().includes(b)));
+  const busca = val('f-ex-busca').toLowerCase();
+  const grade = document.getElementById('cat-grade');
+  const wrap = document.getElementById('wrap-exercicios');
+  const volta = document.getElementById('cat-volta');
+  // Buscar atravessa o catálogo: quem digita já sabe o que quer.
+  const emLista = busca || _cat.sel || _cat.aba === 'todos' || _cat.aba === 'favoritos';
+
+  if (!emLista) {
+    const chave = _cat.aba === 'grupo' ? 'grupos' : 'equipamentos';
+    const itens = (_cat.dados && _cat.dados[chave]) || [];
+    grade.style.display = ''; wrap.style.display = 'none'; volta.style.display = 'none';
+    grade.innerHTML = itens.length ? itens.map(i => `
+      <button class="cat-item" onclick="catEscolher('${esc(i.nome).replace(/'/g, "\\'")}')">
+        <span><span class="n">${esc(i.nome)}</span>
+        <span class="q">${i.n} ${i.n === 1 ? 'exercício' : 'exercícios'}</span></span>
+      </button>`).join('') : '<div class="empty">Biblioteca vazia.</div>';
+    return;
+  }
+
+  grade.style.display = 'none';
+  wrap.style.display = '';
+  volta.style.display = (_cat.sel && !busca) ? '' : 'none';
+  if (_cat.sel) document.getElementById('cat-titulo').textContent = _cat.sel;
+
+  const campo = _cat.aba === 'equipamento' ? 'equipamento' : 'grupo';
+  const linhas = _exercicios.filter(e => {
+    if (busca) return (e.nome + ' ' + (e.equipamento || '') + ' ' + (e.descricao || '')).toLowerCase().includes(busca);
+    if (_cat.aba === 'favoritos') return !!e.favorito;
+    if (_cat.sel) return (e[campo] || 'Sem classificação') === _cat.sel;
+    return true;
+  });
   const tb = document.getElementById('lista-exercicios');
-  if (!linhas.length) { tb.innerHTML = '<tr><td colspan="5"><div class="empty">Nenhum exercício encontrado.</div></td></tr>'; return; }
+  if (!linhas.length) {
+    tb.innerHTML = `<tr><td colspan="6"><div class="empty">${
+      _cat.aba === 'favoritos' ? 'Nenhum favorito ainda — marque a ⭐ dos que você repete sempre.'
+                               : 'Nenhum exercício encontrado.'}</div></td></tr>`;
+    return;
+  }
   tb.innerHTML = linhas.map(e => `
     <tr>
+      <td><button class="ex-fav" title="Favorito" onclick="toggleFavorito(${e.id})">${e.favorito ? '⭐' : '☆'}</button></td>
       <td><b>${esc(e.nome)}</b>${e.video_url ? ` <a href="${esc(e.video_url)}" target="_blank" rel="noopener">▶</a>` : ''}</td>
       <td>${esc(e.grupo || '—')}</td>
       <td>${esc(e.equipamento || '—')}</td>
@@ -887,6 +956,7 @@ function novoChart(ref, ctxId, config) {
 }
 
 async function loadFrequencia() {
+  loadCorpo();
   if (typeof Chart === 'undefined') {
     toast('Gráficos indisponíveis (sem conexão com o CDN do Chart.js)', 'warn');
     return;
@@ -1132,4 +1202,414 @@ async function removerUsuario(id) {
   if (!confirm('Remover este acesso?')) return;
   try { await api('DELETE', `/api/usuarios/${id}`); toast('Acesso removido'); loadUsuarios(); }
   catch (e) { toast(e.message, 'err'); }
+}
+
+// ══════════════════════════════ RÉGUA ════════════════════════════════════════
+// Seletor de valor por rolagem, no lugar do teclado numérico. Motivo prático:
+// no celular, campo numérico abre teclado, o iOS dá zoom e o dedo suado erra o
+// alvo. Rolar uma fita funciona em pé, com uma mão, e não muda o zoom da página.
+let _rg = { min: 0, max: 100, step: 1, tick: 14, valor: 0, casas: 0, onOk: null, t: null };
+
+function rgFmt(v) { return Number(v).toFixed(_rg.casas).replace('.', ','); }
+// Nos rótulos da fita, ",0" só polui: 60 lê melhor que 60,0.
+function rgFmtRot(v) { return rgFmt(v).replace(/,0$/, ''); }
+
+function reguaAbrir({ titulo, unidade, min, max, step, valor, onOk }) {
+  _rg = { min, max, step, tick: 14, valor: valor ?? min, onOk,
+          casas: Number.isInteger(step) ? 0 : 1, t: null };
+  document.getElementById('rg-titulo').textContent = titulo || 'Valor';
+  document.getElementById('rg-unidade').textContent = unidade || '';
+  abrirModal('m-regua');
+  requestAnimationFrame(() => rgMontar());
+}
+
+function rgMontar() {
+  const box = document.getElementById('rg-regua');
+  const fita = document.getElementById('rg-fita');
+  const W = box.clientWidth || 320;
+  const n = Math.round((_rg.max - _rg.min) / _rg.step);
+  const larg = n * _rg.tick;
+  fita.style.width = (larg + W) + 'px';
+  // Traço a cada passo; traço alto + número a cada 10 passos.
+  let html = `<div class="regua-escala" style="left:${W / 2}px;width:${larg}px">`;
+  for (let i = 0; i <= n; i++) {
+    const grande = i % 10 === 0;
+    html += `<i style="left:${i * _rg.tick}px;${grande ? 'height:36px;top:0;opacity:1' : 'opacity:.35'}"></i>`;
+    if (grande) html += `<b style="left:${i * _rg.tick}px">${rgFmtRot(_rg.min + i * _rg.step)}</b>`;
+  }
+  fita.innerHTML = html + '</div>';
+  box.onscroll = rgRolou;
+  box.scrollLeft = Math.round((_rg.valor - _rg.min) / _rg.step) * _rg.tick;
+  document.getElementById('rg-valor').textContent = rgFmt(_rg.valor);
+}
+
+function rgRolou() {
+  const box = document.getElementById('rg-regua');
+  const i = Math.max(0, Math.min(Math.round((_rg.max - _rg.min) / _rg.step),
+                                 Math.round(box.scrollLeft / _rg.tick)));
+  _rg.valor = _rg.min + i * _rg.step;
+  document.getElementById('rg-valor').textContent = rgFmt(_rg.valor);
+  clearTimeout(_rg.t);
+  _rg.t = setTimeout(() => box.scrollTo({ left: i * _rg.tick, behavior: 'smooth' }), 140);
+}
+
+function rgConfirmar() {
+  const fn = _rg.onOk;
+  fecharModal('m-regua');
+  if (fn) fn(Number(_rg.valor.toFixed(_rg.casas)));
+}
+
+// Atalho: liga a régua a um <input> comum (usado no modal de medidas)
+function reguaPara(inputId, titulo, unidade, min, max, step) {
+  const el = document.getElementById(inputId);
+  reguaAbrir({ titulo, unidade, min, max, step,
+    valor: Number(el.value) || (min + max) / 2,
+    onOk: v => { el.value = v; } });
+}
+
+// ══════════════════════════ TREINO DE HOJE (cartão) ══════════════════════════
+async function carregarHoje() {
+  const box = document.getElementById('hoje-card');
+  try {
+    const d = await api('GET', '/api/aulas/hoje');
+    const a = d.aula;
+    if (!a) {
+      box.innerHTML = `<div class="hoje-card">
+        <div class="et">Agenda</div>
+        <h3>Nenhum treino marcado</h3>
+        <div class="sub">Marque os dias do mês para o personal montar os treinos.</div>
+        <div class="acoes"><button class="btn btn-primary" onclick="abrirDiasDoMes()">Marcar dias do mês</button></div>
+      </div>`;
+      return;
+    }
+    const n = (a.exercicios || []).length;
+    const feitos = (a.exercicios || []).filter(e => e.feito).length;
+    const quando = d.eh_hoje ? 'Hoje' : `${diaSemana(a.data)} ${fmtDataCurta(a.data)}`;
+    const titulo = a.foco || a.tipo || (a.modalidade === 'sozinho' ? 'Treino individual' : 'Treino com o personal');
+    const linhas = [
+      a.hora ? `${a.hora}` : null,
+      a.modalidade === 'sozinho' ? 'individual' : 'com o personal',
+      n ? `${n} ${n === 1 ? 'exercício' : 'exercícios'}${feitos ? ` · ${feitos} ${feitos === 1 ? 'feito' : 'feitos'}` : ''}`
+        : 'treino ainda não montado'
+    ].filter(Boolean).join(' · ');
+
+    const podeTreinar = n > 0 && a.ja_comecou && a.status !== 'cancelada';
+    box.innerHTML = `<div class="hoje-card">
+      <div class="et">${d.eh_hoje ? 'Treino de hoje' : 'Próximo treino'}</div>
+      <h3>${esc(titulo)}</h3>
+      <div class="sub">${esc(quando)} · ${esc(linhas)}</div>
+      <div class="acoes">
+        ${podeTreinar ? `<button class="btn btn-primary" onclick="tmAbrir(${a.id})">Treinar agora</button>` : ''}
+        <button class="btn btn-ghost" onclick="abrirAula(${a.id})">
+          ${n ? 'Ver treino' : (a.pode_montar ? 'Montar treino' : 'Ver aula')}</button>
+      </div>
+    </div>`;
+  } catch (e) { box.innerHTML = ''; }
+}
+
+// ══════════════════════════ PAINEL DO MÊS (barras) ═══════════════════════════
+function renderPainel(r) {
+  const card = document.getElementById('card-painel');
+  const box = document.getElementById('painel-mes');
+  const linhas = r.painel || [];
+  if (!linhas.length) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  box.innerHTML = linhas.map(l => `
+    <div class="painel-linha ${l.pct === null ? 'vazia' : ''}">
+      <span class="r">${esc(l.rotulo)}</span>
+      <span class="b"><i style="width:${l.pct === null ? 0 : l.pct}%"></i></span>
+      <span class="v">${esc(l.valor || l.texto || '—')}</span>
+    </div>`).join('');
+}
+
+// ══════════════════════════════ MODO TREINO ══════════════════════════════════
+// Uma tela para usar EM PÉ. Carga e repetições já chegam preenchidas (última
+// carga e prescrição): no caso comum — mesmo peso da última vez — o único toque
+// da série é o ✓.
+let _tm = { aula: null, idx: 0, timer: null, restam: 0, pend: {} };
+
+const TM_PASSO_CARGA = 2.5;   // metade de uma anilha de 5 kg: o ajuste real
+
+async function tmAbrir(aulaId) {
+  try {
+    _tm.aula = await api('GET', `/api/aulas/${aulaId}`);
+  } catch (e) { return toast(e.message, 'err'); }
+  if (!(_tm.aula.exercicios || []).length) return toast('Este treino ainda não tem exercícios', 'warn');
+  // Abre no primeiro exercício que ainda não terminou — retomar de onde parou
+  const i = _tm.aula.exercicios.findIndex(e => !e.feito);
+  _tm.idx = i < 0 ? 0 : i;
+  document.getElementById('modo-treino').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  tmRender();
+}
+
+function tmFechar() {
+  tmDescansoParar();
+  document.getElementById('modo-treino').classList.remove('open');
+  document.body.style.overflow = '';
+  loadAgenda();
+}
+
+function tmAbrirAula() { const id = _tm.aula.id; tmFechar(); abrirAula(id); }
+
+function tmIr(delta) {
+  const n = _tm.aula.exercicios.length;
+  if (delta > 0 && _tm.idx === n - 1) return tmConcluir();
+  _tm.idx = Math.max(0, Math.min(n - 1, _tm.idx + delta));
+  tmRender();
+  document.querySelector('#modo-treino .tm-corpo').scrollTop = 0;
+}
+
+function tmRepsPrescritas(it) {
+  const m = String(it.repeticoes || '').match(/\d+/);
+  return m ? Number(m[0]) : null;
+}
+
+function tmRender() {
+  const a = _tm.aula, it = a.exercicios[_tm.idx];
+  document.getElementById('tm-titulo').textContent = a.foco || a.tipo ||
+    (a.modalidade === 'sozinho' ? 'Treino individual' : 'Treino com o personal');
+  document.getElementById('tm-subtitulo').textContent =
+    `${fmtDataCurta(a.data)}${a.hora ? ' · ' + a.hora : ''} · exercício ${_tm.idx + 1} de ${a.exercicios.length}`;
+
+  document.getElementById('tm-passos').innerHTML = a.exercicios.map((e, i) =>
+    `<i class="${i === _tm.idx ? 'now' : (e.feito ? 'ok' : '')}"></i>`).join('');
+
+  document.getElementById('tm-ex-nome').textContent = it.nome;
+
+  const chips = [];
+  if (it.series || it.repeticoes) chips.push(`${it.series || '?'} × ${it.repeticoes || '?'}`);
+  if (it.descanso_seg) chips.push(`descanso ${it.descanso_seg}s`);
+  if (it.ultima) chips.push(`<span class="tm-chip ult">última: ${fmtN(it.ultima.carga, 1)} kg${
+    it.ultima.repeticoes ? ' × ' + it.ultima.repeticoes : ''} · ${fmtDataCurta(it.ultima.data)}</span>`);
+  if (it.obs) chips.push(esc(it.obs));
+  const cad = _exercicios.find(e => e.nome === it.nome);
+  if (!a.ja_comecou) chips.push('<span class="tm-chip">treino ainda não começou</span>');
+  document.getElementById('tm-ex-meta').innerHTML = chips
+    .map(c => c.startsWith('<span') ? c : `<span class="tm-chip">${esc(c)}</span>`).join('');
+
+  const comoBox = document.getElementById('tm-como');
+  comoBox.textContent = (cad && cad.descricao) ? cad.descricao : '';
+  comoBox.style.display = comoBox.textContent ? '' : 'none';
+
+  const sugCarga = it.ultima ? it.ultima.carga : (it.carga || 0);
+  const sugReps = tmRepsPrescritas(it);
+  const trava = a.ja_comecou ? '' : 'disabled';
+  document.getElementById('tm-series').innerHTML = (it.series_reg || []).map(s => {
+    const carga = s.carga ?? sugCarga;
+    const reps = s.repeticoes ?? sugReps;
+    return `<div class="tm-serie ${s.feito ? 'feita' : ''}">
+      <span class="tm-serie-n">${s.ordem}</span>
+      <span class="tm-campo">
+        <button ${trava} onclick="tmAjusta(${s.ordem},'carga',-${TM_PASSO_CARGA})">−</button>
+        <button class="tm-valor" ${trava} onclick="tmRegua(${s.ordem},'carga')">${carga ? fmtN(carga, carga % 1 ? 1 : 0) : '—'}</button>
+        <span class="tm-un">kg</span>
+        <button ${trava} onclick="tmAjusta(${s.ordem},'carga',${TM_PASSO_CARGA})">+</button>
+      </span>
+      <span class="tm-campo">
+        <button ${trava} onclick="tmAjusta(${s.ordem},'repeticoes',-1)">−</button>
+        <button class="tm-valor" ${trava} onclick="tmRegua(${s.ordem},'repeticoes')">${reps ?? '—'}</button>
+        <button ${trava} onclick="tmAjusta(${s.ordem},'repeticoes',1)">+</button>
+      </span>
+      <button class="tm-check ${s.feito ? 'on' : ''}" ${trava} onclick="tmMarcar(${s.ordem})">✓</button>
+    </div>`;
+  }).join('');
+
+  const ultimo = _tm.idx === a.exercicios.length - 1;
+  document.getElementById('tm-proximo').textContent = ultimo ? 'Concluir treino' : 'Próximo exercício';
+  document.getElementById('tm-ant').disabled = _tm.idx === 0;
+}
+
+function tmSerie(ordem) {
+  return (_tm.aula.exercicios[_tm.idx].series_reg || []).find(s => s.ordem === ordem);
+}
+
+// Valor mostrado hoje na linha (registrado, ou a sugestão que aparece nela)
+function tmValorAtual(s, campo) {
+  const it = _tm.aula.exercicios[_tm.idx];
+  if (s[campo] !== null && s[campo] !== undefined) return s[campo];
+  return campo === 'carga' ? (it.ultima ? it.ultima.carga : (it.carga || 0)) : tmRepsPrescritas(it);
+}
+
+function tmAjusta(ordem, campo, passo) {
+  const s = tmSerie(ordem);
+  const base = Number(tmValorAtual(s, campo) || 0);
+  const novo = Math.max(0, Math.round((base + passo) * 10) / 10);
+  s[campo] = campo === 'repeticoes' ? Math.round(novo) : novo;
+  tmRender();
+  tmSalvar(ordem, true);
+}
+
+function tmRegua(ordem, campo) {
+  const s = tmSerie(ordem);
+  const carga = campo === 'carga';
+  reguaAbrir({
+    titulo: carga ? 'Carga' : 'Repetições', unidade: carga ? 'kg' : 'reps',
+    min: 0, max: carga ? 300 : 60, step: carga ? 0.5 : 1,
+    valor: Number(tmValorAtual(s, campo) || 0),
+    onOk: v => { s[campo] = v; tmRender(); tmSalvar(ordem, false); }
+  });
+}
+
+async function tmMarcar(ordem) {
+  const s = tmSerie(ordem);
+  const it = _tm.aula.exercicios[_tm.idx];
+  const marcando = !s.feito;
+  // Ao marcar, congela na série o que está na tela (sugestão vira registro)
+  if (marcando) {
+    s.carga = Number(tmValorAtual(s, 'carga') || 0) || null;
+    s.repeticoes = tmValorAtual(s, 'repeticoes') || null;
+  }
+  s.feito = marcando ? 1 : 0;
+  tmRender();
+  await tmSalvar(ordem, false);
+  if (marcando && it.descanso_seg) tmDescansoIniciar(it.descanso_seg);
+}
+
+async function tmSalvar(ordem, comAtraso) {
+  const chave = `${_tm.idx}:${ordem}`;
+  clearTimeout(_tm.pend[chave]);
+  const envia = async () => {
+    const s = tmSerie(ordem);
+    const it = _tm.aula.exercicios[_tm.idx];
+    try {
+      const r = await api('PATCH', `/api/aulas/${_tm.aula.id}/exercicios/${it.id}/series/${ordem}`,
+        { carga: s.carga ?? null, repeticoes: s.repeticoes ?? null, feito: !!s.feito });
+      it.feito = r.feito; it.carga = r.carga; it.series_reg = r.series_reg;
+      document.getElementById('tm-passos').innerHTML = _tm.aula.exercicios.map((e, i) =>
+        `<i class="${i === _tm.idx ? 'now' : (e.feito ? 'ok' : '')}"></i>`).join('');
+    } catch (e) { toast(e.message, 'err'); }
+  };
+  if (comAtraso) _tm.pend[chave] = setTimeout(envia, 600); else await envia();
+}
+
+// ── Descanso ────────────────────────────────────────────────────────────────
+function tmDescansoIniciar(seg) {
+  tmDescansoParar();
+  _tm.restam = seg;
+  document.getElementById('tm-descanso').classList.add('on');
+  tmDescansoPinta();
+  _tm.timer = setInterval(() => {
+    _tm.restam--;
+    tmDescansoPinta();
+    if (_tm.restam <= 0) { tmDescansoParar(); tmAviso(); }
+  }, 1000);
+}
+
+function tmDescansoPinta() {
+  const m = Math.floor(Math.max(_tm.restam, 0) / 60), s = Math.max(_tm.restam, 0) % 60;
+  document.getElementById('tm-descanso-t').textContent = `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function tmDescansoMais(seg) { _tm.restam += seg; tmDescansoPinta(); }
+
+function tmDescansoParar() {
+  clearInterval(_tm.timer); _tm.timer = null;
+  document.getElementById('tm-descanso').classList.remove('on');
+}
+
+// Fim do descanso: vibra e apita. Sem áudio externo — o celular fica no bolso.
+function tmAviso() {
+  try { if (navigator.vibrate) navigator.vibrate([180, 90, 180]); } catch (e) {}
+  try {
+    const C = window.AudioContext || window.webkitAudioContext;
+    if (!C) return;
+    const ctx = new C(), osc = ctx.createOscillator(), g = ctx.createGain();
+    osc.frequency.value = 880; g.gain.value = 0.15;
+    osc.connect(g); g.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime + 0.25);
+    setTimeout(() => ctx.close(), 600);
+  } catch (e) {}
+}
+
+async function tmConcluir() {
+  const a = _tm.aula;
+  if (a.status === 'realizada') { toast('Treino já estava marcado como feito'); return tmFechar(); }
+  if (!a.ja_comecou) { toast('Este treino ainda não começou', 'err'); return; }
+  const total = a.exercicios.length, feitos = a.exercicios.filter(e => e.feito).length;
+  const aviso = feitos < total
+    ? `Você marcou ${feitos} de ${total} exercícios. `
+    : '';
+  if (!confirm(`${aviso}Confirmar que o treino foi FEITO? Isso não pode ser desfeito.`)) return;
+  try {
+    await api('PATCH', `/api/aulas/${a.id}`, { status: 'realizada' });
+    toast('Treino registrado');
+    tmFechar();
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+// ══════════════════════════════ CORPO ════════════════════════════════════════
+let _chPeso = null;
+
+async function loadCorpo() {
+  const box = document.getElementById('corpo-painel');
+  let c;
+  try { c = await api('GET', '/api/corpo'); }
+  catch (e) { box.innerHTML = '<div class="empty">Não foi possível carregar.</div>'; return; }
+
+  document.getElementById('btn-pesar').style.display = _cfg.pode_editar ? '' : 'none';
+
+  if (!c.atual) {
+    box.innerHTML = `<div class="empty">
+      Nenhum peso registrado ainda.${_cfg.pode_editar ? ' Registre o primeiro para o gráfico começar a existir.' : ''}
+    </div>`;
+    document.getElementById('card-peso').style.display = 'none';
+    return;
+  }
+
+  const d = c.variacao;
+  const fatos = [];
+  if (c.imc) fatos.push({ k: 'IMC', v: fmtN(c.imc, 1), o: c.imc_texto });
+  else fatos.push({ k: 'IMC', v: '—', o: 'informe a altura em Ajustes' });
+  if (c.meta) fatos.push({ k: 'Meta', v: fmtN(c.meta, 1) + ' kg',
+    o: c.falta_para_meta > 0 ? `faltam ${fmtN(c.falta_para_meta, 1)} kg` : 'meta atingida' });
+  if (c.ritmo_kg_semana !== null) fatos.push({ k: 'Ritmo', v: `${c.ritmo_kg_semana > 0 ? '+' : ''}${fmtN(c.ritmo_kg_semana, 2)} kg`,
+    o: 'por semana, nos últimos 90 dias' });
+  else fatos.push({ k: 'Ritmo', v: '—', o: `precisa de 3 pesagens em 2 semanas (tem ${c.registros})` });
+  if (c.previsao_meta) fatos.push({ k: 'Meta em', v: fmtData(c.previsao_meta), o: 'mantendo este ritmo' });
+
+  box.innerHTML = `
+    <div class="corpo-num">
+      <span class="p">${fmtN(c.atual, 1)}</span><span class="u">kg</span>
+      ${d ? `<span class="d ${d > 0 ? 'sobe' : 'desce'}">${d > 0 ? '+' : ''}${fmtN(d, 1)} kg</span>` : ''}
+      ${c.ultima_medida ? `<span class="u">em ${fmtDataCurta(c.ultima_medida.data)}</span>` : ''}
+    </div>
+    <div class="corpo-fatos">${fatos.map(f => `
+      <div class="corpo-fato"><div class="k">${esc(f.k)}</div>
+        <div class="v">${esc(f.v)}</div><div class="o">${esc(f.o || '')}</div></div>`).join('')}
+    </div>`;
+
+  const serie = c.serie || [];
+  const card = document.getElementById('card-peso');
+  if (serie.length < 2 || typeof Chart === 'undefined') { card.style.display = 'none'; return; }
+  card.style.display = '';
+  const dados = { labels: serie.map(p => fmtDataCurta(p.data)), datasets: [
+    { label: 'Peso (kg)', data: serie.map(p => p.peso), borderColor: CORES.verde,
+      backgroundColor: 'rgba(22,163,74,.12)', fill: true, tension: .3, pointRadius: 3 }
+  ] };
+  if (c.meta) dados.datasets.push({ label: 'Meta', data: serie.map(() => c.meta),
+    borderColor: CORES.laranja, borderDash: [6, 4], pointRadius: 0, fill: false });
+  _chPeso = novoChart(_chPeso, 'ch-peso', { type: 'line', data: dados,
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: !!c.meta } },
+      scales: { y: { beginAtZero: false } } } });
+}
+
+function abrirMedida() {
+  ['md-peso','md-cintura','md-quadril','md-peito','md-braco','md-coxa','md-obs'].forEach(i => setVal(i, ''));
+  setVal('md-data', iso(new Date()));
+  abrirModal('m-medida');
+}
+
+async function salvarMedida() {
+  const body = { data: val('md-data') || null };
+  ['peso','cintura','quadril','peito','braco','coxa'].forEach(k => {
+    const v = num('md-' + k); if (v !== null) body[k] = v;
+  });
+  const obs = val('md-obs'); if (obs) body.obs = obs;
+  if (Object.keys(body).length <= 1) return toast('Informe ao menos um valor', 'err');
+  try {
+    await api('POST', '/api/medidas', body);
+    fecharModal('m-medida'); toast('Medida registrada'); loadCorpo();
+  } catch (e) { toast(e.message, 'err'); }
 }

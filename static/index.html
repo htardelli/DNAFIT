@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="FITPLAN">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2316A34A'/%3E%3Cg stroke='white' stroke-width='9' stroke-linecap='round'%3E%3Cpath d='M30 32v36M70 32v36M18 42v16M82 42v16M30 50h40'/%3E%3C/g%3E%3C/svg%3E">
-<link rel="stylesheet" href="/static/css/style.css?v=4.3">
+<link rel="stylesheet" href="/static/css/style.css?v=5.0">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -52,7 +52,7 @@
     </button>
     <button class="nav-item" data-page="frequencia" onclick="nav('frequencia')">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
-      Frequência
+      Progresso
     </button>
     <button class="nav-item" data-page="financeiro" onclick="nav('financeiro')">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/></svg>
@@ -89,6 +89,15 @@
 
   <!-- ══ AGENDA ══ -->
   <section class="page active" id="page-agenda">
+    <!-- O treino que importa agora. Fica antes de tudo porque, na academia, abrir
+         o app e ter que navegar até o dia é o atrito que fazia ele não usar. -->
+    <div id="hoje-card"></div>
+
+    <div class="card" id="card-painel" style="display:none">
+      <div class="card-head"><span class="card-title">Como está o mês</span></div>
+      <div class="card-body" id="painel-mes"></div>
+    </div>
+
     <div class="kpis" id="kpis"></div>
 
     <div class="card">
@@ -170,16 +179,30 @@
     <div id="tab-exercicios" style="display:none">
       <div class="card">
         <div class="card-head">
-          <span class="card-title">Exercícios</span>
+          <span class="card-title">Biblioteca</span>
           <div class="row">
-            <select id="f-grupo" onchange="renderExercicios()" style="width:auto"><option value="">Todos os grupos</option></select>
             <input id="f-ex-busca" placeholder="Buscar exercício…" oninput="renderExercicios()" style="width:180px">
             <button class="btn btn-sm btn-primary" onclick="novoExercicio()">+ Novo</button>
           </div>
         </div>
-        <div class="table-wrap">
+        <div class="card-body">
+          <!-- Rótulos curtos de propósito: quatro abas precisam caber na largura
+               de um celular sem quebrar linha nem cortar a última. -->
+          <div class="tabs tabs-cat" style="margin-bottom:12px">
+            <button class="tab active" data-cat="grupo" onclick="catAba('grupo')">Músculo</button>
+            <button class="tab" data-cat="equipamento" onclick="catAba('equipamento')">Aparelho</button>
+            <button class="tab" data-cat="favoritos" onclick="catAba('favoritos')" title="Favoritos">⭐</button>
+            <button class="tab" data-cat="todos" onclick="catAba('todos')">Todos</button>
+          </div>
+          <div class="cat-grade" id="cat-grade"></div>
+          <div class="cat-volta" id="cat-volta" style="display:none">
+            <button class="btn btn-sm" onclick="catVoltar()">‹ Voltar</button>
+            <span class="card-title" id="cat-titulo" style="margin-left:8px"></span>
+          </div>
+        </div>
+        <div class="table-wrap" id="wrap-exercicios" style="display:none">
           <table>
-            <thead><tr><th>Exercício</th><th>Grupo</th><th>Equipamento</th><th>Execução</th><th></th></tr></thead>
+            <thead><tr><th></th><th>Exercício</th><th>Grupo</th><th>Equipamento</th><th>Execução</th><th></th></tr></thead>
             <tbody id="lista-exercicios"></tbody>
           </table>
         </div>
@@ -187,8 +210,21 @@
     </div>
   </section>
 
-  <!-- ══ FREQUÊNCIA ══ -->
+  <!-- ══ PROGRESSO (frequência + corpo) ══ -->
   <section class="page" id="page-frequencia">
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">Corpo</span>
+        <button class="btn btn-sm btn-primary" id="btn-pesar" onclick="abrirMedida()">Registrar peso</button>
+      </div>
+      <div class="card-body" id="corpo-painel"></div>
+    </div>
+
+    <div class="card" id="card-peso" style="display:none">
+      <div class="card-head"><span class="card-title">Evolução do peso</span></div>
+      <div class="card-body"><div class="chart-wrap"><canvas id="ch-peso"></canvas></div></div>
+    </div>
+
     <div class="card">
       <div class="card-head">
         <span class="card-title">Aulas por mês</span>
@@ -282,6 +318,8 @@
           <div><label>Duração padrão (min)</label><input id="cfg-duracao" type="number" min="10" step="5"></div>
           <div><label>Professor padrão</label><input id="cfg-prof"></div>
           <div><label>Local padrão</label><input id="cfg-local"></div>
+          <div><label>Altura (cm)</label><input id="cfg-altura" type="number" step="1" min="0" placeholder="para o IMC"></div>
+          <div><label>Meta de peso (kg)</label><input id="cfg-meta" type="number" step="0.1" min="0" placeholder="0 = sem meta"></div>
           <div class="form-full"><button class="btn btn-primary" id="cfg-btn" onclick="salvarConfig()">Salvar</button></div>
         </div>
         <div style="font-size:12px;color:var(--muted);margin-top:12px">
@@ -334,7 +372,7 @@
   </button>
   <button class="tabbar-item" data-page="frequencia" onclick="nav('frequencia')">
     <span class="tb-icone"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg></span>
-    <span>Frequência</span>
+    <span>Progresso</span>
   </button>
   <button class="tabbar-item" data-page="financeiro" onclick="nav('financeiro')">
     <span class="tb-icone"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/></svg></span>
@@ -347,6 +385,98 @@
 </nav>
 
 </div><!-- /app -->
+
+<!-- ══ MODO TREINO ══ Tela cheia, um exercício por vez. ══ -->
+<div class="treino-modo" id="modo-treino">
+  <div class="tm-topo">
+    <button class="tm-x" onclick="tmFechar()">✕</button>
+    <div style="flex:1;min-width:0">
+      <div class="tm-nome" id="tm-titulo">Treino</div>
+      <div class="tm-sub" id="tm-subtitulo"></div>
+    </div>
+    <button class="btn btn-sm" onclick="tmAbrirAula()">Detalhes</button>
+  </div>
+  <div class="tm-passos" id="tm-passos"></div>
+  <div class="tm-corpo">
+    <div class="tm-ex-nome" id="tm-ex-nome">—</div>
+    <div class="tm-ex-meta" id="tm-ex-meta"></div>
+    <div class="tm-rot"><span></span><span>Carga</span><span>Reps</span><span></span></div>
+    <div id="tm-series"></div>
+    <p class="muted" id="tm-como" style="font-size:12px;margin-top:16px;line-height:1.5"></p>
+    <div class="tm-descanso" id="tm-descanso">
+      <span class="t" id="tm-descanso-t">00:00</span>
+      <span class="l">descanso</span>
+      <button onclick="tmDescansoMais(30)">+30s</button>
+      <button onclick="tmDescansoParar()">Pular</button>
+    </div>
+  </div>
+  <div class="tm-rodape">
+    <button class="btn nav-lat" onclick="tmIr(-1)" id="tm-ant">‹</button>
+    <button class="btn btn-primary" id="tm-proximo" onclick="tmIr(1)">Próximo</button>
+  </div>
+</div>
+
+<!-- ══ Modal: Régua ══ Seletor de valor sem teclado (evita o zoom do iOS). ══ -->
+<div class="modal-bg" id="m-regua">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-head">
+      <span class="modal-title" id="rg-titulo">Valor</span>
+      <button class="btn btn-sm btn-ghost" onclick="fecharModal('m-regua')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="regua-box">
+        <div class="regua-valor"><span id="rg-valor">0</span><small id="rg-unidade"></small></div>
+      </div>
+      <div style="position:relative">
+        <div class="regua" id="rg-regua">
+          <div class="regua-fita" id="rg-fita"></div>
+        </div>
+        <div class="regua-agulha"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="fecharModal('m-regua')">Cancelar</button>
+      <button class="btn btn-primary" onclick="rgConfirmar()">Usar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Modal: Medida corporal ══ -->
+<div class="modal-bg" id="m-medida">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-head">
+      <span class="modal-title">Registrar medida</span>
+      <button class="btn btn-sm btn-ghost" onclick="fecharModal('m-medida')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="grid g2">
+        <div><label>Data</label><input type="date" id="md-data"></div>
+        <div><label>Peso (kg)</label>
+          <input type="number" step="0.1" id="md-peso" inputmode="decimal"
+                 onclick="reguaPara('md-peso','Peso','kg',30,200,0.1)"></div>
+      </div>
+      <div class="grid g2">
+        <div><label>Cintura (cm)</label><input type="number" step="0.5" id="md-cintura" inputmode="decimal"></div>
+        <div><label>Quadril (cm)</label><input type="number" step="0.5" id="md-quadril" inputmode="decimal"></div>
+      </div>
+      <div class="grid g2">
+        <div><label>Peito (cm)</label><input type="number" step="0.5" id="md-peito" inputmode="decimal"></div>
+        <div><label>Braço (cm)</label><input type="number" step="0.5" id="md-braco" inputmode="decimal"></div>
+      </div>
+      <div class="grid g2">
+        <div><label>Coxa (cm)</label><input type="number" step="0.5" id="md-coxa" inputmode="decimal"></div>
+        <div><label>Observação</label><input id="md-obs" placeholder="jejum, pós-treino…"></div>
+      </div>
+      <p class="muted" style="font-size:11px;margin-top:8px">
+        Um registro por dia — pesar de novo no mesmo dia corrige o valor em vez de criar outro ponto.
+      </p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="fecharModal('m-medida')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarMedida()">Salvar</button>
+    </div>
+  </div>
+</div>
 
 <!-- ══ Modal: Aula ══ -->
 <div class="modal-bg" id="m-aula">
@@ -621,6 +751,6 @@
 </div>
 
 <div class="toast-wrap" id="toasts"></div>
-<script src="/static/js/app.js?v=4.4"></script>
+<script src="/static/js/app.js?v=5.0"></script>
 </body>
 </html>

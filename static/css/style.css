@@ -320,7 +320,7 @@ tbody tr:hover { background: var(--card-2); }
 .facult-sm { display: none; }
 
 /* ── Modais ───────────────────────────────────────────────────────────────── */
-.modal-bg { position: fixed; inset: 0; background: rgba(6,14,10,.6); display: none; z-index: 100;
+.modal-bg { position: fixed; inset: 0; background: rgba(6,14,10,.6); display: none; z-index: 200;
             align-items: center; justify-content: center; padding: 16px; }
 .modal-bg.open { display: flex; }
 .modal {
@@ -472,3 +472,190 @@ tbody tr:hover { background: var(--card-2); }
   .legenda .facult-lg { display: none; }
   .legenda .facult-sm { display: inline; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MODO TREINO — a tela que se usa em pé, na academia, com uma mão só.
+   Ocupa a tela inteira: sem sidebar, sem tabbar, sem calendário. Um exercício
+   por vez, alvos de toque grandes e nada que exija mira fina ou teclado.
+   ══════════════════════════════════════════════════════════════════════════ */
+.treino-modo {
+  position: fixed; inset: 0; z-index: 120; display: none;
+  background: var(--bg); flex-direction: column;
+}
+.treino-modo.open { display: flex; }
+
+.tm-topo {
+  display: flex; align-items: center; gap: 10px;
+  padding: max(10px, env(safe-area-inset-top)) 14px 10px;
+  background: var(--card); border-bottom: 1px solid var(--border);
+}
+.tm-topo .tm-nome { font-weight: 800; font-size: 15px; line-height: 1.2; flex: 1; min-width: 0; }
+.tm-topo .tm-sub { font-size: 11px; color: var(--muted); font-weight: 600; }
+.tm-x {
+  width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--border);
+  background: var(--card-2); color: var(--text); font-size: 16px; cursor: pointer; flex: none;
+}
+
+/* Barra de progresso segmentada: um traço por exercício do treino. Copiada das
+   telas de referência — diz onde você está sem ocupar linha de texto. */
+.tm-passos { display: flex; gap: 4px; padding: 10px 14px 0; }
+.tm-passos i {
+  flex: 1; height: 4px; border-radius: 2px; background: var(--border);
+  transition: background .2s;
+}
+.tm-passos i.ok  { background: var(--primary); }
+.tm-passos i.now { background: var(--primary); box-shadow: 0 0 0 2px var(--primary-l); }
+
+.tm-corpo { flex: 1; overflow-y: auto; padding: 14px; -webkit-overflow-scrolling: touch; }
+
+.tm-ex-nome { font-size: 22px; font-weight: 800; line-height: 1.15; margin: 4px 0 6px; }
+.tm-ex-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.tm-chip {
+  font-size: 12px; font-weight: 700; padding: 5px 10px; border-radius: 999px;
+  background: var(--card-2); border: 1px solid var(--border); color: var(--muted);
+}
+.tm-chip.ult { background: var(--primary-l); border-color: transparent; color: var(--primary-d); }
+
+/* Uma série = uma linha. Carga e repetições já vêm preenchidas (última carga /
+   prescrição): no caso comum, o único toque é o ✓. */
+.tm-serie {
+  display: grid; grid-template-columns: 26px 1fr 1fr 46px; gap: 8px;
+  align-items: center; padding: 8px 0; border-top: 1px solid var(--border);
+}
+.tm-serie:first-of-type { border-top: 0; }
+.tm-serie.feita { opacity: .55; }
+.tm-serie-n { font-weight: 800; color: var(--muted); font-size: 13px; text-align: center; }
+.tm-campo { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.tm-campo button {
+  width: 30px; height: 38px; flex: none; border: 1px solid var(--border);
+  background: var(--card-2); color: var(--text); font-size: 17px; font-weight: 700;
+  border-radius: 9px; cursor: pointer;
+}
+.tm-campo button:active { background: var(--border); }
+.tm-campo .tm-valor {
+  flex: 1; min-width: 0; height: 38px; border: 0; background: transparent;
+  text-align: center; font-family: var(--font); font-size: 16px; font-weight: 800;
+  color: var(--text); cursor: pointer; padding: 0;
+}
+.tm-campo .tm-un { font-size: 10px; color: var(--muted); font-weight: 700; flex: none; }
+.tm-check {
+  width: 46px; height: 40px; border-radius: 11px; border: 2px solid var(--border);
+  background: var(--card-2); font-size: 18px; cursor: pointer; color: var(--muted);
+}
+.tm-check.on { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+
+.tm-rot { font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+          color: var(--muted); display: grid; grid-template-columns: 26px 1fr 1fr 46px; gap: 8px;
+          padding-bottom: 6px; }
+.tm-rot span:nth-child(2), .tm-rot span:nth-child(3) { text-align: center; }
+
+/* Descanso: aparece sozinho quando uma série é marcada e some ao zerar. */
+.tm-descanso {
+  position: sticky; bottom: 0; margin-top: 14px; display: none;
+  background: var(--side); color: #fff; border-radius: var(--radius);
+  padding: 12px 14px; align-items: center; gap: 12px;
+}
+.tm-descanso.on { display: flex; }
+.tm-descanso .t { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.tm-descanso .l { flex: 1; font-size: 12px; opacity: .8; font-weight: 600; }
+.tm-descanso button {
+  border: 0; background: rgba(255,255,255,.16); color: #fff; font-weight: 700;
+  padding: 8px 12px; border-radius: 9px; cursor: pointer; font-family: var(--font); font-size: 12px;
+}
+
+.tm-rodape {
+  display: flex; gap: 8px; padding: 12px 14px max(12px, env(safe-area-inset-bottom));
+  background: var(--card); border-top: 1px solid var(--border);
+}
+.tm-rodape .btn { flex: 1; height: 48px; font-size: 14px; }
+.tm-rodape .btn.nav-lat { flex: none; width: 52px; }
+
+/* ── Régua de valores ──────────────────────────────────────────────────────
+   O seletor das telas de referência (altura/peso). Os traços são um gradiente
+   repetido, não elementos: 1400 posições sem 1400 nós no DOM. */
+.regua-box { text-align: center; padding: 6px 0 2px; }
+.regua-valor { font-size: 44px; font-weight: 800; line-height: 1; }
+.regua-valor small { font-size: 15px; font-weight: 700; color: var(--muted); margin-left: 4px; }
+.regua {
+  position: relative; height: 74px; margin-top: 14px; overflow-x: auto; overflow-y: hidden;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.regua::-webkit-scrollbar { display: none; }
+.regua-fita { position: relative; height: 56px; }
+/* A escala é criada pelo JS com largura e recuo calculados a partir da largura
+   visível — é isso que faz o traço escolhido parar exatamente sob a agulha. */
+.regua-escala { position: absolute; top: 0; height: 56px; }
+.regua-escala i {
+  position: absolute; top: 4px; width: 2px; height: 30px; margin-left: -1px;
+  background: var(--muted); opacity: .75; border-radius: 1px;
+}
+.regua-escala b {
+  position: absolute; top: 40px; transform: translateX(-50%);
+  font-size: 11px; font-weight: 700; color: var(--muted); white-space: nowrap;
+}
+.regua-agulha {
+  position: absolute; left: 50%; top: 4px; width: 3px; height: 36px; border-radius: 2px;
+  background: var(--primary); transform: translateX(-50%); pointer-events: none;
+}
+
+/* ── Painel do mês (barras) ────────────────────────────────────────────── */
+.painel-linha { display: grid; grid-template-columns: 1fr 100px auto; gap: 10px;
+                align-items: center; padding: 7px 0; }
+.painel-linha .r { font-size: 13px; font-weight: 600; color: var(--text); }
+.painel-linha .b { height: 7px; border-radius: 4px; background: var(--border); overflow: hidden; }
+.painel-linha .b > i { display: block; height: 100%; border-radius: 4px; background: var(--primary); }
+.painel-linha .v { font-size: 12px; font-weight: 700; color: var(--muted); min-width: 54px;
+                   text-align: right; }
+.painel-linha.vazia .v { font-style: italic; }
+
+/* ── Catálogo de exercícios (grupo / equipamento / favoritos) ───────────── */
+.cat-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.cat-item {
+  display: flex; align-items: center; gap: 10px; padding: 12px; cursor: pointer;
+  background: var(--card-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  text-align: left; font-family: var(--font); color: var(--text);
+}
+.cat-item:active, .cat-item.sel { border-color: var(--primary); background: var(--primary-l); }
+.cat-item .n { font-weight: 700; font-size: 13px; display: block; }
+.cat-item .q { font-size: 11px; color: var(--muted); font-weight: 600; }
+.cat-volta { margin-bottom: 10px; }
+.ex-fav { background: none; border: 0; font-size: 17px; cursor: pointer; line-height: 1; padding: 2px; }
+
+/* ── Cartão do treino de hoje ──────────────────────────────────────────── */
+.hoje-card { background: var(--side); color: #fff; border-radius: var(--radius); padding: 16px;
+             margin-bottom: 14px; }
+.hoje-card .et { font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+                 color: var(--primary); }
+.hoje-card h3 { font-size: 19px; font-weight: 800; margin: 6px 0 2px; }
+.hoje-card .sub { font-size: 12px; opacity: .75; font-weight: 600; }
+.hoje-card .acoes { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.hoje-card .btn { height: 44px; flex: 1; min-width: 130px; }
+.hoje-card .btn-ghost { background: rgba(255,255,255,.12); color: #fff; border-color: transparent; }
+
+/* ── Corpo (peso e medidas) ────────────────────────────────────────────── */
+.corpo-num { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.corpo-num .p { font-size: 38px; font-weight: 800; line-height: 1; }
+.corpo-num .u { font-size: 14px; font-weight: 700; color: var(--muted); }
+.corpo-num .d { font-size: 13px; font-weight: 700; padding: 3px 8px; border-radius: 999px; }
+.corpo-num .d.sobe { background: var(--danger-l); color: var(--danger-ink); }
+.corpo-num .d.desce { background: var(--primary-l); color: var(--primary-d); }
+.corpo-fatos { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+               gap: 8px; margin-top: 14px; }
+.corpo-fato { background: var(--card-2); border: 1px solid var(--border);
+              border-radius: var(--radius-sm); padding: 10px; }
+.corpo-fato .k { font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase;
+                 color: var(--muted); }
+.corpo-fato .v { font-size: 17px; font-weight: 800; margin-top: 3px; }
+.corpo-fato .o { font-size: 11px; color: var(--muted); font-weight: 600; }
+
+@media (max-width: 720px) {
+  .tm-ex-nome { font-size: 20px; }
+  .regua-valor { font-size: 38px; }
+  .painel-linha { grid-template-columns: 1fr 78px auto; }
+}
+
+/* Abas do catálogo: nunca quebram linha e, se um dia não couberem, rolam em vez
+   de esconder a última fora da tela. */
+.tabs-cat { overflow-x: auto; scrollbar-width: none; }
+.tabs-cat::-webkit-scrollbar { display: none; }
+.tabs-cat .tab { white-space: nowrap; flex: none; }
