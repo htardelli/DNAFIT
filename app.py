@@ -657,6 +657,9 @@ async def _garantir_series(db, item: dict) -> list:
         await db.executemany(
             "INSERT OR IGNORE INTO aula_series (aula_exercicio_id, ordem) VALUES (?,?)",
             [(item["id"], o) for o in faltando])
+        # Séries novas mudam o "todas feitas": subir de 3 para 4 séries num
+        # exercício já concluído tem de reabri-lo, não mantê-lo verde.
+        await _sincronizar_item(db, item["id"])
         await db.commit()
         cur = await db.execute(
             "SELECT * FROM aula_series WHERE aula_exercicio_id=? ORDER BY ordem", (item["id"],))
@@ -1026,6 +1029,19 @@ async def salvar_exercicios_aula(aid: int, itens: List[ItemIn], user=Depends(get
     if not _pode_montar_treino(user, aula):
         raise HTTPException(403, "O treino desta aula é montado pelo personal. "
                                  "Marque a aula como 'sozinho' se for treinar por conta.")
+    # A lista é substituída inteira (mais simples e atômico), mas as séries JÁ
+    # REGISTRADAS não podem ir junto: o personal ajustar o treino depois da aula,
+    # ou o aluno acrescentar um exercício no meio do treino, apagaria as cargas
+    # que ele acabou de lançar. Guardamos por nome e devolvemos ao final.
+    cur = await db.execute("""
+        SELECT ae.nome, s.ordem, s.carga, s.repeticoes, s.feito
+          FROM aula_exercicios ae JOIN aula_series s ON s.aula_exercicio_id = ae.id
+         WHERE ae.aula_id = ? AND (s.carga IS NOT NULL OR s.repeticoes IS NOT NULL OR s.feito = 1)
+    """, (aid,))
+    registradas = {}
+    for r in await cur.fetchall():
+        registradas.setdefault(r["nome"], []).append(dict(r))
+
     await db.execute("DELETE FROM aula_exercicios WHERE aula_id=?", (aid,))
     for i, it in enumerate(itens):
         nome = (it.nome or "").strip()
@@ -1034,12 +1050,19 @@ async def salvar_exercicios_aula(aid: int, itens: List[ItemIn], user=Depends(get
             nome = ex["nome"] if ex else ""
         if not nome:
             continue
-        await db.execute("""
+        cur = await db.execute("""
             INSERT INTO aula_exercicios
                 (aula_id, exercicio_id, nome, ordem, series, repeticoes, carga, descanso_seg, feito, obs)
             VALUES (?,?,?,?,?,?,?,?,?,?)
         """, (aid, it.exercicio_id, nome, it.ordem if it.ordem is not None else i,
               it.series, it.repeticoes, it.carga, it.descanso_seg, 1 if it.feito else 0, it.obs))
+        for sr in registradas.get(nome, []):
+            await db.execute("""
+                INSERT OR REPLACE INTO aula_series
+                    (aula_exercicio_id, ordem, carga, repeticoes, feito) VALUES (?,?,?,?,?)
+            """, (cur.lastrowid, sr["ordem"], sr["carga"], sr["repeticoes"], sr["feito"]))
+        if registradas.get(nome):
+            await _sincronizar_item(db, cur.lastrowid)
     await db.execute("UPDATE aulas SET atualizado_em=CURRENT_TIMESTAMP WHERE id=?", (aid,))
     await db.commit()
     return await _itens_da_aula(db, aid)

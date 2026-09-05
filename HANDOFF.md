@@ -42,7 +42,7 @@ código compartilhado.
 |---|---|
 | Repositório | `htardelli/planges` (privado) |
 | Branch | `claude/aulas-control-app-a0wprp` |
-| Último commit | `2a6cda0` |
+| Último commit | `HEAD` |
 | Pasta do app | `fitplan/` |
 
 ### Railway
@@ -345,6 +345,13 @@ Três camadas que não se misturam:
 É isso que mantém `/api/evolucao`, o volume do mês e as telas antigas funcionando
 sem saberem que séries existem. Ponto de atenção conhecido: marcar `feito` pelo
 modal antigo da aula **não** marca as séries; o inverso funciona.
+
+`PUT /api/aulas/{id}/exercicios` substitui a lista inteira, mas **preserva as séries
+já registradas**, casando por nome do exercício. Sem isso, o personal ajustar o
+treino depois da aula — ou o aluno acrescentar um exercício no meio do treino —
+apagaria as cargas recém-lançadas. Quem mexer nessa rota tem de manter esse resgate.
+As séries nascem preguiçosamente (`_garantir_series`) na primeira leitura da aula;
+subir de 3 para 6 séries reabre o exercício que estava concluído.
 
 ### Segurança já implementada
 
