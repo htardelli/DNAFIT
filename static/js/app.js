@@ -142,7 +142,7 @@ async function iniciar() {
   await Promise.all([carregarExercicios(), carregarModelos(), carregarPlanos(),
                      carregarConfig(), carregarCadastros()]);
   loadAgenda();
-  // Por cima de tudo: o aviso de Pix é a única coisa no app que a outra pessoa
+  // Por cima de tudo: o aviso de pagamento é a única coisa no app que a outra pessoa
   // está esperando de você.
   verificarAvisosPix();
 }
@@ -1859,14 +1859,14 @@ function abrirPix() {
 
 async function salvarPix() {
   const valor = num('px-valor');
-  if (!valor || valor <= 0) return toast('Informe o valor do Pix', 'err');
+  if (!valor || valor <= 0) return toast('Informe o valor pago', 'err');
   try {
     await api('POST', '/api/pagamentos', {
       mes: val('px-mes') || null, valor,
       data_pix: val('px-data') || null, obs: val('px-obs') || null
     });
     fecharModal('m-pix');
-    toast('Pix informado — aguardando a confirmação do personal');
+    toast('Pagamento informado — aguardando a confirmação do personal');
     loadPix();
   } catch (e) { toast(e.message, 'err'); }
 }
@@ -1878,15 +1878,15 @@ async function loadPix() {
   try { itens = await api('GET', `/api/pagamentos?ano=${_mesRef.getFullYear()}`); }
   catch (e) { box.innerHTML = '<div class="empty">Não foi possível carregar.</div>'; return; }
   if (!itens.length) {
-    box.innerHTML = `<div class="empty">Nenhum Pix informado neste ano.${
-      _user.role === 'aluno' ? ' Use “Informei o Pix” quando pagar.' : ''}</div>`;
+    box.innerHTML = `<div class="empty">Nenhum pagamento informado neste ano.${
+      _user.role === 'aluno' ? ' Use “Informar pagamento” quando pagar.' : ''}</div>`;
     return;
   }
   box.innerHTML = itens.map(p => `
     <div class="pix-linha">
       <div>
         <div class="q">${fmtR(p.valor)} <span class="muted">· ref. ${esc(fmtMes(p.mes))}</span></div>
-        <div class="s">Pix em ${fmtDataCurta(p.data_pix)}${p.obs ? ' · ' + esc(p.obs) : ''}</div>
+        <div class="s">Pago em ${fmtDataCurta(p.data_pix)}${p.obs ? ' · ' + esc(p.obs) : ''}</div>
       </div>
       ${p.confirmado
         ? `<span class="pix-tag ok">✅ recebido</span>`
@@ -1908,13 +1908,13 @@ async function confirmarPix(id) {
 }
 
 async function apagarPix(id) {
-  if (!confirm('Cancelar este aviso de Pix?')) return;
+  if (!confirm('Cancelar este aviso de pagamento?')) return;
   try { await api('DELETE', `/api/pagamentos/${id}`); loadPix(); }
   catch (e) { toast(e.message, 'err'); }
 }
 
 // ── Aviso prioritário, por cima da tela inicial ─────────────────────────────
-// Personal: tem Pix esperando confirmação — é ação dele.
+// Personal: tem pagamento esperando confirmação — é ação dele.
 // Aluno: o personal confirmou e ele ainda não viu — é notícia dele.
 async function verificarAvisosPix() {
   let d;
@@ -1930,11 +1930,11 @@ async function verificarAvisosPix() {
          E mais ${itens.length - 1} ${itens.length === 2 ? 'aviso' : 'avisos'} depois deste.</p>` : '';
 
   if (d.tipo === 'confirmar') {
-    titulo.textContent = '💸 Pix informado — confirme o recebimento';
+    titulo.textContent = '💸 Pagamento informado — confirme o recebimento';
     corpo.innerHTML = `
       <div class="pix-destaque">${fmtR(p.valor)}</div>
       <p style="margin:10px 0 0">
-        <b>${esc(p.informou_nome || 'O aluno')}</b> informou um Pix enviado em
+        <b>${esc(p.informou_nome || 'O aluno')}</b> informou um pagamento feito em
         <b>${fmtData(p.data_pix)}</b>, referente a <b>${esc(fmtMes(p.mes))}</b>.
         ${p.obs ? `<br><span class="muted">${esc(p.obs)}</span>` : ''}
       </p>
@@ -1945,11 +1945,11 @@ async function verificarAvisosPix() {
       <button class="btn" onclick="fecharModal('m-pix-aviso')">Ainda não</button>
       <button class="btn btn-primary" onclick="confirmarPix(${p.id})">Confirmo que recebi</button>`;
   } else {
-    titulo.textContent = '✅ Pix confirmado';
+    titulo.textContent = '✅ Pagamento confirmado';
     corpo.innerHTML = `
       <div class="pix-destaque">${fmtR(p.valor)}</div>
       <p style="margin:10px 0 0">
-        <b>${esc(p.confirmou_nome || 'O personal')}</b> confirmou o recebimento do Pix
+        <b>${esc(p.confirmou_nome || 'O personal')}</b> confirmou o recebimento do pagamento
         de <b>${fmtData(p.data_pix)}</b>, referente a <b>${esc(fmtMes(p.mes))}</b>.
       </p>${resto}`;
     acoes.innerHTML = `<button class="btn btn-primary" onclick="pixVisto(${p.id})">Entendi</button>`;

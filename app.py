@@ -1540,13 +1540,13 @@ async def informar_pagamento(body: PagamentoIn, user=Depends(require_dono),
                              db: aiosqlite.Connection = Depends(get_db)):
     """Quem paga é o aluno — só ele informa o Pix."""
     if body.valor is None or body.valor <= 0:
-        raise HTTPException(400, "Informe o valor do Pix.")
+        raise HTTPException(400, "Informe o valor pago.")
     mes = (body.mes or _hoje().strftime("%Y-%m")).strip()
     if not re.fullmatch(r"\d{4}-\d{2}", mes):
         raise HTTPException(400, "Mês inválido (use AAAA-MM).")
     data = _parse_data(body.data_pix) if body.data_pix else _hoje().isoformat()
     if data > _hoje().isoformat():
-        raise HTTPException(400, "A data do Pix não pode ser no futuro.")
+        raise HTTPException(400, "A data do pagamento não pode ser no futuro.")
     cur = await db.execute("""
         INSERT INTO pagamentos (mes, valor, data_pix, obs, informado_por)
         VALUES (?,?,?,?,?)
@@ -1562,7 +1562,7 @@ async def confirmar_pagamento(pid: int, user=Depends(get_current_user),
     sabe disso é quem recebe. Deixar o aluno confirmar o próprio Pix esvaziaria
     o registro — viraria só um bilhete dele para ele mesmo."""
     if user["role"] != "personal":
-        raise HTTPException(403, "Só o personal confirma o recebimento do Pix.")
+        raise HTTPException(403, "Só o personal confirma o recebimento do pagamento.")
     p = await _pagamento(db, pid)
     if p["confirmado"]:
         return p

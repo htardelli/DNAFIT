@@ -20,7 +20,7 @@ dos exercícios de cada treino.
 | Frequência | **Agenda** (aderência e sequência) e **Frequência** (gráficos por mês/semana) |
 | Tipo de exercício | **Treinos** — biblioteca por grupo muscular e equipamento; tipo da aula (Força, Hipertrofia, HIIT…) |
 | Descrição dos exercícios | **Treinos** (execução de cada exercício) e, na aula, séries/reps/carga/descanso/observação |
-| Avisar que paguei o Pix e saber que ele recebeu | **Financeiro → Informei o Pix** — ele confirma em um aviso sobre a tela inicial |
+| Avisar que paguei e saber que ele recebeu | **Financeiro → Informar pagamento** — ele confirma em um aviso sobre a tela inicial |
 | Registrar o treino **enquanto treino** | **Agenda → Treinar agora** — modo treino, uma série por toque |
 | Saber quanto levantei da última vez | Aparece sozinho no modo treino: *última: 55 kg × 10 · 28/08* |
 | Acompanhar peso e medidas | **Progresso → Corpo** — peso, IMC, meta, ritmo real e gráfico |
@@ -168,13 +168,14 @@ o app mostra um aviso no topo de todas as telas.
 
 ---
 
-## Pagamento por Pix
+## Informar pagamento
 
 O dinheiro anda por fora do app — o que o app faz é registrar **as duas pontas**,
 para que ninguém precise lembrar de cabeça no mês seguinte.
 
-1. Você paga o Pix e abre **Financeiro → Informei o Pix** (valor, data e o mês a
-   que se refere; o valor já vem preenchido com o que falta pagar).
+1. Você paga e abre **Financeiro → Informar pagamento** (valor, data e o mês a
+   que se refere; o valor já vem preenchido com o que falta pagar). Se quiser
+   registrar como pagou — Pix, dinheiro, parcela —, escreva na observação.
 2. Da próxima vez que o **personal** abrir o app, um aviso aparece **por cima da
    tela inicial**, com o valor em destaque e dois botões: *Confirmo que recebi* e
    *Ainda não*. Enquanto ele não confirmar, o aviso volta toda vez que ele abrir.

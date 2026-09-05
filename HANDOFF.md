@@ -398,13 +398,19 @@ Aplicar um modelo (por qualquer caminho) **limpa a sugestão** — deixá-la far
 personal reencontrar um pedido que ele já atendeu. Aula encerrada (realizada,
 falta ou cancelada) recusa as duas ações.
 
-### Pagamento (Pix informado × recebido)
+### Pagamento (informado × recebido)
+
+Na interface tudo se chama **pagamento**, não "Pix": o meio pode mudar (dinheiro,
+transferência, parcela) e quem registra escreve na observação. No código e nos
+comentários "Pix" aparece porque é o meio real de hoje; a coluna do banco é
+`data_pix` e ficou assim para não migrar dado em uso.
+
 
 O dinheiro anda **por fora** do sistema; o app registra as duas pontas do combinado.
 
 | Ponta | Quem faz | Por quê |
 |---|---|---|
-| "Enviei o Pix" | **só o `aluno`** | quem paga é ele |
+| "Paguei" | **só o `aluno`** | quem paga é ele |
 | "Recebi" | **só o `personal`** | confirmar é atestar que o dinheiro chegou; deixar o aluno confirmar o próprio Pix transformaria o registro num bilhete dele para ele mesmo |
 
 Enquanto faltar a confirmação, o pagamento é **pendente** e volta a aparecer em
