@@ -308,6 +308,20 @@ projeto (já está no `.gitignore`).
   ação só na lateral, confira se ela tem caminho no celular.
 - O painel do mês usa **`S/D`** (não "sem dados"): a coluna da direita é estreita e
   alinhada, e texto longo desalinha as quatro barras.
+- **Modalidade tem convenção única no app inteiro:** personal = **azul e redondo**,
+  individual = **verde e quadrado**. Cor sozinha não basta (daltonismo, olhada de
+  relance no meio da série) — a forma carrega a mesma informação. No calendário a
+  cor já é do *status*, então a modalidade entra como **listra diagonal** = individual.
+  Cuidado: no celular o chip vira barrinha com `border-left-width: 0`, o que apagava
+  a borda tracejada que antes era a única marca de modalidade lá.
+- **Barra inferior × barra de endereços do Safari.** Esconder a barra de endereços
+  ao rolar muda a altura visível **sem mover** o que está em `position: fixed` —
+  sobra uma fresta entre a barra do app e a do navegador, com o conteúdo da página
+  aparecendo por ela. Duas defesas, ambas necessárias:
+  `ajustarBarraInferior()` desloca a barra pela diferença que a **VisualViewport**
+  informa (funciona nos dois sentidos: barra alta demais e barra escondida sob a do
+  navegador), e `.tabbar::after` pinta 160px de fundo abaixo dela para o caso de o JS
+  não rodar. Não remova nenhuma das duas achando que a outra basta.
 
 ### Modo treino (a tela da academia)
 

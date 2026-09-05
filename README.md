@@ -31,6 +31,11 @@ dos exercícios de cada treino.
 Ao marcar os dias, você diz **como** vai treinar. São duas agendas independentes no
 mesmo mês — marcar os dias de uma nunca apaga os da outra.
 
+Na tela você reconhece cada um de longe: **personal é um círculo azul com P**,
+**individual é um quadrado verde com I**. No calendário, a barrinha do dia é
+**lisa** para o personal e **listrada** para o individual — a cor da barra continua
+sendo a do *status* (agendada, feita, falta).
+
 | | **Com o personal** | **Sozinho** |
 |---|---|---|
 | Quem monta o treino | o personal | você |

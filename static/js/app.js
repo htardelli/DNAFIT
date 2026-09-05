@@ -1716,3 +1716,29 @@ function renderSugestao(a) {
       : ''}
     <button class="btn btn-sm" style="margin-left:6px" onclick="removerSugestao(${a.id})">Retirar</button>`;
 }
+
+
+// ═════════════ BARRA INFERIOR × BARRA DE ENDEREÇOS DO NAVEGADOR ══════════════
+// No Safari do iPhone, esconder a barra de endereços ao rolar muda a altura
+// VISÍVEL da página sem mover o que está em `position: fixed`. O resultado é uma
+// fresta entre a barra do app e a do navegador, com o conteúdo aparecendo por
+// ela. A VisualViewport diz quanto a área visível difere da área de layout;
+// deslocamos a barra por essa diferença. Serve para os dois lados: barra alta
+// demais (a fresta que ele viu) e barra escondida sob a do navegador.
+function ajustarBarraInferior() {
+  const barra = document.getElementById('tabbar');
+  const vv = window.visualViewport;
+  if (!barra || !vv) return;
+  const sobra = window.innerHeight - vv.height - vv.offsetTop;
+  barra.style.transform = Math.abs(sobra) > 1 ? `translateY(${-sobra}px)` : '';
+}
+
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', ajustarBarraInferior);
+  window.visualViewport.addEventListener('scroll', ajustarBarraInferior);
+  window.addEventListener('orientationchange', () => setTimeout(ajustarBarraInferior, 250));
+  // A rolagem da página é o gatilho de esconder/mostrar a barra de endereços,
+  // e nem todo iOS emite 'scroll' na VisualViewport nesse momento.
+  window.addEventListener('scroll', ajustarBarraInferior, { passive: true });
+  document.addEventListener('DOMContentLoaded', ajustarBarraInferior);
+}

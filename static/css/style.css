@@ -263,13 +263,15 @@ tbody tr:hover { background: var(--card-2); }
 }
 .ex-tag.pend { background: var(--warn-l); color: var(--warn-ink); }
 
+/* Convenção única no app: PERSONAL = azul e redondo · INDIVIDUAL = verde e
+   quadrado. Cor sozinha não basta — quem enxerga mal cor, ou olha de relance
+   no meio da série, lê a FORMA. */
 .modo {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 28px; height: 28px; border-radius: 999px; font-size: 12px; font-weight: 800;
+  width: 28px; height: 28px; font-size: 12px; font-weight: 800; color: #fff;
 }
-.modo-p { background: var(--primary-l); color: var(--primary-d); }
-.modo-i { background: var(--info-l); color: var(--info-ink); }
-:root[data-theme="dark"] .modo-p { color: var(--primary); }
+.modo-p { background: var(--info);    border-radius: 999px; }
+.modo-i { background: var(--primary); border-radius: 8px; color: var(--on-primary); }
 
 .st { display: inline-flex; align-items: center; justify-content: center;
       width: 30px; height: 30px; border-radius: 999px; font-size: 15px; line-height: 1; }
@@ -304,6 +306,12 @@ tbody tr:hover { background: var(--card-2); }
 .chip-cancelada { background: var(--neutro-l);  color: var(--neutro-ink); border-left-color: var(--neutro); text-decoration: line-through; }
 :root[data-theme="dark"] .chip-realizada { color: var(--primary); }
 .chip.solo { border-left-style: dashed; }
+/* Listrado = individual. Sobrevive à barrinha compacta do celular, que zera a
+   borda esquerda e apagava a única marca de modalidade que existia lá. */
+.chip.solo {
+  background-image: repeating-linear-gradient(135deg,
+    rgba(255,255,255,.55) 0 3px, transparent 3px 7px);
+}
 
 /* feriados */
 .cal-day.fer  { background: var(--fer-l); border-color: var(--fer); }
@@ -422,10 +430,20 @@ tbody tr:hover { background: var(--card-2); }
   .topbar .title { font-size: 20px; }
 
   /* barra inferior: o padrão do app que serviu de referência */
+  /* No Safari do iPhone, esconder a barra de endereços ao rolar muda a altura
+     visível SEM mover o que está em position:fixed — sobra uma fresta entre a
+     barra do app e a do navegador, e o conteúdo da página aparece por ela.
+     Duas defesas: o JS reposiciona pela VisualViewport, e o ::after pinta o
+     fundo abaixo da barra para que nada vaze mesmo que o JS não rode. */
   .tabbar {
     display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 70;
     background: var(--card); border-top: 1px solid var(--border);
     height: var(--barra-h); padding-bottom: env(safe-area-inset-bottom);
+    will-change: transform;
+  }
+  .tabbar::after {
+    content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 160px;
+    background: var(--card); pointer-events: none;
   }
 
   /* campo com menos de 16px faz o iOS dar zoom na página e não voltar */
@@ -681,3 +699,9 @@ tbody tr:hover { background: var(--card-2); }
              border-radius: 999px; flex: none; }
 .dia-op .m.p { background: var(--info-l); color: var(--info-ink); }
 .dia-op .m.i { background: var(--primary-l); color: var(--primary-d); }
+
+/* Legenda de modalidade: mesma bolinha/quadradinho da tabela, em miniatura, para
+   que a leitura da lista não dependa de tooltip (que no celular não existe). */
+.legenda-modo { display: inline-flex; align-items: center; gap: 4px; }
+.legenda-modo .modo { width: 16px; height: 16px; font-size: 9px; }
+.legenda-modo .modo-i { border-radius: 5px; }
