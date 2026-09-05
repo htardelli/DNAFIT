@@ -515,7 +515,11 @@ function aplicarModoAula() {
   // inconsistente e precisa continuar corrigível.
   const concluida = val('a-status') === 'realizada' && !!val('a-id')
                     && jaComecou(val('a-data'), val('a-hora'));
-  const pode = podeMontarTreino(val('a-modalidade')) && !concluida;
+  // Quem monta o treino continua podendo corrigi-lo DEPOIS de feito: num treino
+  // individual o aluno é autor e executor, e o que ele fez pode não ser o que
+  // estava escrito antes. O que a aula FOI (data, hora, status, modalidade,
+  // valor) segue congelado — é isso que o "feito não se desfaz" protege.
+  const pode = podeMontarTreino(val('a-modalidade'));
   // "Realizada" e "Falta" afirmam que o horário passou — indisponíveis antes disso
   const passou = jaComecou(val('a-data'), val('a-hora'));
   const sel = document.getElementById('a-status');
@@ -526,10 +530,22 @@ function aplicarModoAula() {
   });
   if (!passou && (sel.value === 'realizada' || sel.value === 'falta')) sel.value = 'agendada';
   document.getElementById('a-aviso-futuro').style.display = (passou || concluida) ? 'none' : '';
-  document.getElementById('a-aviso-feito').style.display = concluida ? '' : 'none';
+  const avisoFeito = document.getElementById('a-aviso-feito');
+  avisoFeito.style.display = concluida ? '' : 'none';
+  if (concluida) {
+    avisoFeito.innerHTML = pode
+      ? `<b>Treino feito.</b> A data, o horário e o status não mudam mais.
+         Como <b>o treino é seu</b>, você continua podendo corrigir os exercícios,
+         as cargas e as observações — para o registro bater com o que realmente aconteceu.`
+      : `<b>Treino feito.</b> Isso não se desfaz. O que ainda dá para registrar aqui:
+         a <b>percepção de esforço</b>, as <b>observações</b> de como foi, e em cada
+         exercício a <b>carga usada</b>, a observação e o que foi <b>feito</b>.`;
+  }
   // campos que descrevem QUANDO e COMO a aula foi contratada ficam congelados
-  ['a-data', 'a-hora', 'a-status', 'a-modalidade', 'a-valor'].forEach(i => {
-    document.getElementById(i).disabled = concluida;
+  ['a-data', 'a-hora', 'a-status', 'a-modalidade', 'a-valor',
+   'a-duracao', 'a-local', 'a-professor', 'a-plano'].forEach(i => {
+    const el = document.getElementById(i);
+    if (el && concluida) el.disabled = true;
   });
   document.getElementById('a-btn-del').style.display =
     (val('a-id') && !concluida) ? '' : 'none';
@@ -538,9 +554,12 @@ function aplicarModoAula() {
   // do que campo travado.
   ['a-tipo', 'a-foco', 'a-descricao', 'a-modelo', 'a-duracao', 'a-local', 'a-professor', 'a-plano'].forEach(i => {
     const el = document.getElementById(i);
-    if (el) el.disabled = !pode;
+    if (el) el.disabled = !pode || (concluida && !['a-tipo','a-foco','a-descricao','a-modelo'].includes(i));
   });
   document.getElementById('a-ex-acoes').style.display = pode ? '' : 'none';
+  // "Aplicar modelo" troca a lista inteira e apagaria as cargas já lançadas —
+  // some depois de a aula ser concluída. "+ Exercício" continua.
+  document.getElementById('a-aplicar-modelo').style.display = concluida ? 'none' : '';
   document.getElementById('a-ex-aviso').style.display = pode ? 'none' : '';
   // linhas de exercício viram somente leitura (o "feito" continua marcável)
   // Prescrição (nome, séries, reps, descanso) x execução (carga, obs, feito).
@@ -560,12 +579,20 @@ async function salvarAula() {
   if (!val('a-data')) return toast('Informe a data', 'err');
   const concluida = val('a-status') === 'realizada' && !!id
                     && jaComecou(val('a-data'), val('a-hora'));
-  const pode = podeMontarTreino(val('a-modalidade')) && !concluida;
+  // Mesma regra de aplicarModoAula: quem MONTA o treino continua podendo
+  // corrigi-lo depois de feito. As duas funções precisam concordar — se só a
+  // tela liberar, o formulário parece editável e o salvamento descarta a edição.
+  const pode = podeMontarTreino(val('a-modalidade'));
   // Aula já feita: só o registro do que aconteceu.
   // Numa aula do personal, o aluno só envia o que é dele — o backend recusa o resto
-  const body = concluida ? {
+  const body = concluida ? (pode ? {
+    // Autor do treino corrigindo o que de fato foi feito
+    obs: val('a-obs') || null, pse: num('a-pse'),
+    tipo: val('a-tipo') || null, foco: val('a-foco') || null,
+    descricao: val('a-descricao') || null, modelo_id: num('a-modelo')
+  } : {
     obs: val('a-obs') || null, pse: num('a-pse')
-  } : pode ? {
+  }) : pode ? {
     data: val('a-data'), hora: val('a-hora') || null, duracao_min: num('a-duracao') || 60,
     tipo: val('a-tipo') || null, foco: val('a-foco') || null, local: val('a-local') || null,
     // Campos escondidos no modo sozinho vão nulos: campo oculto que continua

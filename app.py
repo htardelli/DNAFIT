@@ -337,6 +337,11 @@ def _ja_comecou(data_iso: str, hora: Optional[str]) -> bool:
 # dos exercícios (carga usada, o que foi feito).
 STATUS_IRREVERSIVEL = "realizada"
 CAMPOS_APOS_REALIZADA = {"obs", "pse"}
+# Quem MONTA o treino também pode corrigi-lo depois de feito: num treino
+# individual o aluno é autor e executor, e o que ele fez de verdade pode não ser
+# o que estava escrito antes. Isso não afeta o que a aula foi (data, horário,
+# modalidade, valor, status) — só o que ela conteve.
+CAMPOS_APOS_REALIZADA_AUTOR = {"tipo", "foco", "descricao", "modelo_id"}
 
 # Status que afirmam que o horário da aula passou. Não dá para dizer que uma
 # aula de amanhã foi feita — nem que houve falta nela.
@@ -979,12 +984,17 @@ async def editar_aula(aid: int, body: AulaUpdate, user=Depends(get_current_user)
     # horário que ainda não chegou é dado inconsistente — e precisa poder ser
     # corrigida, senão fica presa para sempre.
     if atual["status"] == STATUS_IRREVERSIVEL and _ja_comecou(atual["data"], atual["hora"]):
-        travados = set(data) - CAMPOS_APOS_REALIZADA
+        liberados = set(CAMPOS_APOS_REALIZADA)
+        if _pode_montar_treino(user, atual):
+            liberados |= CAMPOS_APOS_REALIZADA_AUTOR
+        travados = set(data) - liberados
         if travados:
+            extra = (" Como o treino é seu, dá para corrigir também os exercícios, o foco e a descrição."
+                     if _pode_montar_treino(user, atual) else "")
             raise HTTPException(400,
                 "Este treino já foi dado como feito e isso não se desfaz. "
                 "Dá para ajustar a percepção de esforço, as observações e a execução "
-                f"dos exercícios. Campos bloqueados: {', '.join(sorted(travados))}.")
+                f"dos exercícios.{extra} Campos bloqueados: {', '.join(sorted(travados))}.")
 
     # Vale o estado final: mudar a data para o futuro numa aula já 'realizada'
     # criaria o mesmo absurdo que marcar 'realizada' numa aula futura.
@@ -1208,6 +1218,13 @@ async def aplicar_modelo(aid: int, mid: int, substituir: bool = True,
         raise HTTPException(404, "Aula não encontrada")
     if not _pode_montar_treino(user, aula):
         raise HTTPException(403, "O treino desta aula é montado pelo personal.")
+    # Aplicar um modelo TROCA a lista inteira e, ao contrário do PUT de exercícios,
+    # não resgata as séries já lançadas. Numa aula concluída isso apagaria as
+    # cargas registradas — corrigir um exercício é uma coisa, varrer o histórico
+    # do treino é outra.
+    if aula["status"] == STATUS_IRREVERSIVEL and _ja_comecou(aula["data"], aula["hora"]):
+        raise HTTPException(400, "Este treino já foi feito: aplicar um modelo agora apagaria "
+                                 "as cargas registradas. Ajuste os exercícios um a um.")
     mod = await (await db.execute("SELECT * FROM modelos WHERE id=?", (mid,))).fetchone()
     if not mod:
         raise HTTPException(404, "Modelo não encontrado")

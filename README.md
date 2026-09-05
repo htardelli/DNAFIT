@@ -87,6 +87,11 @@ tela cheia: um exercício por vez, botões grandes, nada de calendário.
   Vibra e apita quando zera.
 - No fim, **Concluir treino** marca a aula como feita. Como sempre, isso pede
   confirmação e **não pode ser desfeito**.
+- **Treino individual já feito continua editável por você.** O treino é seu: se
+  esqueceu de listar um exercício, ou fez diferente do planejado, corrija depois —
+  o registro precisa bater com o que realmente aconteceu. O que não muda mais é o
+  que a aula *foi*: data, horário e status. Em aula com o personal, o treino
+  continua sendo dele: você ajusta carga, observações e o que foi feito.
 - **Treino futuro não é registrável.** Os botões ficam travados até o horário chegar —
   a mesma regra que já valia para o status.
 

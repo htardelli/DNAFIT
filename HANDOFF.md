@@ -376,6 +376,25 @@ Três camadas que não se misturam:
 | Execução por série | `aula_series` (carga, repetições, feito) | quem treinou, os dois perfis |
 | Resumo do item | `aula_exercicios.carga` / `.feito` | **derivado** — `_sincronizar_item()` |
 
+**Depois de `realizada`, quem MONTA o treino ainda pode corrigi-lo.** Num treino
+individual o aluno é autor e executor: o que ele fez pode não ser o que estava
+escrito antes, e o registro tem de bater com a realidade. Liberados para o autor:
+a lista de exercícios, `tipo`, `foco`, `descricao`, `modelo_id`
+(`CAMPOS_APOS_REALIZADA_AUTOR`). Congelado para todo mundo, sempre: `data`,
+`hora`, `status`, `modalidade`, `valor` — é isso que o "feito não se desfaz"
+protege. Quem só executou (o aluno numa aula do personal) continua limitado a
+`obs`, `pse` e à execução de cada exercício.
+
+`aplicar-modelo` é recusado em aula concluída: ele troca a lista inteira e, ao
+contrário do `PUT` de exercícios, **não resgata as séries já lançadas** — apagaria
+as cargas registradas. Na tela, o seletor "Aplicar modelo…" some quando a aula
+está concluída, e "+ Exercício" fica.
+
+⚠️ `aplicarModoAula()` e `salvarAula()` calculam `pode` **cada uma por sua conta**.
+As duas precisam concordar: quando só a tela liberou, o formulário parecia
+editável e o salvamento descartava a edição em silêncio (foi um defeito real,
+pego em teste de interface — o teste de API sozinho não o encontraria).
+
 `carga` do item = **maior carga executada**; `feito` = todas as séries marcadas.
 É isso que mantém `/api/evolucao`, o volume do mês e as telas antigas funcionando
 sem saberem que séries existem. Ponto de atenção conhecido: marcar `feito` pelo
