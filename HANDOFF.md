@@ -462,6 +462,31 @@ aluno" não foi implementado: `aluno` é o papel de DONO da conta, então um per
 que criasse um aluno criaria um segundo dono — escalada de privilégio num sistema
 que assume um aluno só. Isso só faz sentido junto com multi-aluno, que não existe.
 
+### Conclusão do treino (energia · fadiga · esforço)
+
+Marcar como feita — pelo ✅ da lista ou pelo *Concluir treino* do modo treino —
+abre `#m-concluir`, que **substitui o `confirm()` do navegador**: mantém a
+confirmação de irreversibilidade e aproveita o único momento em que a resposta
+sobre o corpo é confiável. Perguntar depois é perguntar à memória. Foi por não
+perguntar em lugar nenhum que a linha "Esforço médio" do painel vivia em `S/D`.
+
+Campos: `energia` e `fadiga` (1–5) e `pse` (1–10), **todos opcionais** — exigir
+resposta numa tela usada depois de todo treino cria o hábito de responder
+qualquer coisa. Ficam também no modal da aula, junto do PSE, para correção
+posterior; aparecem só quando o treino já começou.
+
+**As escalas de 1 a 5 são simétricas em torno de "Normal" e monotônicas**
+(Muito baixa · Baixa · Normal · Alta · Muito alta). O pedido original trazia
+"baixa, média, normal, alta, acima da média", que tem dois pares de quase
+sinônimos: daqui a três meses ninguém lembra se marcou "média" ou "normal", e o
+dado deixa de se comparar com ele mesmo. O PSE segue a **Borg CR10** — o número
+continua 1–10 (é o que histórico e painel usam) e cada um ganhou rótulo, para a
+pergunta ser respondível em pé, suado.
+
+`energia`/`fadiga` entram em `CAMPOS_APOS_REALIZADA` e em
+`CAMPOS_ALUNO_EM_AULA_DO_PERSONAL`: é feedback do aluno, vale em qualquer
+modalidade e depois da aula fechada.
+
 ### Segurança já implementada
 
 - Chave de assinatura dos tokens sorteada no 1º start e guardada no banco

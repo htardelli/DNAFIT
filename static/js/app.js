@@ -409,14 +409,10 @@ function renderLista() {
 }
 
 async function marcar(id, status) {
-  // Treino feito é fato consumado — confirma antes, porque não se desfaz
-  if (status === 'realizada') {
-    const a = _aulas.find(x => x.id === id);
-    const quando = a ? `${fmtDataCurta(a.data)}${a.hora ? ' às ' + a.hora : ''}` : 'desta aula';
-    if (!confirm(`Confirmar que o treino de ${quando} foi feito?\n\n` +
-                 `Isso não pode ser desfeito. Depois só dá para registrar o esforço, ` +
-                 `as observações e a execução dos exercícios.`)) return;
-  }
+  // Treino feito é fato consumado. Em vez do confirm() do navegador, abre o
+  // modal de conclusão: mesma confirmação, e aproveita o único momento em que
+  // energia, fadiga e esforço têm resposta confiável.
+  if (status === 'realizada') return abrirConclusao(id);
   try {
     await api('PATCH', `/api/aulas/${id}`, { status });
     toast(status === 'realizada' ? 'Treino registrado como feito' : 'Aula marcada como ' + status);
@@ -428,7 +424,10 @@ async function marcar(id, status) {
 function limparAula() {
   const sg = document.getElementById('a-aviso-sugestao');
   if (sg) sg.style.display = 'none';
-  ['a-id','a-hora','a-foco','a-pse','a-descricao','a-obs','a-valor'].forEach(i => setVal(i, ''));
+  ['a-id','a-hora','a-foco','a-descricao','a-obs','a-valor'].forEach(i => setVal(i, ''));
+  document.getElementById('a-pse').innerHTML = opcoesEscala(PSE_ESCALA, '');
+  document.getElementById('a-energia').innerHTML = opcoesEscala(NIVEIS, '');
+  document.getElementById('a-fadiga').innerHTML = opcoesEscala(NIVEIS, '');
   preencherCad('a-professor', 'professor', ''); preencherCad('a-local', 'local', '');
   setVal('a-duracao', 60); setVal('a-status', 'agendada'); setVal('a-tipo', '');
   setVal('a-modalidade', 'com_personal');
@@ -470,7 +469,10 @@ async function abrirAula(id, remarcar) {
     preencherCad('a-local', 'local', a.local || '');
     preencherCad('a-professor', 'professor', a.professor || '');
     setVal('a-plano', a.plano_id || ''); setVal('a-modelo', a.modelo_id || '');
-    setVal('a-pse', a.pse || ''); setVal('a-descricao', a.descricao || ''); setVal('a-obs', a.obs || '');
+    document.getElementById('a-pse').innerHTML = opcoesEscala(PSE_ESCALA, a.pse);
+    document.getElementById('a-energia').innerHTML = opcoesEscala(NIVEIS, a.energia);
+    document.getElementById('a-fadiga').innerHTML = opcoesEscala(NIVEIS, a.fadiga);
+    setVal('a-descricao', a.descricao || ''); setVal('a-obs', a.obs || '');
     setVal('a-valor', a.valor ?? '');
     setVal('a-modalidade', a.modalidade || 'com_personal');
     (a.exercicios || []).forEach(it => addLinhaEx('a-ex', it));
@@ -502,7 +504,10 @@ function aplicarModoAula() {
   const novo = !val('a-id');
   const comecou = jaComecou(val('a-data'), val('a-hora'));
   document.getElementById('w-status').style.display = novo ? 'none' : '';
-  document.getElementById('w-pse').style.display = (novo || !comecou) ? 'none' : '';
+  // Energia, fadiga e esforço acompanham o PSE: só existem depois que o treino
+  // aconteceu. Na hora de marcar a aula não há resposta possível.
+  ['w-pse', 'w-energia', 'w-fadiga'].forEach(i =>
+    document.getElementById(i).style.display = (novo || !comecou) ? 'none' : '');
   // Treino sozinho não tem professor, não consome pacote e não custa nada: os três
   // campos só existem no acordo com o personal. Deixá-los na tela pedindo resposta
   // convida a preencher um dado que o app depois trata como zero.
@@ -585,14 +590,17 @@ async function salvarAula() {
   const pode = podeMontarTreino(val('a-modalidade'));
   // Aula já feita: só o registro do que aconteceu.
   // Numa aula do personal, o aluno só envia o que é dele — o backend recusa o resto
+  // Como o corpo estava ao fim do treino — do aluno, em qualquer modalidade
+  const feedback = {
+    obs: val('a-obs') || null, pse: num('a-pse'),
+    energia: num('a-energia'), fadiga: num('a-fadiga')
+  };
   const body = concluida ? (pode ? {
     // Autor do treino corrigindo o que de fato foi feito
-    obs: val('a-obs') || null, pse: num('a-pse'),
+    ...feedback,
     tipo: val('a-tipo') || null, foco: val('a-foco') || null,
     descricao: val('a-descricao') || null, modelo_id: num('a-modelo')
-  } : {
-    obs: val('a-obs') || null, pse: num('a-pse')
-  }) : pode ? {
+  } : { ...feedback }) : pode ? {
     data: val('a-data'), hora: val('a-hora') || null, duracao_min: num('a-duracao') || 60,
     tipo: val('a-tipo') || null, foco: val('a-foco') || null, local: val('a-local') || null,
     // Campos escondidos no modo sozinho vão nulos: campo oculto que continua
@@ -602,12 +610,10 @@ async function salvarAula() {
     modalidade: val('a-modalidade'),
     plano_id: val('a-modalidade') === 'sozinho' ? null : num('a-plano'),
     modelo_id: num('a-modelo'),
-    descricao: val('a-descricao') || null, obs: val('a-obs') || null, pse: num('a-pse'),
-    valor: num('a-valor')
+    descricao: val('a-descricao') || null, valor: num('a-valor'), ...feedback
   } : {
     data: val('a-data'), hora: val('a-hora') || null, status: val('a-status'),
-    modalidade: val('a-modalidade'), obs: val('a-obs') || null, pse: num('a-pse'),
-    valor: num('a-valor')
+    modalidade: val('a-modalidade'), valor: num('a-valor'), ...feedback
   };
   try {
     let aulaId = id;
@@ -1609,15 +1615,8 @@ async function tmConcluir() {
   if (a.status === 'realizada') { toast('Treino já estava marcado como feito'); return tmFechar(); }
   if (!a.ja_comecou) { toast('Este treino ainda não começou', 'err'); return; }
   const total = a.exercicios.length, feitos = a.exercicios.filter(e => e.feito).length;
-  const aviso = feitos < total
-    ? `Você marcou ${feitos} de ${total} exercícios. `
-    : '';
-  if (!confirm(`${aviso}Confirmar que o treino foi FEITO? Isso não pode ser desfeito.`)) return;
-  try {
-    await api('PATCH', `/api/aulas/${a.id}`, { status: 'realizada' });
-    toast('Treino registrado');
-    tmFechar();
-  } catch (e) { toast(e.message, 'err'); }
+  abrirConclusao(a.id, feitos < total ? `Você marcou ${feitos} de ${total} exercícios.` : '',
+                 () => tmFechar());
 }
 
 // ══════════════════════════════ CORPO ════════════════════════════════════════
@@ -2000,4 +1999,69 @@ async function pixVisto(id) {
   try { await api('POST', `/api/pagamentos/${id}/visto`); } catch (e) {}
   fecharModal('m-pix-aviso');
   verificarAvisosPix();   // encadeia o próximo aviso, se houver
+}
+
+// ══════════════════════ CONCLUSÃO DO TREINO ══════════════════════════════════
+// Energia, fadiga e esforço são perguntados NA HORA de concluir. Perguntar
+// depois é perguntar à memória, não ao corpo — e foi por não perguntar em lugar
+// nenhum que a linha "Esforço médio" do painel do mês vivia em S/D.
+//
+// As duas escalas de 1 a 5 são simétricas em torno de "Normal" e monotônicas.
+// Escala com dois rótulos que significam quase o mesmo ("média" e "normal",
+// "alta" e "acima da média") gera dado que não se compara com ele mesmo.
+const NIVEIS = [
+  { v: 1, t: 'Muito baixa' }, { v: 2, t: 'Baixa' }, { v: 3, t: 'Normal' },
+  { v: 4, t: 'Alta' },        { v: 5, t: 'Muito alta' }
+];
+
+// Borg CR10: o número continua de 1 a 10 (é o que o histórico e o painel usam),
+// mas cada um ganha o rótulo que torna a pergunta respondível em pé, suado.
+const PSE_ESCALA = [
+  { v: 1,  t: 'Muito leve' },        { v: 2,  t: 'Leve' },
+  { v: 3,  t: 'Moderada' },          { v: 4,  t: 'Pouco intensa' },
+  { v: 5,  t: 'Intensa' },           { v: 6,  t: 'Intensa +' },
+  { v: 7,  t: 'Muito intensa' },     { v: 8,  t: 'Muito intensa +' },
+  { v: 9,  t: 'Muito, muito intensa' }, { v: 10, t: 'Exaustão máxima' }
+];
+
+function opcoesEscala(escala, valor) {
+  return '<option value="">—</option>' + escala.map(o =>
+    `<option value="${o.v}"${String(o.v) === String(valor ?? '') ? ' selected' : ''}>${o.v} · ${o.t}</option>`
+  ).join('');
+}
+
+function rotuloEscala(escala, v) {
+  const o = escala.find(x => x.v === Number(v));
+  return o ? `${o.v} · ${o.t}` : '—';
+}
+
+let _cc = { id: null, depois: null };
+
+function abrirConclusao(id, aviso, depois) {
+  const a = (_aulas.find(x => x.id === id)) || (_tm.aula && _tm.aula.id === id ? _tm.aula : null);
+  _cc = { id, depois: depois || null };
+  const quando = a ? `${fmtDataCurta(a.data)}${a.hora ? ' às ' + a.hora : ''}` : 'deste treino';
+  document.getElementById('cc-aviso').innerHTML =
+    `${aviso ? `<b>${esc(aviso)}</b> ` : ''}Confirmar que o treino de <b>${quando}</b> foi feito?
+     <b>Isso não pode ser desfeito.</b>`;
+  document.getElementById('cc-energia').innerHTML = opcoesEscala(NIVEIS, a && a.energia);
+  document.getElementById('cc-fadiga').innerHTML = opcoesEscala(NIVEIS, a && a.fadiga);
+  document.getElementById('cc-pse').innerHTML = opcoesEscala(PSE_ESCALA, a && a.pse);
+  setVal('cc-obs', (a && a.obs) || '');
+  abrirModal('m-concluir');
+}
+
+async function confirmarConclusao() {
+  const body = {
+    status: 'realizada',
+    energia: num('cc-energia'), fadiga: num('cc-fadiga'), pse: num('cc-pse'),
+    obs: val('cc-obs') || null
+  };
+  try {
+    await api('PATCH', `/api/aulas/${_cc.id}`, body);
+    fecharModal('m-concluir');
+    toast('Treino registrado como feito');
+    if (_cc.depois) _cc.depois();
+    loadAgenda();
+  } catch (e) { toast(e.message, 'err'); }
 }

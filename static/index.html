@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="FITPLAN">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2316A34A'/%3E%3Cg stroke='white' stroke-width='9' stroke-linecap='round'%3E%3Cpath d='M30 32v36M70 32v36M18 42v16M82 42v16M30 50h40'/%3E%3C/g%3E%3C/svg%3E">
-<link rel="stylesheet" href="/static/css/style.css?v=5.6">
+<link rel="stylesheet" href="/static/css/style.css?v=5.7">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -439,6 +439,34 @@
 
 </div><!-- /app -->
 
+<!-- ══ Modal: Concluir treino ══
+     Substitui o confirm() do navegador. O momento de fechar o treino é o único
+     em que energia, fadiga e esforço têm resposta confiável — perguntar depois é
+     perguntar à memória, não ao corpo. ══ -->
+<div class="modal-bg" id="m-concluir">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-head">
+      <span class="modal-title">Concluir treino</span>
+      <button class="btn btn-sm btn-ghost" onclick="fecharModal('m-concluir')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="aviso" id="cc-aviso" style="margin-bottom:14px"></div>
+      <div><label>Nível de energia</label><select id="cc-energia"></select></div>
+      <div><label>Nível de fadiga</label><select id="cc-fadiga"></select></div>
+      <div><label>Percepção de esforço (PSE)</label><select id="cc-pse"></select></div>
+      <div><label>Como foi o treino</label>
+        <textarea id="cc-obs" rows="3" placeholder="dor, sono, o que rendeu, o que travou…"></textarea></div>
+      <p class="muted" style="font-size:11px;margin-top:10px">
+        Todos opcionais — dá para preencher ou corrigir depois, dentro da aula.
+      </p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="fecharModal('m-concluir')">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarConclusao()">Confirmar treino feito</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ Aviso prioritário de pagamento ══
      Fica POR CIMA da tela inicial porque confirmar o pagamento é a única coisa no app
      que a outra pessoa está esperando. Um cartão no meio da página seria rolado
@@ -643,7 +671,9 @@
           <select id="a-professor" onchange="cadNovoSe(this,'professor')"></select></div>
         <div id="w-plano"><label>Pacote</label><select id="a-plano"><option value="">—</option></select></div>
         <div><label>Modelo de treino</label><select id="a-modelo"><option value="">—</option></select></div>
-        <div id="w-pse"><label>PSE (esforço 1-10)</label><input id="a-pse" type="number" min="1" max="10"></div>
+        <div id="w-pse"><label>Percepção de esforço</label><select id="a-pse"></select></div>
+        <div id="w-energia"><label>Nível de energia</label><select id="a-energia"></select></div>
+        <div id="w-fadiga"><label>Nível de fadiga</label><select id="a-fadiga"></select></div>
         <div id="w-valor"><label>Valor da aula (R$)</label><input id="a-valor" type="number" step="0.01" min="0"></div>
         <div class="form-full" style="margin-top:-4px">
           <span style="font-size:11px;color:var(--muted)">Remarcação: mude a data para outro dia <b>do mesmo mês</b>. Outro mês é recusado — aquele mês já foi pago.</span>
@@ -867,6 +897,6 @@
 </div>
 
 <div class="toast-wrap" id="toasts"></div>
-<script src="/static/js/app.js?v=5.6"></script>
+<script src="/static/js/app.js?v=5.7"></script>
 </body>
 </html>

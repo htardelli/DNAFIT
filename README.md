@@ -85,8 +85,12 @@ tela cheia: um exercício por vez, botões grandes, nada de calendário.
   sem zoom, com uma mão só.
 - Marcou a série? O **descanso começa sozinho**, com o tempo que está na prescrição.
   Vibra e apita quando zera.
-- No fim, **Concluir treino** marca a aula como feita. Como sempre, isso pede
-  confirmação e **não pode ser desfeito**.
+- No fim, **Concluir treino** marca a aula como feita. A confirmação vem junto de
+  três perguntas rápidas: **nível de energia**, **nível de fadiga** (1 a 5) e
+  **percepção de esforço** (1 a 10, com rótulo — de *Muito leve* a *Exaustão
+  máxima*), mais um espaço para escrever como foi. Todos opcionais, e todos
+  corrigíveis depois dentro da aula. O mesmo acontece ao marcar ✅ na lista.
+  Como sempre, dar o treino por feito **não pode ser desfeito**.
 - **Treino individual já feito continua editável por você.** O treino é seu: se
   esqueceu de listar um exercício, ou fez diferente do planejado, corrija depois —
   o registro precisa bater com o que realmente aconteceu. O que não muda mais é o

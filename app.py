@@ -87,7 +87,8 @@ MODALIDADES = ("com_personal", "sozinho")
 # Numa aula COM O PERSONAL, o treino é prescrição do professor: o aluno só lê.
 # Ele continua dono do registro do dia — pode remarcar, dizer se aconteceu e
 # lançar o feedback. Estes são os campos que ele pode mexer nessas aulas.
-CAMPOS_ALUNO_EM_AULA_DO_PERSONAL = {"data", "hora", "status", "obs", "pse", "valor", "modalidade"}
+CAMPOS_ALUNO_EM_AULA_DO_PERSONAL = {"data", "hora", "status", "obs", "pse", "valor",
+                                    "modalidade", "energia", "fadiga"}
 
 
 def _pode_montar_treino(user, aula) -> bool:
@@ -336,7 +337,13 @@ def _ja_comecou(data_iso: str, hora: Optional[str]) -> bool:
 # aceita o registro do que aconteceu — esforço percebido, observações e a execução
 # dos exercícios (carga usada, o que foi feito).
 STATUS_IRREVERSIVEL = "realizada"
-CAMPOS_APOS_REALIZADA = {"obs", "pse"}
+CAMPOS_APOS_REALIZADA = {"obs", "pse", "energia", "fadiga"}
+
+# Escalas de 1 a 5, iguais para energia e fadiga: simétricas em torno de "Normal"
+# e monotônicas. Escala com dois rótulos que significam quase a mesma coisa
+# ("média" e "normal", "alta" e "acima da média") produz dado que não se compara
+# com ele mesmo — daqui a três meses ele não lembra qual dos dois usou.
+NIVEIS_1A5 = 5
 # Quem MONTA o treino também pode corrigi-lo depois de feito: num treino
 # individual o aluno é autor e executor, e o que ele fez de verdade pode não ser
 # o que estava escrito antes. Isso não afeta o que a aula foi (data, horário,
@@ -531,6 +538,8 @@ class AulaIn(BaseModel):
 
 
 class AulaUpdate(BaseModel):
+    energia: Optional[int] = None
+    fadiga: Optional[int] = None
     data: Optional[str] = None
     hora: Optional[str] = None
     duracao_min: Optional[int] = None
@@ -960,6 +969,12 @@ async def editar_aula(aid: int, body: AulaUpdate, user=Depends(get_current_user)
         raise HTTPException(400, f"Status deve ser um de: {', '.join(STATUS_VALIDOS)}")
     if "modalidade" in data and data["modalidade"] not in MODALIDADES:
         raise HTTPException(400, f"Modalidade deve ser um de: {', '.join(MODALIDADES)}")
+    for campo in ("energia", "fadiga"):
+        v = data.get(campo)
+        if v is not None and not (1 <= int(v) <= NIVEIS_1A5):
+            raise HTTPException(400, f"{campo.capitalize()} deve ficar entre 1 e {NIVEIS_1A5}.")
+    if data.get("pse") is not None and not (1 <= int(data["pse"]) <= 10):
+        raise HTTPException(400, "Percepção de esforço deve ficar entre 1 e 10.")
     # Aula com o personal: a prescrição é dele. O aluno remarca, diz se aconteceu e
     # registra o feedback, mas não reescreve o treino.
     if not _pode_montar_treino(user, atual):
