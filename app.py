@@ -1156,6 +1156,50 @@ async def registrar_serie(aid: int, eid: int, ordem: int, body: SerieIn,
     return out
 
 
+@app.post("/api/aulas/{aid}/usar-modelo/{mid}")
+async def usar_modelo(aid: int, mid: int, user=Depends(get_current_user),
+                      db: aiosqlite.Connection = Depends(get_db)):
+    """Leva um modelo da biblioteca para um dia da agenda.
+
+    O que acontece depende de quem manda no treino daquele dia:
+      • treino sozinho (ou usuário personal) → o modelo é APLICADO na hora;
+      • aula com o personal, pedida pelo aluno → vira SUGESTÃO, e o personal
+        decide. O aluno não passa por cima da prescrição de quem ele contratou,
+        mas também não fica sem voz sobre o que quer treinar.
+    """
+    aula = await (await db.execute("SELECT * FROM aulas WHERE id=?", (aid,))).fetchone()
+    if not aula:
+        raise HTTPException(404, "Aula não encontrada")
+    mod = await (await db.execute("SELECT * FROM modelos WHERE id=?", (mid,))).fetchone()
+    if not mod:
+        raise HTTPException(404, "Modelo não encontrado")
+    if aula["status"] in ("realizada", "falta", "cancelada"):
+        raise HTTPException(400, "Esta aula já foi encerrada.")
+
+    if _pode_montar_treino(user, aula):
+        await db.execute("DELETE FROM aula_exercicios WHERE aula_id=?", (aid,))
+        n = await _copiar_modelo(db, aid, mid)
+        await db.execute(
+            "UPDATE aulas SET modelo_id=?, sugestao_modelo_id=NULL,"
+            " tipo=COALESCE(NULLIF(tipo,''),?), foco=COALESCE(NULLIF(foco,''),?),"
+            " atualizado_em=CURRENT_TIMESTAMP WHERE id=?",
+            (mid, mod["tipo"], mod["foco"], aid))
+        await db.commit()
+        return {"acao": "aplicado", "itens": n, "modelo": mod["nome"]}
+
+    await db.execute("UPDATE aulas SET sugestao_modelo_id=?, atualizado_em=CURRENT_TIMESTAMP"
+                     " WHERE id=?", (mid, aid))
+    await db.commit()
+    return {"acao": "sugerido", "modelo": mod["nome"]}
+
+
+@app.delete("/api/aulas/{aid}/sugestao", status_code=204)
+async def limpar_sugestao(aid: int, user=Depends(get_current_user),
+                          db: aiosqlite.Connection = Depends(get_db)):
+    await db.execute("UPDATE aulas SET sugestao_modelo_id=NULL WHERE id=?", (aid,))
+    await db.commit()
+
+
 @app.post("/api/aulas/{aid}/aplicar-modelo/{mid}")
 async def aplicar_modelo(aid: int, mid: int, substituir: bool = True,
                          user=Depends(get_current_user), db: aiosqlite.Connection = Depends(get_db)):
@@ -1170,8 +1214,11 @@ async def aplicar_modelo(aid: int, mid: int, substituir: bool = True,
     if substituir:
         await db.execute("DELETE FROM aula_exercicios WHERE aula_id=?", (aid,))
     n = await _copiar_modelo(db, aid, mid)
+    # Aplicar o modelo atende a sugestão pendente — deixá-la depois disso só
+    # faria o personal ver de novo um pedido que ele já cumpriu.
     await db.execute(
-        "UPDATE aulas SET modelo_id=?, tipo=COALESCE(NULLIF(tipo,''),?), foco=COALESCE(NULLIF(foco,''),?),"
+        "UPDATE aulas SET modelo_id=?, sugestao_modelo_id=NULL,"
+        " tipo=COALESCE(NULLIF(tipo,''),?), foco=COALESCE(NULLIF(foco,''),?),"
         " atualizado_em=CURRENT_TIMESTAMP WHERE id=?",
         (mid, mod["tipo"], mod["foco"], aid))
     await db.commit()
@@ -1647,7 +1694,9 @@ async def resumo(mes: Optional[str] = None, user=Depends(get_current_user),
 
     def _linha(rotulo, valor, base, sufixo="", texto=""):
         if not base:
-            return {"rotulo": rotulo, "pct": None, "valor": None, "texto": "sem dados"}
+            # "S/D" e não "sem dados": a coluna da direita é estreita e alinhada;
+            # texto longo desalinha as quatro barras.
+            return {"rotulo": rotulo, "pct": None, "valor": None, "texto": "S/D"}
         pct = max(0, min(100, round(100.0 * valor / base)))
         return {"rotulo": rotulo, "pct": pct,
                 "valor": f"{valor:g}/{base:g}{sufixo}" if not texto else texto}

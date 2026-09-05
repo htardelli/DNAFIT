@@ -212,6 +212,8 @@ projeto (já está no `.gitignore`).
 | PUT | `/api/aulas/{id}/exercicios` | substitui a lista de exercícios |
 | PATCH | `/api/aulas/{aid}/exercicios/{eid}/series/{ordem}` | registra UMA série (carga, reps, feito) |
 | POST | `/api/aulas/{id}/aplicar-modelo/{mid}` | copia um modelo para a aula |
+| POST | `/api/aulas/{id}/usar-modelo/{mid}` | aplica **ou** sugere, conforme quem manda no treino do dia |
+| DELETE | `/api/aulas/{id}/sugestao` | retira a sugestão pendente |
 | GET/POST/PATCH/DELETE | `/api/exercicios*` | biblioteca |
 | GET | `/api/exercicios/catalogo` | contagem por grupo muscular e por equipamento |
 | POST | `/api/exercicios/{id}/favorito` | alterna favorito |
@@ -300,6 +302,12 @@ projeto (já está no `.gitignore`).
     remedir.
 - Ícones: status usa 📅 ✅ ❌ 🚫; ações usam ✅ (concluir) e 🔁 (remarcar). **Nenhum
   ícone de ação pode repetir o ícone de status da mesma linha.**
+- No celular a barra lateral é `display: none` **e o botão de menu também** — logo,
+  tudo que existir só na sidebar fica inalcançável no telefone. Foi assim que o
+  "Sair" ficou inacessível até virar um cartão em Ajustes. Antes de pôr qualquer
+  ação só na lateral, confira se ela tem caminho no celular.
+- O painel do mês usa **`S/D`** (não "sem dados"): a coluna da direita é estreita e
+  alinhada, e texto longo desalinha as quatro barras.
 
 ### Modo treino (a tela da academia)
 
@@ -352,6 +360,20 @@ treino depois da aula — ou o aluno acrescentar um exercício no meio do treino
 apagaria as cargas recém-lançadas. Quem mexer nessa rota tem de manter esse resgate.
 As séries nascem preguiçosamente (`_garantir_series`) na primeira leitura da aula;
 subir de 3 para 6 séries reabre o exercício que estava concluído.
+
+### Sugestão de modelo
+
+`aulas.sugestao_modelo_id` é o modelo que o **aluno pediu** para uma aula do
+personal. Fica separado de `modelo_id`, que é a prescrição de fato: **pedido não
+é prescrição**. `POST /api/aulas/{id}/usar-modelo/{mid}` decide sozinho:
+
+- quem **pode montar** aquele treino (aula `sozinho`, ou usuário `personal`) →
+  o modelo é **aplicado**, substituindo os exercícios do dia;
+- o aluno numa aula **com o personal** → vira **sugestão**, e o personal decide.
+
+Aplicar um modelo (por qualquer caminho) **limpa a sugestão** — deixá-la faria o
+personal reencontrar um pedido que ele já atendeu. Aula encerrada (realizada,
+falta ou cancelada) recusa as duas ações.
 
 ### Segurança já implementada
 

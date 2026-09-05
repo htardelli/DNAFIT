@@ -83,6 +83,20 @@ tela cheia: um exercício por vez, botões grandes, nada de calendário.
 - **Treino futuro não é registrável.** Os botões ficam travados até o horário chegar —
   a mesma regra que já valia para o status.
 
+## Levar um treino da biblioteca para um dia
+
+Em **Treinos → Modelos**, cada modelo tem **Usar em um dia**. Ele lista as próximas
+aulas agendadas e você escolhe uma:
+
+- se o dia for **individual**, o modelo é **aplicado na hora**;
+- se for **com o personal**, ele vira **sugestão**. O personal abre a aula, vê
+  *"Sugestão do aluno: Treino A"* e decide se aplica. Você pede o que quer treinar
+  sem passar por cima de quem você contratou — e pode **retirar** o pedido quando
+  quiser.
+
+Aplicar um modelo substitui os exercícios daquele dia; se já houver treino montado,
+o app pergunta antes.
+
 ## Progresso → Corpo
 
 Registre o peso quando quiser (**Registrar peso**) e o app mostra:
@@ -147,6 +161,11 @@ o app mostra um aviso no topo de todas as telas.
 > use uma senha que você não use em mais nada.
 
 ---
+
+## Sair do aplicativo
+
+**Ajustes → Minha conta → Sair do aplicativo.** No computador o botão também está
+no rodapé da barra lateral.
 
 ## Perfis de acesso
 

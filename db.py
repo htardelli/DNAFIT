@@ -269,6 +269,9 @@ async def init_db(hash_fn):
         await _add_col("aulas", "valor", "REAL")
         await _add_col("aulas", "modalidade", "TEXT")
         await _add_col("exercicios", "favorito", "INTEGER DEFAULT 0")
+        # Modelo que o ALUNO pediu para uma aula do personal. Fica separado de
+        # modelo_id (a prescrição de fato) — pedido não é prescrição.
+        await _add_col("aulas", "sugestao_modelo_id", "INTEGER")
         # aulas criadas antes desta coluna eram todas com o personal
         await db.execute("UPDATE aulas SET modalidade='com_personal' "
                          "WHERE modalidade IS NULL OR modalidade=''")

@@ -399,6 +399,7 @@ tbody tr:hover { background: var(--card-2); }
 }
 .aviso a { color: inherit; font-weight: 700; }
 .aviso-ok { background: var(--primary-l); border-left-color: var(--primary); color: var(--primary-d); }
+.aviso-info { background: var(--info-l); border-left-color: var(--info); color: var(--info-ink); }
 :root[data-theme="dark"] .aviso-ok { color: var(--primary); }
 
 .toast-wrap { position: fixed; bottom: 24px; right: 20px; z-index: 300; display: flex; flex-direction: column; gap: 8px; }
@@ -659,3 +660,24 @@ tbody tr:hover { background: var(--card-2); }
 .tabs-cat { overflow-x: auto; scrollbar-width: none; }
 .tabs-cat::-webkit-scrollbar { display: none; }
 .tabs-cat .tab { white-space: nowrap; flex: none; }
+
+
+/* ── Escolher o dia para um modelo ─────────────────────────────────────────
+   Lista das próximas aulas: escolher entre dias que já existem na agenda é mais
+   seguro do que digitar uma data e criar aula duplicada sem perceber. */
+.dia-op {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 12px;
+  margin-bottom: 8px; cursor: pointer; text-align: left; font-family: var(--font);
+  background: var(--card-2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text);
+}
+.dia-op:active { border-color: var(--primary); background: var(--primary-l); }
+/* data em cima, dia da semana e situação embaixo — em linha única elas quebram
+   no meio da frase e a data perde o destaque */
+.dia-op > span:first-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dia-op .q { font-weight: 800; font-size: 14px; }
+.dia-op .s { font-size: 11px; color: var(--muted); font-weight: 600; }
+.dia-op .m { margin-left: auto; font-size: 11px; font-weight: 800; padding: 3px 8px;
+             border-radius: 999px; flex: none; }
+.dia-op .m.p { background: var(--info-l); color: var(--info-ink); }
+.dia-op .m.i { background: var(--primary-l); color: var(--primary-d); }

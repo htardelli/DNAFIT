@@ -180,6 +180,9 @@ async function carregarConfig() {
 }
 
 function loadConfig() {
+  document.getElementById('cfg-usuario').textContent = _user.nome || '';
+  document.getElementById('cfg-usuario-sub').textContent =
+    `${_user.email || ''} · ${_user.role === 'aluno' ? 'Aluno (dono da conta)' : 'Personal'}`;
   setVal('cfg-valor', _cfg.valor_hora || '');
   setVal('cfg-hora', _cfg.hora_padrao || '');
   setVal('cfg-duracao', _cfg.duracao_padrao || 60);
@@ -271,7 +274,7 @@ function renderKpis(r) {
   cards.splice(1, 0, {
     l: dono ? 'Pago no mês' : 'A receber no mês',
     v: fmtR(f.valor_mes || 0), sm: true,
-    s: `${f.aulas_pagas || 0} aulas × ${fmtR(f.valor_hora || 0)} · ${fmtR(f.a_treinar || 0)} ainda por treinar`
+    s: `${f.aulas_pagas || 0} ${f.aulas_pagas === 1 ? 'aula' : 'aulas'} × ${fmtR(f.valor_hora || 0)} · ${fmtR(f.a_treinar || 0)} ainda por treinar`
   });
   if (f.perdido) {
     cards.push({ l: 'Valor perdido', v: fmtR(f.perdido),
@@ -410,6 +413,8 @@ async function marcar(id, status) {
 
 // ── Modal de aula ─────────────────────────────────────────────────────────────
 function limparAula() {
+  const sg = document.getElementById('a-aviso-sugestao');
+  if (sg) sg.style.display = 'none';
   ['a-id','a-hora','a-foco','a-local','a-professor','a-pse','a-descricao','a-obs','a-valor'].forEach(i => setVal(i, ''));
   setVal('a-duracao', 60); setVal('a-status', 'agendada'); setVal('a-tipo', '');
   setVal('a-modalidade', 'com_personal');
@@ -453,6 +458,7 @@ async function abrirAula(id, remarcar) {
     document.getElementById('a-btn-del').style.display = '';
     document.getElementById('a-recorrencia').style.display = 'none';   // recorrência só na criação
     aplicarModoAula();
+    renderSugestao(a);
     abrirModal('m-aula');
     // veio do botão de remarcar: leva direto ao campo da data
     if (remarcar) setTimeout(() => {
@@ -785,7 +791,10 @@ function renderModelos() {
       <td>${esc(m.tipo || '—')}</td>
       <td>${esc(m.foco || '—')}</td>
       <td class="right">${m.qtd_exercicios || 0}</td>
-      <td class="right"><button class="btn btn-sm" onclick="abrirModelo(${m.id})">Abrir</button></td>
+      <td class="right">
+        <button class="btn btn-sm btn-primary" onclick="usarModelo(${m.id})">Usar em um dia</button>
+        <button class="btn btn-sm" onclick="abrirModelo(${m.id})">Abrir</button>
+      </td>
     </tr>`).join('');
 }
 
@@ -1293,11 +1302,14 @@ async function carregarHoje() {
         : 'treino ainda não montado'
     ].filter(Boolean).join(' · ');
 
+    const sug = a.sugestao_modelo_id
+      ? (_modelos.find(m => m.id === a.sugestao_modelo_id) || {}).nome : null;
     const podeTreinar = n > 0 && a.ja_comecou && a.status !== 'cancelada';
     box.innerHTML = `<div class="hoje-card">
       <div class="et">${d.eh_hoje ? 'Treino de hoje' : 'Próximo treino'}</div>
       <h3>${esc(titulo)}</h3>
       <div class="sub">${esc(quando)} · ${esc(linhas)}</div>
+      ${sug ? `<div class="sub" style="margin-top:6px">💡 sugestão do aluno: <b>${esc(sug)}</b></div>` : ''}
       <div class="acoes">
         ${podeTreinar ? `<button class="btn btn-primary" onclick="tmAbrir(${a.id})">Treinar agora</button>` : ''}
         <button class="btn btn-ghost" onclick="abrirAula(${a.id})">
@@ -1612,4 +1624,95 @@ async function salvarMedida() {
     await api('POST', '/api/medidas', body);
     fecharModal('m-medida'); toast('Medida registrada'); loadCorpo();
   } catch (e) { toast(e.message, 'err'); }
+}
+
+
+// ══════════════════ LEVAR UM MODELO PARA UM DIA DA AGENDA ════════════════════
+// A biblioteca só valia enquanto alguém abrisse a aula e fosse buscar o modelo
+// lá dentro. Aqui o caminho é o inverso: escolhe-se o treino e depois o dia.
+let _umModelo = null;
+
+async function usarModelo(mid) {
+  const m = _modelos.find(x => x.id === mid);
+  if (!m) return;
+  _umModelo = m;
+  document.getElementById('um-titulo').textContent = `Usar "${m.nome}" em qual dia?`;
+  const lista = document.getElementById('um-lista');
+  lista.innerHTML = '<div class="empty">Carregando…</div>';
+  abrirModal('m-usar-modelo');
+
+  const hoje = iso(new Date());
+  const fim = iso(new Date(Date.now() + 90 * 864e5));
+  let aulas;
+  try { aulas = await api('GET', `/api/aulas?ini=${hoje}&fim=${fim}`); }
+  catch (e) { lista.innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+
+  const abertas = aulas.filter(a => a.status === 'agendada');
+  if (!abertas.length) {
+    lista.innerHTML = `<div class="empty">
+      Nenhuma aula agendada daqui para a frente.<br>
+      Marque os dias do mês na Agenda e volte aqui.</div>`;
+    return;
+  }
+  lista.innerHTML = abertas.map(a => {
+    const solo = (a.modalidade || 'com_personal') === 'sozinho';
+    const jaTem = (a.qtd_exercicios || 0) > 0;
+    return `<button class="dia-op" onclick="usarModeloNoDia(${a.id}, ${solo}, ${jaTem})">
+      <span>
+        <span class="q">${fmtDataCurta(a.data)}${a.hora ? ' · ' + a.hora : ''}</span>
+        <span class="s">${esc(diaSemana(a.data))}${jaTem ? ` · já tem ${a.qtd_exercicios} ${a.qtd_exercicios === 1 ? 'exercício' : 'exercícios'}` : ' · sem treino'}</span>
+      </span>
+      <span class="m ${solo ? 'i' : 'p'}">${solo ? 'Individual' : 'Personal'}</span>
+    </button>`;
+  }).join('');
+}
+
+async function usarModeloNoDia(aid, solo, jaTem) {
+  // Aplicar substitui o treino inteiro do dia. Se já existe conteúdo lá,
+  // perguntar é obrigatório — é trabalho de alguém que some.
+  const vaiAplicar = solo || _user.role === 'personal';
+  if (vaiAplicar && jaTem &&
+      !confirm('Este dia já tem exercícios. Aplicar o modelo substitui todos eles. Continuar?')) return;
+  try {
+    const r = await api('POST', `/api/aulas/${aid}/usar-modelo/${_umModelo.id}`);
+    fecharModal('m-usar-modelo');
+    toast(r.acao === 'aplicado'
+      ? `"${r.modelo}" aplicado (${r.itens} exercícios)`
+      : `"${r.modelo}" sugerido ao personal`);
+    loadAgenda();
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+async function removerSugestao(aid) {
+  try {
+    await api('DELETE', `/api/aulas/${aid}/sugestao`);
+    toast('Sugestão removida');
+    abrirAula(aid);
+    loadAgenda();
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+async function aceitarSugestao(aid, mid) {
+  try {
+    await api('POST', `/api/aulas/${aid}/aplicar-modelo/${mid}`);
+    toast('Modelo aplicado na aula');
+    abrirAula(aid);
+    loadAgenda();
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+// Sugestão do aluno dentro da aula. Quem pode montar vê o botão de aplicar;
+// quem sugeriu vê o de retirar. Ninguém fica preso ao pedido de ontem.
+function renderSugestao(a) {
+  const box = document.getElementById('a-aviso-sugestao');
+  if (!a.sugestao_modelo_id) { box.style.display = 'none'; return; }
+  const m = _modelos.find(x => x.id === a.sugestao_modelo_id);
+  const nome = m ? m.nome : `modelo #${a.sugestao_modelo_id}`;
+  const podeAplicar = podeMontarTreino(a.modalidade);
+  box.style.display = '';
+  box.innerHTML = `<b>Sugestão do aluno:</b> ${esc(nome)}.
+    ${podeAplicar
+      ? `<button class="btn btn-sm btn-primary" style="margin-left:8px" onclick="aceitarSugestao(${a.id}, ${a.sugestao_modelo_id})">Aplicar</button>`
+      : ''}
+    <button class="btn btn-sm" style="margin-left:6px" onclick="removerSugestao(${a.id})">Retirar</button>`;
 }
