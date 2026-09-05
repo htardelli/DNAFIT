@@ -1465,6 +1465,187 @@ async def remover_plano(pid: int, user=Depends(get_current_user),
     await db.commit()
 
 
+# ── Pagamentos (Pix informado × recebido) ─────────────────────────────────────
+# O dinheiro anda por fora do sistema. O app registra as DUAS pontas do combinado:
+# o aluno informa que enviou o Pix, o personal confirma que recebeu. Enquanto uma
+# ponta faltar, o pagamento fica pendente e aparece em destaque para os dois — é
+# essa pendência visível que evita o "eu mandei" / "não caiu" no mês seguinte.
+class PagamentoIn(BaseModel):
+    mes: Optional[str] = None       # 'YYYY-MM' — None → mês corrente
+    valor: float
+    data_pix: Optional[str] = None  # None → hoje
+    obs: Optional[str] = None
+
+
+async def _pagamento(db, pid: int) -> dict:
+    row = await (await db.execute("""
+        SELECT p.*, ui.nome informou_nome, uc.nome confirmou_nome
+          FROM pagamentos p
+     LEFT JOIN usuarios ui ON ui.id = p.informado_por
+     LEFT JOIN usuarios uc ON uc.id = p.confirmado_por
+         WHERE p.id = ?
+    """, (pid,))).fetchone()
+    if not row:
+        raise HTTPException(404, "Pagamento não encontrado")
+    d = dict(row)
+    d["confirmado"] = bool(d["confirmado_em"])
+    return d
+
+
+@app.get("/api/pagamentos")
+async def listar_pagamentos(ano: Optional[int] = None, user=Depends(get_current_user),
+                            db: aiosqlite.Connection = Depends(get_db)):
+    ano = ano or _hoje().year
+    cur = await db.execute("""
+        SELECT p.*, ui.nome informou_nome, uc.nome confirmou_nome
+          FROM pagamentos p
+     LEFT JOIN usuarios ui ON ui.id = p.informado_por
+     LEFT JOIN usuarios uc ON uc.id = p.confirmado_por
+         WHERE substr(p.mes,1,4) = ?
+      ORDER BY p.mes DESC, p.id DESC
+    """, (str(ano),))
+    itens = []
+    for r in await cur.fetchall():
+        d = dict(r); d["confirmado"] = bool(d["confirmado_em"]); itens.append(d)
+    return itens
+
+
+@app.get("/api/pagamentos/avisos")
+async def avisos_pagamento(user=Depends(get_current_user),
+                           db: aiosqlite.Connection = Depends(get_db)):
+    """O que precisa aparecer POR CIMA da tela inicial, para este usuário.
+
+    Personal: Pix informado e ainda não confirmado — é ação dele.
+    Aluno:    Pix que o personal confirmou e ele ainda não viu — é notícia dele.
+    """
+    if user["role"] == "personal":
+        cur = await db.execute("""
+            SELECT p.*, ui.nome informou_nome FROM pagamentos p
+         LEFT JOIN usuarios ui ON ui.id = p.informado_por
+             WHERE p.confirmado_em IS NULL ORDER BY p.data_pix, p.id
+        """)
+        return {"tipo": "confirmar", "itens": [dict(r) for r in await cur.fetchall()]}
+
+    cur = await db.execute("""
+        SELECT p.*, uc.nome confirmou_nome FROM pagamentos p
+     LEFT JOIN usuarios uc ON uc.id = p.confirmado_por
+         WHERE p.confirmado_em IS NOT NULL AND p.visto_aluno = 0
+      ORDER BY p.confirmado_em
+    """)
+    return {"tipo": "confirmado", "itens": [dict(r) for r in await cur.fetchall()]}
+
+
+@app.post("/api/pagamentos", status_code=201)
+async def informar_pagamento(body: PagamentoIn, user=Depends(require_dono),
+                             db: aiosqlite.Connection = Depends(get_db)):
+    """Quem paga é o aluno — só ele informa o Pix."""
+    if body.valor is None or body.valor <= 0:
+        raise HTTPException(400, "Informe o valor do Pix.")
+    mes = (body.mes or _hoje().strftime("%Y-%m")).strip()
+    if not re.fullmatch(r"\d{4}-\d{2}", mes):
+        raise HTTPException(400, "Mês inválido (use AAAA-MM).")
+    data = _parse_data(body.data_pix) if body.data_pix else _hoje().isoformat()
+    if data > _hoje().isoformat():
+        raise HTTPException(400, "A data do Pix não pode ser no futuro.")
+    cur = await db.execute("""
+        INSERT INTO pagamentos (mes, valor, data_pix, obs, informado_por)
+        VALUES (?,?,?,?,?)
+    """, (mes, round(body.valor, 2), data, (body.obs or "").strip() or None, user["id"]))
+    await db.commit()
+    return await _pagamento(db, cur.lastrowid)
+
+
+@app.post("/api/pagamentos/{pid}/confirmar")
+async def confirmar_pagamento(pid: int, user=Depends(get_current_user),
+                              db: aiosqlite.Connection = Depends(get_db)):
+    """Só o personal confirma: confirmar é atestar que o dinheiro CHEGOU, e quem
+    sabe disso é quem recebe. Deixar o aluno confirmar o próprio Pix esvaziaria
+    o registro — viraria só um bilhete dele para ele mesmo."""
+    if user["role"] != "personal":
+        raise HTTPException(403, "Só o personal confirma o recebimento do Pix.")
+    p = await _pagamento(db, pid)
+    if p["confirmado"]:
+        return p
+    await db.execute(
+        "UPDATE pagamentos SET confirmado_por=?, confirmado_em=CURRENT_TIMESTAMP, visto_aluno=0"
+        " WHERE id=?", (user["id"], pid))
+    await db.commit()
+    return await _pagamento(db, pid)
+
+
+@app.post("/api/pagamentos/{pid}/visto", status_code=204)
+async def marcar_visto(pid: int, user=Depends(require_dono),
+                       db: aiosqlite.Connection = Depends(get_db)):
+    await db.execute("UPDATE pagamentos SET visto_aluno=1 WHERE id=?", (pid,))
+    await db.commit()
+
+
+@app.delete("/api/pagamentos/{pid}", status_code=204)
+async def remover_pagamento(pid: int, user=Depends(require_dono),
+                            db: aiosqlite.Connection = Depends(get_db)):
+    """O aluno cancela o próprio aviso enquanto ele não foi confirmado — erro de
+    digitação acontece. Depois de confirmado, o registro é dos dois: fica."""
+    p = await _pagamento(db, pid)
+    if p["confirmado"]:
+        raise HTTPException(400, "Pagamento já confirmado pelo personal — não dá para apagar.")
+    await db.execute("DELETE FROM pagamentos WHERE id=?", (pid,))
+    await db.commit()
+
+
+# ── Cadastros de apoio (professores e locais) ─────────────────────────────────
+TIPOS_CADASTRO = ("professor", "local")
+
+
+class CadastroIn(BaseModel):
+    tipo: str
+    nome: str
+
+
+@app.get("/api/cadastros")
+async def listar_cadastros(tipo: Optional[str] = None, user=Depends(get_current_user),
+                           db: aiosqlite.Connection = Depends(get_db)):
+    sql, params = "SELECT * FROM cadastros WHERE ativo=1", []
+    if tipo:
+        sql += " AND tipo=?"; params.append(tipo)
+    sql += " ORDER BY tipo, nome"
+    cur = await db.execute(sql, params)
+    itens = [dict(r) for r in await cur.fetchall()]
+    return {t: [i["nome"] for i in itens if i["tipo"] == t] for t in TIPOS_CADASTRO} \
+        if not tipo else itens
+
+
+@app.post("/api/cadastros", status_code=201)
+async def criar_cadastro(body: CadastroIn, user=Depends(get_current_user),
+                         db: aiosqlite.Connection = Depends(get_db)):
+    """Os dois perfis mantêm a base: o aluno cadastra o professor com quem vai
+    treinar, o personal cadastra o local onde atende. É lista de apoio, não
+    controle de acesso — por isso não passa por require_dono."""
+    tipo = (body.tipo or "").strip().lower()
+    nome = (body.nome or "").strip()
+    if tipo not in TIPOS_CADASTRO:
+        raise HTTPException(400, "Tipo inválido.")
+    if not nome:
+        raise HTTPException(400, "Informe o nome.")
+    existe = await (await db.execute(
+        "SELECT id, ativo FROM cadastros WHERE tipo=? AND nome=?", (tipo, nome))).fetchone()
+    if existe:
+        await db.execute("UPDATE cadastros SET ativo=1 WHERE id=?", (existe["id"],))
+        await db.commit()
+        return {"id": existe["id"], "tipo": tipo, "nome": nome}
+    cur = await db.execute("INSERT INTO cadastros (tipo, nome) VALUES (?,?)", (tipo, nome))
+    await db.commit()
+    return {"id": cur.lastrowid, "tipo": tipo, "nome": nome}
+
+
+@app.delete("/api/cadastros/{cid}", status_code=204)
+async def remover_cadastro(cid: int, user=Depends(get_current_user),
+                           db: aiosqlite.Connection = Depends(get_db)):
+    """Desativa em vez de apagar: as aulas antigas guardam o nome em texto, e
+    sumir com a opção não deve reescrever o passado."""
+    await db.execute("UPDATE cadastros SET ativo=0 WHERE id=?", (cid,))
+    await db.commit()
+
+
 # ── Corpo (peso e medidas) ────────────────────────────────────────────────────
 class MedidaIn(BaseModel):
     data: Optional[str] = None     # None → hoje
@@ -1709,6 +1890,16 @@ async def resumo(mes: Optional[str] = None, user=Depends(get_current_user),
         _linha("Carga registrada", com_carga, realizadas),
     ]
 
+    # Pix do mês: informado × confirmado. O valor devido continua vindo da agenda;
+    # isto é só o rastro de que o dinheiro andou.
+    pg = await (await db.execute("""
+        SELECT COALESCE(SUM(valor),0) t,
+               COALESCE(SUM(CASE WHEN confirmado_em IS NOT NULL THEN valor END),0) c,
+               COUNT(*) n,
+               SUM(CASE WHEN confirmado_em IS NULL THEN 1 ELSE 0 END) pend
+          FROM pagamentos WHERE mes = ?
+    """, (ini[:7],))).fetchone()
+
     return {
         "mes": ini[:7], "inicio": ini, "fim": fim,
         "painel": painel, "pse_media": round(pse_media, 1) if pse_media else None,
@@ -1729,6 +1920,10 @@ async def resumo(mes: Optional[str] = None, user=Depends(get_current_user),
             "a_treinar": _v("agendada"),             # pago, ainda por acontecer
             "perdido": _v("falta", "cancelada"),     # pago e não treinado — não volta
             "aulas_perdidas": _n("falta", "cancelada"),
+            "pix_informado": round(pg["t"], 2),
+            "pix_confirmado": round(pg["c"], 2),
+            "pix_pendentes": pg["pend"] or 0,
+            "falta_pagar": round(max(valor_mes - pg["t"], 0), 2),
         },
     }
 

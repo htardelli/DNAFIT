@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="FITPLAN">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2316A34A'/%3E%3Cg stroke='white' stroke-width='9' stroke-linecap='round'%3E%3Cpath d='M30 32v36M70 32v36M18 42v16M82 42v16M30 50h40'/%3E%3C/g%3E%3C/svg%3E">
-<link rel="stylesheet" href="/static/css/style.css?v=5.2">
+<link rel="stylesheet" href="/static/css/style.css?v=5.3">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -261,6 +261,14 @@
 
     <div class="card">
       <div class="card-head">
+        <span class="card-title">Pagamentos (Pix)</span>
+        <button class="btn btn-sm btn-primary" id="btn-pix" onclick="abrirPix()">Informei o Pix</button>
+      </div>
+      <div class="card-body" id="pix-lista"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
         <span class="card-title">Fechamento mês a mês</span>
         <div class="row">
           <span class="muted" id="fin-hora"></span>
@@ -355,6 +363,36 @@
       </div>
     </div>
 
+    <div class="card">
+      <div class="card-head"><span class="card-title">Professores e locais</span></div>
+      <div class="card-body">
+        <p class="muted" style="font-size:12px;margin:0 0 12px">
+          Alimenta as listas de <b>Professor</b> e <b>Local</b> na hora de marcar as aulas.
+          Os dois perfis podem cadastrar. Remover uma opção não altera as aulas já marcadas.
+        </p>
+        <div class="grid g2">
+          <div>
+            <label>Professores</label>
+            <div class="row" style="margin-bottom:8px">
+              <input id="cad-prof-novo" placeholder="Nome do professor"
+                     onkeydown="if(event.key==='Enter')addCadastro('professor')">
+              <button class="btn btn-sm btn-primary" onclick="addCadastro('professor')">+</button>
+            </div>
+            <div id="cad-professores"></div>
+          </div>
+          <div>
+            <label>Locais</label>
+            <div class="row" style="margin-bottom:8px">
+              <input id="cad-local-novo" placeholder="Nome do local"
+                     onkeydown="if(event.key==='Enter')addCadastro('local')">
+              <button class="btn btn-sm btn-primary" onclick="addCadastro('local')">+</button>
+            </div>
+            <div id="cad-locais"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="card" id="card-usuarios" style="display:none">
       <div class="card-head">
         <span class="card-title">Acessos</span>
@@ -400,6 +438,48 @@
 </nav>
 
 </div><!-- /app -->
+
+<!-- ══ Aviso prioritário de pagamento ══
+     Fica POR CIMA da tela inicial porque confirmar o Pix é a única coisa no app
+     que a outra pessoa está esperando. Um cartão no meio da página seria rolado
+     e esquecido — e o combustível de discussão sobre dinheiro é justamente o
+     "eu avisei" / "eu não vi". ══ -->
+<div class="modal-bg" id="m-pix-aviso">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-head">
+      <span class="modal-title" id="pix-av-titulo">Pagamento</span>
+    </div>
+    <div class="modal-body" id="pix-av-corpo"></div>
+    <div class="modal-foot" id="pix-av-acoes"></div>
+  </div>
+</div>
+
+<!-- ══ Modal: Informar Pix ══ -->
+<div class="modal-bg" id="m-pix">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-head">
+      <span class="modal-title">Informar Pix ao personal</span>
+      <button class="btn btn-sm btn-ghost" onclick="fecharModal('m-pix')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="grid g2">
+        <div><label>Mês referente</label><input type="month" id="px-mes"></div>
+        <div class="form-dt"><label>Data do Pix</label><input type="date" id="px-data"></div>
+      </div>
+      <div><label>Valor enviado (R$) *</label>
+        <input type="number" step="0.01" min="0" id="px-valor" inputmode="decimal"></div>
+      <div><label>Observação</label><input id="px-obs" placeholder="chave usada, parcela…"></div>
+      <p class="muted" style="font-size:11px;margin-top:10px">
+        O personal recebe este aviso em destaque ao abrir o app e confirma o recebimento.
+        Enquanto ele não confirmar, o pagamento fica marcado como <b>pendente</b> para os dois.
+      </p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="fecharModal('m-pix')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarPix()">Informar Pix</button>
+    </div>
+  </div>
+</div>
 
 <!-- ══ MODO TREINO ══ Tela cheia, um exercício por vez. ══ -->
 <div class="treino-modo" id="modo-treino">
@@ -543,7 +623,7 @@
             <option value="sozinho">Sozinho</option>
           </select>
         </div>
-        <div><label>Status</label>
+        <div id="w-status"><label>Status</label>
           <select id="a-status">
             <option value="agendada">Agendada</option>
             <option value="realizada">Realizada</option>
@@ -559,12 +639,14 @@
           </select>
         </div>
         <div><label>Foco (grupos)</label><input id="a-foco" placeholder="Peito e tríceps"></div>
-        <div><label>Local</label><input id="a-local" placeholder="Academia / casa"></div>
-        <div><label>Professor</label><input id="a-professor"></div>
+        <div><label>Local</label>
+          <select id="a-local" onchange="cadNovoSe(this,'local')"></select></div>
+        <div><label>Professor</label>
+          <select id="a-professor" onchange="cadNovoSe(this,'professor')"></select></div>
         <div><label>Pacote</label><select id="a-plano"><option value="">—</option></select></div>
         <div><label>Modelo de treino</label><select id="a-modelo"><option value="">—</option></select></div>
-        <div><label>PSE (esforço 1-10)</label><input id="a-pse" type="number" min="1" max="10"></div>
-        <div><label>Valor da aula (R$)</label><input id="a-valor" type="number" step="0.01" min="0"></div>
+        <div id="w-pse"><label>PSE (esforço 1-10)</label><input id="a-pse" type="number" min="1" max="10"></div>
+        <div id="w-valor"><label>Valor da aula (R$)</label><input id="a-valor" type="number" step="0.01" min="0"></div>
         <div class="form-full" style="margin-top:-4px">
           <span style="font-size:11px;color:var(--muted)">Remarcação: mude a data para outro dia <b>do mesmo mês</b>. Outro mês é recusado — aquele mês já foi pago.</span>
         </div>
@@ -645,8 +727,10 @@
       <div class="form-grid">
         <div class="form-dt"><label>Horário</label><input id="dm-hora" type="time"></div>
         <div><label>Duração (min)</label><input id="dm-duracao" type="number" min="10" step="5"></div>
-        <div><label>Professor</label><input id="dm-prof"></div>
-        <div><label>Local</label><input id="dm-local"></div>
+        <div><label>Professor</label>
+          <select id="dm-prof" onchange="cadNovoSe(this,'professor')"></select></div>
+        <div><label>Local</label>
+          <select id="dm-local" onchange="cadNovoSe(this,'local')"></select></div>
         <div><label>Valor da aula (R$)</label><input id="dm-valor" type="number" step="0.01" min="0" oninput="dmTotal()"></div>
       </div>
     </div>
@@ -785,6 +869,6 @@
 </div>
 
 <div class="toast-wrap" id="toasts"></div>
-<script src="/static/js/app.js?v=5.2"></script>
+<script src="/static/js/app.js?v=5.3"></script>
 </body>
 </html>

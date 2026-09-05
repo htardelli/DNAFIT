@@ -170,6 +170,38 @@ CREATE TABLE IF NOT EXISTS aula_series (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_as_item_ordem ON aula_series(aula_exercicio_id, ordem);
 
+-- Pagamento do mês. O aluno paga por Pix ANTES de treinar; o dinheiro sai por
+-- fora do sistema, então o app registra as duas pontas do combinado: o aluno
+-- informa que enviou, o personal confirma que recebeu. Sem a confirmação, o
+-- pagamento fica pendente e aparece em destaque para os dois.
+CREATE TABLE IF NOT EXISTS pagamentos (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    mes            TEXT NOT NULL,          -- 'YYYY-MM' a que o pagamento se refere
+    valor          REAL NOT NULL,
+    data_pix       DATE NOT NULL,          -- quando o Pix foi enviado
+    obs            TEXT,
+    informado_por  INTEGER,
+    informado_em   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    confirmado_por INTEGER,
+    confirmado_em  TIMESTAMP,              -- NULL = ainda não confirmado
+    visto_aluno    INTEGER NOT NULL DEFAULT 0,   -- o aluno já viu a confirmação?
+    FOREIGN KEY (informado_por)  REFERENCES usuarios(id) ON DELETE SET NULL,
+    FOREIGN KEY (confirmado_por) REFERENCES usuarios(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_pg_mes ON pagamentos(mes);
+
+-- Base de professores e locais. Digitar o mesmo nome à mão em toda aula gera
+-- "Academia", "academia" e "Academia " como três lugares diferentes — e aí o
+-- filtro e o histórico deixam de fechar.
+CREATE TABLE IF NOT EXISTS cadastros (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    tipo      TEXT NOT NULL,     -- 'professor' | 'local'
+    nome      TEXT NOT NULL,
+    ativo     INTEGER NOT NULL DEFAULT 1,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cad_tipo_nome ON cadastros(tipo, nome);
+
 -- Medidas corporais. Uma linha por dia (a última do dia vence) — peso é o único
 -- campo obrigatório; o resto é opcional e entra quando ele medir.
 CREATE TABLE IF NOT EXISTS medidas (
@@ -226,6 +258,28 @@ SEED_EXERCICIOS = [
     ("Alongamento posterior", "Mobilidade", "Peso corporal", "Sentado, alcance os pés mantendo a coluna longa."),
     ("Mobilidade de quadril", "Mobilidade", "Peso corporal", "Rotações e aberturas controladas de quadril."),
     ("Mobilidade torácica",   "Mobilidade", "Peso corporal", "Rotação de tronco em quatro apoios."),
+]
+
+
+# Exercícios acrescentados DEPOIS do seed original. O seed só roda com a tabela
+# vazia, então quem já usa o app nunca os receberia. Estes entram uma única vez,
+# controlados por uma marca na config — assim um exercício apagado de propósito
+# não ressuscita no próximo start.
+SEED_EXTRA = [
+    ("seed_cardio_corrida", [
+        ("Corrida na esteira",    "Cardio", "Máquina",
+         "Anote na observação o tempo, a distância e a velocidade (ex.: 30 min · 5 km · 10 km/h). Deixe a carga em branco."),
+        ("Corrida na rua",        "Cardio", "Livre",
+         "Corrida ao ar livre. Anote na observação tempo, distância e ritmo (ex.: 35 min · 6 km · 5:50/km)."),
+        ("Caminhada na esteira",  "Cardio", "Máquina",
+         "Caminhada contínua, com ou sem inclinação. Anote tempo, velocidade e inclinação na observação."),
+        ("Caminhada na rua",      "Cardio", "Livre",
+         "Caminhada ao ar livre. Anote tempo e distância na observação."),
+        ("Tiros na esteira",      "Cardio", "Máquina",
+         "Intervalado: alterne tiros fortes e recuperação. Anote o formato na observação (ex.: 8× 400m com 1 min de pausa)."),
+        ("Subida na esteira",     "Cardio", "Máquina",
+         "Caminhada ou trote em inclinação alta. Anote a inclinação e o tempo na observação."),
+    ]),
 ]
 
 
@@ -293,6 +347,35 @@ async def init_db(hash_fn):
                     "INSERT OR IGNORE INTO exercicios (nome, grupo, equipamento, descricao) VALUES (?,?,?,?)",
                     (nome, grupo, equip, desc))
             print(f"[DB] Biblioteca inicial: {len(SEED_EXERCICIOS)} exercícios")
+
+        # Lotes posteriores: entram uma vez só, mesmo em banco já povoado
+        for marca, itens in SEED_EXTRA:
+            ja = await (await db.execute("SELECT 1 FROM config WHERE chave=?", (marca,))).fetchone()
+            if ja:
+                continue
+            for nome, grupo, equip, desc in itens:
+                await db.execute(
+                    "INSERT OR IGNORE INTO exercicios (nome, grupo, equipamento, descricao) VALUES (?,?,?,?)",
+                    (nome, grupo, equip, desc))
+            await db.execute("INSERT OR REPLACE INTO config (chave, valor) VALUES (?, '1')", (marca,))
+            print(f"[DB] Lote {marca}: {len(itens)} exercícios")
+
+        # Base de professores e locais: semeada a partir do que já foi digitado
+        # nas aulas e dos padrões da config, para não começar vazia.
+        n = (await (await db.execute("SELECT COUNT(*) FROM cadastros")).fetchone())[0]
+        if n == 0:
+            for tipo, coluna, chave in (("professor", "professor", "professor_padrao"),
+                                        ("local", "local", "local_padrao")):
+                cur = await db.execute(
+                    f"SELECT DISTINCT TRIM({coluna}) v FROM aulas WHERE TRIM(COALESCE({coluna},'')) <> ''")
+                nomes = {r[0] for r in await cur.fetchall()}
+                padrao = (await (await db.execute(
+                    "SELECT valor FROM config WHERE chave=?", (chave,))).fetchone())
+                if padrao and (padrao[0] or "").strip():
+                    nomes.add(padrao[0].strip())
+                for nome in sorted(nomes):
+                    await db.execute(
+                        "INSERT OR IGNORE INTO cadastros (tipo, nome) VALUES (?,?)", (tipo, nome))
 
         # Usuário dono (aluno). E-mail e senha configuráveis por variável de ambiente.
         n = (await (await db.execute("SELECT COUNT(*) FROM usuarios")).fetchone())[0]

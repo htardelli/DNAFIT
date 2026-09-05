@@ -42,6 +42,14 @@ function fmtR(n) { return 'R$ ' + fmtN(n, 2); }
 function iso(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function fmtData(s) { if (!s) return '—'; const [a,m,d] = s.slice(0,10).split('-'); return `${d}/${m}/${a}`; }
 function fmtDataCurta(s) { if (!s) return '—'; const [a,m,d] = s.slice(0,10).split('-'); return `${d}/${m}/${a.slice(2)}`; }
+// 'YYYY-MM' → 'setembro/2026'. Referência de mês é para ler, não para decifrar.
+function fmtMes(s) {
+  if (!s) return '—';
+  const [a, m] = s.split('-');
+  const nome = ['janeiro','fevereiro','março','abril','maio','junho','julho',
+                'agosto','setembro','outubro','novembro','dezembro'][Number(m) - 1];
+  return nome ? `${nome}/${a}` : s;
+}
 function diaSemana(s) {
   const D = ['dom','seg','ter','qua','qui','sex','sáb'];
   return D[new Date(s + 'T12:00:00').getDay()];
@@ -107,8 +115,8 @@ function nav(page) {
   if (page === 'agenda') loadAgenda();
   if (page === 'treinos') { loadExercicios(); loadModelos(); }
   if (page === 'frequencia') loadFrequencia();
-  if (page === 'financeiro') { loadFinanceiro(); loadPlanos(); }
-  if (page === 'config') { loadConfig(); loadUsuarios(); }
+  if (page === 'financeiro') { loadFinanceiro(); loadPlanos(); loadPix(); }
+  if (page === 'config') { loadConfig(); loadUsuarios(); renderCadastros(); }
 }
 
 function abrirMenu() { document.getElementById('sidebar').classList.add('open'); document.getElementById('overlay').classList.add('show'); }
@@ -131,8 +139,12 @@ async function iniciar() {
   // App publicado na internet: senha inicial ainda em uso é o risco nº 1
   document.getElementById('aviso-senha').style.display = _user.senha_padrao ? '' : 'none';
   document.getElementById('card-usuarios').style.display = _user.role === 'aluno' ? '' : 'none';
-  await Promise.all([carregarExercicios(), carregarModelos(), carregarPlanos(), carregarConfig()]);
+  await Promise.all([carregarExercicios(), carregarModelos(), carregarPlanos(),
+                     carregarConfig(), carregarCadastros()]);
   loadAgenda();
+  // Por cima de tudo: o aviso de Pix é a única coisa no app que a outra pessoa
+  // está esperando de você.
+  verificarAvisosPix();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -239,6 +251,7 @@ async function loadAgenda() {
       api('GET', `/api/aulas?mes=${mes}`)
     ]);
     _aulas = aulas;
+    _resumoMes = resumo;
     renderKpis(resumo);
     renderPainel(resumo);
     renderCal();
@@ -415,7 +428,8 @@ async function marcar(id, status) {
 function limparAula() {
   const sg = document.getElementById('a-aviso-sugestao');
   if (sg) sg.style.display = 'none';
-  ['a-id','a-hora','a-foco','a-local','a-professor','a-pse','a-descricao','a-obs','a-valor'].forEach(i => setVal(i, ''));
+  ['a-id','a-hora','a-foco','a-pse','a-descricao','a-obs','a-valor'].forEach(i => setVal(i, ''));
+  preencherCad('a-professor', 'professor', ''); preencherCad('a-local', 'local', '');
   setVal('a-duracao', 60); setVal('a-status', 'agendada'); setVal('a-tipo', '');
   setVal('a-modalidade', 'com_personal');
   setVal('a-plano', ''); setVal('a-modelo', ''); setVal('a-repetir', 0);
@@ -430,10 +444,15 @@ function novaAula(dataIso) {
   setVal('a-data', dataIso || iso(new Date()));
   setVal('a-hora', _cfg.hora_padrao || '');
   setVal('a-duracao', _cfg.duracao_padrao || 60);
-  setVal('a-professor', _cfg.professor_padrao || '');
-  setVal('a-local', _cfg.local_padrao || '');
+  preencherCad('a-professor', 'professor', _cfg.professor_padrao || '');
+  preencherCad('a-local', 'local', _cfg.local_padrao || '');
+  // O valor não aparece na hora de marcar (é o da configuração vigente), mas
+  // continua sendo enviado: é ele que fecha o mês no Financeiro.
   setVal('a-valor', _cfg.valor_hora_vigente || _cfg.valor_hora || '');
-  if (planoAtivo) { setVal('a-plano', planoAtivo.id); if (planoAtivo.professor) setVal('a-professor', planoAtivo.professor); }
+  if (planoAtivo) {
+    setVal('a-plano', planoAtivo.id);
+    if (planoAtivo.professor) preencherCad('a-professor', 'professor', planoAtivo.professor);
+  }
   document.getElementById('m-aula-titulo').textContent = 'Nova aula';
   document.getElementById('a-btn-del').style.display = 'none';
   document.getElementById('a-recorrencia').style.display = '';
@@ -448,7 +467,8 @@ async function abrirAula(id, remarcar) {
     setVal('a-id', a.id); setVal('a-data', a.data); setVal('a-hora', a.hora || '');
     setVal('a-duracao', a.duracao_min || 60); setVal('a-status', a.status);
     setVal('a-tipo', a.tipo || ''); setVal('a-foco', a.foco || '');
-    setVal('a-local', a.local || ''); setVal('a-professor', a.professor || '');
+    preencherCad('a-local', 'local', a.local || '');
+    preencherCad('a-professor', 'professor', a.professor || '');
     setVal('a-plano', a.plano_id || ''); setVal('a-modelo', a.modelo_id || '');
     setVal('a-pse', a.pse || ''); setVal('a-descricao', a.descricao || ''); setVal('a-obs', a.obs || '');
     setVal('a-valor', a.valor ?? '');
@@ -474,6 +494,17 @@ async function abrirAula(id, remarcar) {
 // Aula com o personal, na visão do aluno: o treino é leitura; o que é dele são
 // data, status e feedback.
 function aplicarModoAula() {
+  // Na hora de MARCAR a aula, três campos não têm resposta possível ainda:
+  //   • status  — aula nova nasce agendada; mudar isso é decisão de depois;
+  //   • PSE     — só existe quando o treino termina;
+  //   • valor   — vem da configuração vigente e é gravado sozinho.
+  // Eles voltam ao editar uma aula que já existe, e o PSE só depois que ela começou.
+  const novo = !val('a-id');
+  const comecou = jaComecou(val('a-data'), val('a-hora'));
+  document.getElementById('w-status').style.display = novo ? 'none' : '';
+  document.getElementById('w-pse').style.display = (novo || !comecou) ? 'none' : '';
+  document.getElementById('w-valor').style.display =
+    (novo || val('a-modalidade') === 'sozinho') ? 'none' : '';
   // Aula já feita: só entram esforço, observações e a execução dos exercícios.
   // Só trava se a aula realmente aconteceu — "feita" num horário futuro é dado
   // inconsistente e precisa continuar corrigível.
@@ -672,8 +703,8 @@ async function abrirDiasDoMes(mod) {
     'Dias de aula — ' + _mesRef.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
   setVal('dm-hora', _cfg.hora_padrao || '');
   setVal('dm-duracao', _cfg.duracao_padrao || 60);
-  setVal('dm-prof', _cfg.professor_padrao || '');
-  setVal('dm-local', _cfg.local_padrao || '');
+  preencherCad('dm-prof', 'professor', _cfg.professor_padrao || '');
+  preencherCad('dm-local', 'local', _cfg.local_padrao || '');
   setVal('dm-valor', _dmMod === 'sozinho' ? 0 : (_cfg.valor_hora_vigente || _cfg.valor_hora || ''));
   dmGrid(_mesRef.getFullYear(), _mesRef.getMonth());
   abrirModal('m-dias');
@@ -1741,4 +1772,193 @@ if (window.visualViewport) {
   // e nem todo iOS emite 'scroll' na VisualViewport nesse momento.
   window.addEventListener('scroll', ajustarBarraInferior, { passive: true });
   document.addEventListener('DOMContentLoaded', ajustarBarraInferior);
+}
+
+// ══════════════ BASE DE PROFESSORES E LOCAIS ═════════════════════════════════
+// Campo livre gerava "Academia", "academia" e "Academia " como três lugares
+// diferentes — e aí filtro e histórico deixam de fechar. Agora é lista.
+let _cad = { professor: [], local: [] };
+let _resumoMes = null;
+
+async function carregarCadastros() {
+  try { _cad = await api('GET', '/api/cadastros'); }
+  catch (e) { _cad = { professor: [], local: [] }; }
+}
+
+// Monta o <select> já com o valor atual selecionado. O valor de uma aula antiga
+// que não esteja mais na base entra como opção própria: sumir com ele
+// reescreveria o passado ao salvar.
+function preencherCad(selectId, tipo, valor) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  const nomes = [...(_cad[tipo] || [])];
+  if (valor && !nomes.includes(valor)) nomes.unshift(valor);
+  sel.innerHTML = '<option value="">—</option>'
+    + nomes.map(n => `<option${n === valor ? ' selected' : ''}>${esc(n)}</option>`).join('')
+    + '<option value="__novo__">+ Cadastrar novo…</option>';
+  sel.value = valor || '';
+}
+
+// Escolher "+ Cadastrar novo…" abre o cadastro sem tirar o usuário da tela.
+async function cadNovoSe(sel, tipo) {
+  if (sel.value !== '__novo__') return;
+  const nome = (prompt(tipo === 'professor' ? 'Nome do professor:' : 'Nome do local:') || '').trim();
+  if (!nome) { preencherCad(sel.id, tipo, ''); return; }
+  try {
+    await api('POST', '/api/cadastros', { tipo, nome });
+    await carregarCadastros();
+    preencherCad(sel.id, tipo, nome);
+    renderCadastros();
+  } catch (e) { toast(e.message, 'err'); preencherCad(sel.id, tipo, ''); }
+}
+
+function renderCadastros() {
+  [['professor', 'cad-professores'], ['local', 'cad-locais']].forEach(([tipo, alvo]) => {
+    const box = document.getElementById(alvo);
+    if (!box) return;
+    const itens = _cad[tipo] || [];
+    box.innerHTML = itens.length
+      ? itens.map(n => `<div class="cad-item"><span>${esc(n)}</span>
+          <button class="btn btn-sm btn-ghost" title="Remover"
+            onclick="delCadastro('${tipo}', '${esc(n).replace(/'/g, "\\'")}')">✕</button></div>`).join('')
+      : '<div class="muted" style="font-size:12px">Nenhum cadastrado.</div>';
+  });
+}
+
+async function addCadastro(tipo) {
+  const campo = document.getElementById(tipo === 'professor' ? 'cad-prof-novo' : 'cad-local-novo');
+  const nome = campo.value.trim();
+  if (!nome) return;
+  try {
+    await api('POST', '/api/cadastros', { tipo, nome });
+    campo.value = '';
+    await carregarCadastros(); renderCadastros();
+    toast('Cadastrado');
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+async function delCadastro(tipo, nome) {
+  try {
+    const itens = await api('GET', `/api/cadastros?tipo=${tipo}`);
+    const alvo = itens.find(i => i.nome === nome);
+    if (!alvo) return;
+    await api('DELETE', `/api/cadastros/${alvo.id}`);
+    await carregarCadastros(); renderCadastros();
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+// ══════════════════════════ PAGAMENTO (PIX) ══════════════════════════════════
+function abrirPix() {
+  const hoje = new Date();
+  setVal('px-mes', mesRefStr());
+  setVal('px-data', iso(hoje));
+  setVal('px-valor', _resumoMes && _resumoMes.financeiro ? _resumoMes.financeiro.falta_pagar || '' : '');
+  setVal('px-obs', '');
+  abrirModal('m-pix');
+}
+
+async function salvarPix() {
+  const valor = num('px-valor');
+  if (!valor || valor <= 0) return toast('Informe o valor do Pix', 'err');
+  try {
+    await api('POST', '/api/pagamentos', {
+      mes: val('px-mes') || null, valor,
+      data_pix: val('px-data') || null, obs: val('px-obs') || null
+    });
+    fecharModal('m-pix');
+    toast('Pix informado — aguardando a confirmação do personal');
+    loadPix();
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+async function loadPix() {
+  const box = document.getElementById('pix-lista');
+  document.getElementById('btn-pix').style.display = _user.role === 'aluno' ? '' : 'none';
+  let itens;
+  try { itens = await api('GET', `/api/pagamentos?ano=${_mesRef.getFullYear()}`); }
+  catch (e) { box.innerHTML = '<div class="empty">Não foi possível carregar.</div>'; return; }
+  if (!itens.length) {
+    box.innerHTML = `<div class="empty">Nenhum Pix informado neste ano.${
+      _user.role === 'aluno' ? ' Use “Informei o Pix” quando pagar.' : ''}</div>`;
+    return;
+  }
+  box.innerHTML = itens.map(p => `
+    <div class="pix-linha">
+      <div>
+        <div class="q">${fmtR(p.valor)} <span class="muted">· ref. ${esc(fmtMes(p.mes))}</span></div>
+        <div class="s">Pix em ${fmtDataCurta(p.data_pix)}${p.obs ? ' · ' + esc(p.obs) : ''}</div>
+      </div>
+      ${p.confirmado
+        ? `<span class="pix-tag ok">✅ recebido</span>`
+        : `<span class="pix-tag pend">⏳ aguardando</span>`}
+      ${(!p.confirmado && _user.role === 'personal')
+        ? `<button class="btn btn-sm btn-primary" onclick="confirmarPix(${p.id})">Confirmar</button>` : ''}
+      ${(!p.confirmado && _user.role === 'aluno')
+        ? `<button class="btn btn-sm btn-ghost" title="Cancelar aviso" onclick="apagarPix(${p.id})">✕</button>` : ''}
+    </div>`).join('');
+}
+
+async function confirmarPix(id) {
+  try {
+    await api('POST', `/api/pagamentos/${id}/confirmar`);
+    toast('Recebimento confirmado');
+    fecharModal('m-pix-aviso');
+    loadPix(); verificarAvisosPix();
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+async function apagarPix(id) {
+  if (!confirm('Cancelar este aviso de Pix?')) return;
+  try { await api('DELETE', `/api/pagamentos/${id}`); loadPix(); }
+  catch (e) { toast(e.message, 'err'); }
+}
+
+// ── Aviso prioritário, por cima da tela inicial ─────────────────────────────
+// Personal: tem Pix esperando confirmação — é ação dele.
+// Aluno: o personal confirmou e ele ainda não viu — é notícia dele.
+async function verificarAvisosPix() {
+  let d;
+  try { d = await api('GET', '/api/pagamentos/avisos'); } catch (e) { return; }
+  const itens = d.itens || [];
+  if (!itens.length) { fecharModal('m-pix-aviso'); return; }
+  const p = itens[0];
+  const titulo = document.getElementById('pix-av-titulo');
+  const corpo = document.getElementById('pix-av-corpo');
+  const acoes = document.getElementById('pix-av-acoes');
+  const resto = itens.length > 1
+    ? `<p class="muted" style="font-size:12px;margin-top:10px">
+         E mais ${itens.length - 1} ${itens.length === 2 ? 'aviso' : 'avisos'} depois deste.</p>` : '';
+
+  if (d.tipo === 'confirmar') {
+    titulo.textContent = '💸 Pix informado — confirme o recebimento';
+    corpo.innerHTML = `
+      <div class="pix-destaque">${fmtR(p.valor)}</div>
+      <p style="margin:10px 0 0">
+        <b>${esc(p.informou_nome || 'O aluno')}</b> informou um Pix enviado em
+        <b>${fmtData(p.data_pix)}</b>, referente a <b>${esc(fmtMes(p.mes))}</b>.
+        ${p.obs ? `<br><span class="muted">${esc(p.obs)}</span>` : ''}
+      </p>
+      <p class="muted" style="font-size:12px;margin-top:10px">
+        Confirme só depois de ver o dinheiro na conta. Enquanto não confirmar,
+        este aviso volta a aparecer toda vez que você abrir o app.</p>${resto}`;
+    acoes.innerHTML = `
+      <button class="btn" onclick="fecharModal('m-pix-aviso')">Ainda não</button>
+      <button class="btn btn-primary" onclick="confirmarPix(${p.id})">Confirmo que recebi</button>`;
+  } else {
+    titulo.textContent = '✅ Pix confirmado';
+    corpo.innerHTML = `
+      <div class="pix-destaque">${fmtR(p.valor)}</div>
+      <p style="margin:10px 0 0">
+        <b>${esc(p.confirmou_nome || 'O personal')}</b> confirmou o recebimento do Pix
+        de <b>${fmtData(p.data_pix)}</b>, referente a <b>${esc(fmtMes(p.mes))}</b>.
+      </p>${resto}`;
+    acoes.innerHTML = `<button class="btn btn-primary" onclick="pixVisto(${p.id})">Entendi</button>`;
+  }
+  abrirModal('m-pix-aviso');
+}
+
+async function pixVisto(id) {
+  try { await api('POST', `/api/pagamentos/${id}/visto`); } catch (e) {}
+  fecharModal('m-pix-aviso');
+  verificarAvisosPix();   // encadeia o próximo aviso, se houver
 }

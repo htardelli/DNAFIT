@@ -218,6 +218,11 @@ projeto (já está no `.gitignore`).
 | GET | `/api/exercicios/catalogo` | contagem por grupo muscular e por equipamento |
 | POST | `/api/exercicios/{id}/favorito` | alterna favorito |
 | GET/POST/DELETE | `/api/medidas*` | medidas corporais — **escrita só o dono** |
+| GET/POST/DELETE | `/api/pagamentos*` | Pix informado (**só o dono informa**) |
+| GET | `/api/pagamentos/avisos` | o que precisa aparecer por cima da tela inicial |
+| POST | `/api/pagamentos/{id}/confirmar` | recebimento — **só o personal** |
+| POST | `/api/pagamentos/{id}/visto` | o aluno deu ciência da confirmação |
+| GET/POST/DELETE | `/api/cadastros*` | professores e locais — **os dois perfis** |
 | GET | `/api/corpo` | peso, IMC, meta, ritmo e série do gráfico |
 | GET/POST/PUT/DELETE | `/api/modelos*` | treinos A/B/C |
 | GET/POST/PUT/DELETE | `/api/planos*` | pacotes |
@@ -298,6 +303,10 @@ projeto (já está no `.gitignore`).
     do container;
   - `min-width: 0` nas células do grid de formulário, senão os mesmos campos
     estouram a coluna;
+  - na tela de **marcar** aula (`novaAula`), `status`, `PSE` e `valor` ficam ocultos:
+    aula nova nasce agendada, PSE só existe depois do treino e o valor vem da
+    configuração vigente. Eles voltam ao **editar** — e o PSE só depois que a aula
+    começou. O valor continua sendo enviado na criação: é ele que fecha o mês;
   - a tabela de aulas cabe exatamente na largura de 390px — mexer em colunas exige
     remedir.
 - Ícones: status usa 📅 ✅ ❌ 🚫; ações usam ✅ (concluir) e 🔁 (remarcar). **Nenhum
@@ -389,6 +398,41 @@ Aplicar um modelo (por qualquer caminho) **limpa a sugestão** — deixá-la far
 personal reencontrar um pedido que ele já atendeu. Aula encerrada (realizada,
 falta ou cancelada) recusa as duas ações.
 
+### Pagamento (Pix informado × recebido)
+
+O dinheiro anda **por fora** do sistema; o app registra as duas pontas do combinado.
+
+| Ponta | Quem faz | Por quê |
+|---|---|---|
+| "Enviei o Pix" | **só o `aluno`** | quem paga é ele |
+| "Recebi" | **só o `personal`** | confirmar é atestar que o dinheiro chegou; deixar o aluno confirmar o próprio Pix transformaria o registro num bilhete dele para ele mesmo |
+
+Enquanto faltar a confirmação, o pagamento é **pendente** e volta a aparecer em
+destaque toda vez que o personal abre o app. Confirmado, o aluno recebe o aviso
+uma vez (`visto_aluno`) e ele para de aparecer. O aluno pode **apagar** um aviso
+ainda não confirmado (erro de digitação); depois de confirmado, o registro é dos
+dois e não sai.
+
+O aviso vive em `#m-pix-aviso`, **por cima da tela inicial**, chamado por
+`verificarAvisosPix()` no `iniciar()`. Isso é deliberado: é a única coisa no app
+que a outra pessoa está esperando, e um cartão no meio da página seria rolado e
+esquecido — que é exatamente como nasce o "eu avisei" / "eu não vi" no mês seguinte.
+
+### Base de professores e locais
+
+`cadastros (tipo, nome)` alimenta os `<select>` de **Professor** e **Local**.
+Campo livre gerava "Academia", "academia" e "Academia " como três lugares
+diferentes. **Os dois perfis** cadastram (é lista de apoio, não controle de
+acesso — por isso não passa por `require_dono`); remover **desativa** em vez de
+apagar, porque as aulas guardam o nome em texto e sumir com a opção não pode
+reescrever o passado. `preencherCad()` mantém como opção o valor de uma aula
+antiga que já não esteja na base.
+
+**Contas de usuário continuam só com o dono.** Pedido de "o personal cadastrar um
+aluno" não foi implementado: `aluno` é o papel de DONO da conta, então um personal
+que criasse um aluno criaria um segundo dono — escalada de privilégio num sistema
+que assume um aluno só. Isso só faz sentido junto com multi-aluno, que não existe.
+
 ### Segurança já implementada
 
 - Chave de assinatura dos tokens sorteada no 1º start e guardada no banco
@@ -400,7 +444,11 @@ falta ou cancelada) recusa as duas ações.
 
 ### Ainda não existe (candidatos a próximo passo, se o usuário pedir)
 
-- Registro de **pagamento** ("pago em tal data") — hoje só há "devido".
+- **Comprovante anexado** ao Pix (hoje só valor, data e observação em texto).
+- **Cardio no volume do mês**: `volume_kg` multiplica séries × reps × carga. Com
+  os exercícios de corrida na biblioteca, se alguém digitar minutos no campo de
+  carga, minutos entram na conta como quilos. A convenção do app é deixar a carga
+  em branco e anotar tempo/distância na observação — mas nada impede o contrário.
 - **Sem foto de progresso** e sem histórico de medidas na tela (o banco guarda
   cintura/quadril/peito/braço/coxa; a tela só mostra o peso).
 - **Backup** dentro do app. O Railway oferece backup do volume na aba *Backups*,
