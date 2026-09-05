@@ -154,6 +154,36 @@ CREATE TABLE IF NOT EXISTS aula_exercicios (
     FOREIGN KEY (aula_id) REFERENCES aulas(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_ae_aula ON aula_exercicios(aula_id);
+
+-- Execução série a série. A prescrição (séries/repetições/descanso) fica em
+-- aula_exercicios; aqui fica o que saiu de fato em cada série: carga, repetições
+-- e o "check" na academia. Sem isto não existe histórico de carga confiável —
+-- uma linha só por exercício não distingue aquecimento de série pesada.
+CREATE TABLE IF NOT EXISTS aula_series (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    aula_exercicio_id INTEGER NOT NULL,
+    ordem             INTEGER NOT NULL DEFAULT 1,   -- 1ª, 2ª, 3ª série…
+    carga             REAL,
+    repeticoes        INTEGER,
+    feito             INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY (aula_exercicio_id) REFERENCES aula_exercicios(id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_as_item_ordem ON aula_series(aula_exercicio_id, ordem);
+
+-- Medidas corporais. Uma linha por dia (a última do dia vence) — peso é o único
+-- campo obrigatório; o resto é opcional e entra quando ele medir.
+CREATE TABLE IF NOT EXISTS medidas (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    data      DATE NOT NULL UNIQUE,
+    peso      REAL,
+    cintura   REAL,
+    quadril   REAL,
+    peito     REAL,
+    braco     REAL,
+    coxa      REAL,
+    obs       TEXT,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 """
 
 # Biblioteca inicial — só é gravada se a tabela estiver vazia (depois é 100% editável)
@@ -205,6 +235,8 @@ DEFAULTS_CONFIG = {
     "duracao_padrao": "60",
     "professor_padrao": "",
     "local_padrao": "",
+    "altura_cm": "0",         # usada no IMC e no painel de corpo
+    "peso_meta": "0",         # meta de peso — 0 = sem meta definida
 }
 
 
@@ -236,6 +268,7 @@ async def init_db(hash_fn):
         await _add_col("planos", "valor_hora", "REAL")
         await _add_col("aulas", "valor", "REAL")
         await _add_col("aulas", "modalidade", "TEXT")
+        await _add_col("exercicios", "favorito", "INTEGER DEFAULT 0")
         # aulas criadas antes desta coluna eram todas com o personal
         await db.execute("UPDATE aulas SET modalidade='com_personal' "
                          "WHERE modalidade IS NULL OR modalidade=''")

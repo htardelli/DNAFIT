@@ -562,6 +562,8 @@ class ConfigIn(BaseModel):
     duracao_padrao: Optional[int] = None
     professor_padrao: Optional[str] = None
     local_padrao: Optional[str] = None
+    altura_cm: Optional[float] = None
+    peso_meta: Optional[float] = None
 
 
 class ItemIn(BaseModel):
@@ -617,6 +619,8 @@ async def obter_config(user=Depends(get_current_user), db: aiosqlite.Connection 
         "duracao_padrao": int(cfg.get("duracao_padrao") or 60),
         "professor_padrao": cfg.get("professor_padrao") or "",
         "local_padrao": cfg.get("local_padrao") or "",
+        "altura_cm": float(cfg.get("altura_cm") or 0),
+        "peso_meta": float(cfg.get("peso_meta") or 0),
         "pode_editar": user["role"] == "aluno",
     }
 
@@ -635,10 +639,93 @@ async def salvar_config(body: ConfigIn, user=Depends(require_dono),
 
 
 # ── Aulas ─────────────────────────────────────────────────────────────────────
+MAX_SERIES = 20   # teto de séries por exercício — evita item com ordem absurda
+
+
+async def _garantir_series(db, item: dict) -> list:
+    """Cria as linhas de série que faltam para o exercício (1..n) e devolve todas.
+
+    Nascem vazias: o registro acontece na academia. O n vem da prescrição — se o
+    personal subir de 3 para 4 séries, a 4ª aparece sem apagar o que já foi feito.
+    """
+    n = min(int(item.get("series") or 0), MAX_SERIES)
+    cur = await db.execute(
+        "SELECT * FROM aula_series WHERE aula_exercicio_id=? ORDER BY ordem", (item["id"],))
+    atuais = [dict(r) for r in await cur.fetchall()]
+    faltando = [o for o in range(1, max(n, 1) + 1) if o not in {s["ordem"] for s in atuais}]
+    if faltando:
+        await db.executemany(
+            "INSERT OR IGNORE INTO aula_series (aula_exercicio_id, ordem) VALUES (?,?)",
+            [(item["id"], o) for o in faltando])
+        await db.commit()
+        cur = await db.execute(
+            "SELECT * FROM aula_series WHERE aula_exercicio_id=? ORDER BY ordem", (item["id"],))
+        atuais = [dict(r) for r in await cur.fetchall()]
+    return atuais
+
+
+async def _ultimas_cargas(db, nomes: list, antes_de: str) -> dict:
+    """Última carga registrada em cada exercício, em aula realizada ANTERIOR a esta.
+
+    É o número que falta na hora de escolher o peso do dia: "da última vez, 40 kg".
+    O app já guardava isso e nunca mostrava.
+    """
+    nomes = [n for n in {x for x in nomes if x}]
+    if not nomes:
+        return {}
+    ph = ",".join("?" * len(nomes))
+    cur = await db.execute(f"""
+        SELECT ae.nome, a.data,
+               MAX(COALESCE(s.carga, ae.carga)) carga,
+               MAX(COALESCE(s.repeticoes, 0))   reps
+          FROM aula_exercicios ae
+          JOIN aulas a ON a.id = ae.aula_id
+     LEFT JOIN aula_series s ON s.aula_exercicio_id = ae.id AND s.feito = 1
+         WHERE a.status = 'realizada' AND a.data < ? AND ae.nome IN ({ph})
+      GROUP BY ae.nome, a.data
+      ORDER BY a.data
+    """, [antes_de] + nomes)
+    ult = {}
+    for r in await cur.fetchall():   # ordem crescente: a última linha de cada nome vence
+        if r["carga"]:
+            ult[r["nome"]] = {"data": r["data"], "carga": r["carga"],
+                              "repeticoes": r["reps"] or None}
+    return ult
+
+
+async def _sincronizar_item(db, eid: int):
+    """Reflete as séries no resumo do exercício: carga = maior carga executada,
+    feito = todas as séries marcadas.
+
+    Mantém /api/evolucao, o volume do mês e as telas antigas funcionando sem que
+    precisem saber que existem séries.
+    """
+    r = await (await db.execute(
+        "SELECT COUNT(*) n, COALESCE(SUM(feito),0) f, MAX(CASE WHEN feito=1 THEN carga END) c "
+        "FROM aula_series WHERE aula_exercicio_id=?", (eid,))).fetchone()
+    sets, params = [], []
+    if r["c"] is not None:
+        sets.append("carga=?"); params.append(r["c"])
+    if r["n"]:
+        sets.append("feito=?"); params.append(1 if r["f"] >= r["n"] else 0)
+    if sets:
+        params.append(eid)
+        await db.execute(f"UPDATE aula_exercicios SET {', '.join(sets)} WHERE id=?", params)
+
+
 async def _itens_da_aula(db, aula_id: int) -> list:
     cur = await db.execute(
         "SELECT * FROM aula_exercicios WHERE aula_id=? ORDER BY ordem, id", (aula_id,))
-    return [dict(r) for r in await cur.fetchall()]
+    itens = [dict(r) for r in await cur.fetchall()]
+    if not itens:
+        return itens
+    row = await (await db.execute("SELECT data FROM aulas WHERE id=?", (aula_id,))).fetchone()
+    ult = await _ultimas_cargas(db, [i["nome"] for i in itens],
+                                row["data"] if row else _hoje().isoformat())
+    for it in itens:
+        it["series_reg"] = await _garantir_series(db, it)
+        it["ultima"] = ult.get(it["nome"])
+    return itens
 
 
 @app.get("/api/aulas")
@@ -670,6 +757,32 @@ async def listar_aulas(ini: Optional[str] = None, fim: Optional[str] = None,
     return aulas
 
 
+@app.get("/api/aulas/hoje")
+async def aula_de_hoje(user=Depends(get_current_user),
+                       db: aiosqlite.Connection = Depends(get_db)):
+    """O treino que importa agora: o de hoje; se não houver, o próximo agendado.
+
+    Existe para que abrir o app na academia dê UM toque até a lista de exercícios,
+    em vez de calendário → dia → aula.
+    """
+    hoje = _hoje().isoformat()
+    row = await (await db.execute(
+        "SELECT * FROM aulas WHERE data=? ORDER BY COALESCE(hora,'99:99') LIMIT 1",
+        (hoje,))).fetchone()
+    eh_hoje = row is not None
+    if not row:
+        row = await (await db.execute(
+            "SELECT * FROM aulas WHERE data > ? AND status='agendada' "
+            "ORDER BY data, COALESCE(hora,'99:99') LIMIT 1", (hoje,))).fetchone()
+    if not row:
+        return {"aula": None, "eh_hoje": False, "hoje": hoje}
+    aula = dict(row)
+    aula["exercicios"] = await _itens_da_aula(db, aula["id"])
+    aula["pode_montar"] = _pode_montar_treino(user, row)
+    aula["ja_comecou"] = _ja_comecou(aula["data"], aula["hora"])
+    return {"aula": aula, "eh_hoje": eh_hoje, "hoje": hoje}
+
+
 @app.get("/api/aulas/{aid}")
 async def obter_aula(aid: int, user=Depends(get_current_user),
                      db: aiosqlite.Connection = Depends(get_db)):
@@ -678,6 +791,8 @@ async def obter_aula(aid: int, user=Depends(get_current_user),
         raise HTTPException(404, "Aula não encontrada")
     aula = dict(row)
     aula["exercicios"] = await _itens_da_aula(db, aid)
+    aula["pode_montar"] = _pode_montar_treino(user, row)
+    aula["ja_comecou"] = _ja_comecou(aula["data"], aula["hora"])
     return aula
 
 
@@ -966,6 +1081,58 @@ async def registrar_execucao(aid: int, eid: int, body: ExecucaoIn,
     return dict(row)
 
 
+class SerieIn(BaseModel):
+    """Uma série executada: o peso que saiu, as repetições que saíram, e o check."""
+    carga: Optional[float] = None
+    repeticoes: Optional[int] = None
+    feito: Optional[bool] = None
+
+
+@app.patch("/api/aulas/{aid}/exercicios/{eid}/series/{ordem}")
+async def registrar_serie(aid: int, eid: int, ordem: int, body: SerieIn,
+                          user=Depends(get_current_user),
+                          db: aiosqlite.Connection = Depends(get_db)):
+    """Registra UMA série do exercício — o que se faz com o celular na mão, na academia.
+
+    Liberado para os dois perfis (quem treinou é quem sabe o que saiu), mas nunca
+    antes do treino começar: não se executa o que ainda não aconteceu.
+    """
+    if not (1 <= ordem <= MAX_SERIES):
+        raise HTTPException(400, f"Série fora do intervalo (1 a {MAX_SERIES})")
+    aula = await (await db.execute("SELECT * FROM aulas WHERE id=?", (aid,))).fetchone()
+    if not aula:
+        raise HTTPException(404, "Aula não encontrada")
+    item = await (await db.execute(
+        "SELECT * FROM aula_exercicios WHERE id=? AND aula_id=?", (eid, aid))).fetchone()
+    if not item:
+        raise HTTPException(404, "Exercício não encontrado nesta aula")
+    if not _ja_comecou(aula["data"], aula["hora"]):
+        raise HTTPException(400, "Este treino ainda não começou — não dá para registrar "
+                                 "séries de um treino futuro.")
+    dados = body.dict(exclude_unset=True)
+    await db.execute("INSERT OR IGNORE INTO aula_series (aula_exercicio_id, ordem) VALUES (?,?)",
+                     (eid, ordem))
+    if dados:
+        sets, params = [], []
+        for k, v in dados.items():
+            sets.append(f"{k}=?")
+            params.append((1 if v else 0) if k == "feito" else v)
+        params += [eid, ordem]
+        await db.execute(
+            f"UPDATE aula_series SET {', '.join(sets)} WHERE aula_exercicio_id=? AND ordem=?",
+            params)
+    await _sincronizar_item(db, eid)
+    await db.execute("UPDATE aulas SET atualizado_em=CURRENT_TIMESTAMP WHERE id=?", (aid,))
+    await db.commit()
+    row = await (await db.execute(
+        "SELECT * FROM aula_exercicios WHERE id=?", (eid,))).fetchone()
+    out = dict(row)
+    cur = await db.execute(
+        "SELECT * FROM aula_series WHERE aula_exercicio_id=? ORDER BY ordem", (eid,))
+    out["series_reg"] = [dict(r) for r in await cur.fetchall()]
+    return out
+
+
 @app.post("/api/aulas/{aid}/aplicar-modelo/{mid}")
 async def aplicar_modelo(aid: int, mid: int, substituir: bool = True,
                          user=Depends(get_current_user), db: aiosqlite.Connection = Depends(get_db)):
@@ -989,18 +1156,59 @@ async def aplicar_modelo(aid: int, mid: int, substituir: bool = True,
 
 
 # ── Exercícios ────────────────────────────────────────────────────────────────
+@app.get("/api/exercicios/catalogo")
+async def catalogo_exercicios(user=Depends(get_current_user),
+                              db: aiosqlite.Connection = Depends(get_db)):
+    """Índice da biblioteca: quantos exercícios por grupo muscular e por equipamento.
+
+    É o que transforma uma lista de 38 nomes numa biblioteca navegável — escolher
+    "Peito" e ver 5 opções é mais rápido do que rolar tudo procurando.
+    """
+    async def _contar(campo):
+        cur = await db.execute(f"""
+            SELECT COALESCE(NULLIF({campo},''),'Sem classificação') k, COUNT(*) n
+              FROM exercicios WHERE ativo=1 GROUP BY k ORDER BY n DESC, k
+        """)
+        return [{"nome": r["k"], "n": r["n"]} for r in await cur.fetchall()]
+
+    total = (await (await db.execute("SELECT COUNT(*) FROM exercicios WHERE ativo=1")).fetchone())[0]
+    favs = (await (await db.execute(
+        "SELECT COUNT(*) FROM exercicios WHERE ativo=1 AND COALESCE(favorito,0)=1")).fetchone())[0]
+    return {"total": total, "favoritos": favs,
+            "grupos": await _contar("grupo"), "equipamentos": await _contar("equipamento")}
+
+
 @app.get("/api/exercicios")
-async def listar_exercicios(grupo: Optional[str] = None, busca: Optional[str] = None,
+async def listar_exercicios(grupo: Optional[str] = None, equipamento: Optional[str] = None,
+                            busca: Optional[str] = None, favoritos: bool = False,
                             user=Depends(get_current_user), db: aiosqlite.Connection = Depends(get_db)):
     sql, params = "SELECT * FROM exercicios WHERE 1=1", []
     if grupo:
-        sql += " AND grupo=?"; params.append(grupo)
+        sql += " AND COALESCE(NULLIF(grupo,''),'Sem classificação')=?"; params.append(grupo)
+    if equipamento:
+        sql += " AND COALESCE(NULLIF(equipamento,''),'Sem classificação')=?"; params.append(equipamento)
+    if favoritos:
+        sql += " AND COALESCE(favorito,0)=1"
     if busca:
         sql += " AND (nome LIKE ? OR descricao LIKE ? OR equipamento LIKE ?)"
         params += [f"%{busca}%"] * 3
     sql += " ORDER BY grupo, nome"
     cur = await db.execute(sql, params)
     return [dict(r) for r in await cur.fetchall()]
+
+
+@app.post("/api/exercicios/{eid}/favorito")
+async def alternar_favorito(eid: int, user=Depends(get_current_user),
+                            db: aiosqlite.Connection = Depends(get_db)):
+    """Favorito é atalho de montagem de treino, não gosto pessoal: os 8 exercícios
+    que ele repete sempre ficam a um toque em vez de a uma busca."""
+    row = await (await db.execute("SELECT favorito FROM exercicios WHERE id=?", (eid,))).fetchone()
+    if not row:
+        raise HTTPException(404, "Exercício não encontrado")
+    novo = 0 if (row["favorito"] or 0) else 1
+    await db.execute("UPDATE exercicios SET favorito=? WHERE id=?", (novo, eid))
+    await db.commit()
+    return {"id": eid, "favorito": bool(novo)}
 
 
 @app.post("/api/exercicios", status_code=201)
@@ -1187,6 +1395,123 @@ async def remover_plano(pid: int, user=Depends(get_current_user),
     await db.commit()
 
 
+# ── Corpo (peso e medidas) ────────────────────────────────────────────────────
+class MedidaIn(BaseModel):
+    data: Optional[str] = None     # None → hoje
+    peso: Optional[float] = None
+    cintura: Optional[float] = None
+    quadril: Optional[float] = None
+    peito: Optional[float] = None
+    braco: Optional[float] = None
+    coxa: Optional[float] = None
+    obs: Optional[str] = None
+
+
+_CAMPOS_MEDIDA = ("peso", "cintura", "quadril", "peito", "braco", "coxa", "obs")
+
+
+def _classificar_imc(imc: float) -> str:
+    """Faixas da OMS. Descrição, não recomendação — o app não dá conselho de saúde."""
+    if imc < 18.5:  return "abaixo do peso"
+    if imc < 25:    return "peso normal"
+    if imc < 30:    return "sobrepeso"
+    if imc < 35:    return "obesidade grau I"
+    if imc < 40:    return "obesidade grau II"
+    return "obesidade grau III"
+
+
+@app.get("/api/medidas")
+async def listar_medidas(limite: int = 60, user=Depends(get_current_user),
+                         db: aiosqlite.Connection = Depends(get_db)):
+    cur = await db.execute("SELECT * FROM medidas ORDER BY data DESC LIMIT ?",
+                           (max(1, min(limite, 500)),))
+    return [dict(r) for r in await cur.fetchall()]
+
+
+@app.post("/api/medidas", status_code=201)
+async def salvar_medida(body: MedidaIn, user=Depends(require_dono),
+                        db: aiosqlite.Connection = Depends(get_db)):
+    """Uma linha por dia: pesar duas vezes no mesmo dia corrige o registro em vez
+    de criar dois pontos no gráfico. Só o dono registra — é o corpo dele."""
+    data = _parse_data(body.data) if body.data else _hoje().isoformat()
+    if data > _hoje().isoformat():
+        raise HTTPException(400, "Não dá para registrar uma medida no futuro.")
+    dados = {k: v for k, v in body.dict(exclude_unset=True).items() if k in _CAMPOS_MEDIDA}
+    if not dados:
+        raise HTTPException(400, "Informe ao menos um valor.")
+    await db.execute("INSERT OR IGNORE INTO medidas (data) VALUES (?)", (data,))
+    sets = ", ".join(f"{k}=?" for k in dados)
+    await db.execute(f"UPDATE medidas SET {sets} WHERE data=?", list(dados.values()) + [data])
+    await db.commit()
+    row = await (await db.execute("SELECT * FROM medidas WHERE data=?", (data,))).fetchone()
+    return dict(row)
+
+
+@app.delete("/api/medidas/{mid}", status_code=204)
+async def remover_medida(mid: int, user=Depends(require_dono),
+                         db: aiosqlite.Connection = Depends(get_db)):
+    await db.execute("DELETE FROM medidas WHERE id=?", (mid,))
+    await db.commit()
+
+
+@app.get("/api/corpo")
+async def corpo(user=Depends(get_current_user), db: aiosqlite.Connection = Depends(get_db)):
+    """Painel de corpo: peso atual, variação, IMC, meta e ritmo REAL.
+
+    O ritmo e a previsão saem de regressão linear sobre os pontos registrados —
+    e só aparecem com histórico suficiente. Sem isso, seria adivinhação vestida
+    de número, que é exatamente o que o app não deve fazer.
+    """
+    cfg = await _config(db)
+    altura = float(cfg.get("altura_cm") or 0)
+    meta = float(cfg.get("peso_meta") or 0)
+
+    cur = await db.execute(
+        "SELECT data, peso FROM medidas WHERE peso IS NOT NULL AND peso > 0 ORDER BY data")
+    pontos = [{"data": r["data"], "peso": r["peso"]} for r in await cur.fetchall()]
+
+    ultima = await (await db.execute("SELECT * FROM medidas ORDER BY data DESC LIMIT 1")).fetchone()
+    atual = pontos[-1]["peso"] if pontos else None
+    anterior = pontos[-2]["peso"] if len(pontos) > 1 else None
+
+    imc = texto_imc = None
+    if atual and altura > 0:
+        imc = round(atual / ((altura / 100) ** 2), 1)
+        texto_imc = _classificar_imc(imc)
+
+    # Ritmo: kg por semana pela reta de mínimos quadrados dos últimos 90 dias.
+    ritmo = previsao = None
+    corte = (_hoje() - timedelta(days=90)).isoformat()
+    recentes = [p for p in pontos if p["data"] >= corte]
+    if len(recentes) >= 3:
+        d0 = date.fromisoformat(recentes[0]["data"])
+        xs = [(date.fromisoformat(p["data"]) - d0).days for p in recentes]
+        ys = [p["peso"] for p in recentes]
+        n, sx, sy = len(xs), sum(xs), sum(ys)
+        sxx = sum(x * x for x in xs)
+        sxy = sum(x * y for x, y in zip(xs, ys))
+        denom = n * sxx - sx * sx
+        if denom and (xs[-1] - xs[0]) >= 14:      # precisa de 2 semanas de janela
+            inclinacao = (n * sxy - sx * sy) / denom      # kg por dia
+            ritmo = round(inclinacao * 7, 2)
+            if meta > 0 and atual and ritmo and (meta - atual) / ritmo > 0:
+                dias = (meta - atual) / inclinacao
+                if 0 < dias <= 730:
+                    previsao = (_hoje() + timedelta(days=round(dias))).isoformat()
+
+    return {
+        "atual": atual, "anterior": anterior,
+        "variacao": round(atual - anterior, 1) if (atual and anterior) else None,
+        "primeira": pontos[0]["peso"] if pontos else None,
+        "altura_cm": altura or None, "imc": imc, "imc_texto": texto_imc,
+        "meta": meta or None,
+        "falta_para_meta": round(atual - meta, 1) if (atual and meta) else None,
+        "ritmo_kg_semana": ritmo, "previsao_meta": previsao,
+        "registros": len(pontos), "serie": pontos[-60:],
+        "ultima_medida": dict(ultima) if ultima else None,
+    }
+
+
 # ── Resumo (KPIs do mês) ──────────────────────────────────────────────────────
 @app.get("/api/resumo")
 async def resumo(mes: Optional[str] = None, user=Depends(get_current_user),
@@ -1284,8 +1609,37 @@ async def resumo(mes: Optional[str] = None, user=Depends(get_current_user),
     """, (ini, fim))
     por_modalidade = {r["m"]: r["n"] for r in await cur.fetchall()}
 
+    # Painel do mês — barras honestas. Nenhum "score" inventado: cada linha é uma
+    # razão entre dois números que existem no banco. Sem base, a linha diz "sem dados"
+    # em vez de mostrar zero, que pareceria mau desempenho quando é falta de registro.
+    pse_media = (await (await db.execute(
+        "SELECT AVG(pse) FROM aulas WHERE status='realizada' AND pse IS NOT NULL "
+        "AND data BETWEEN ? AND ?", (ini, fim))).fetchone())[0]
+    com_carga = (await (await db.execute("""
+        SELECT COUNT(DISTINCT a.id) FROM aulas a
+          JOIN aula_exercicios ae ON ae.aula_id = a.id
+          JOIN aula_series s ON s.aula_exercicio_id = ae.id AND s.feito = 1
+         WHERE a.status='realizada' AND a.data BETWEEN ? AND ?
+    """, (ini, fim))).fetchone())[0]
+
+    def _linha(rotulo, valor, base, sufixo="", texto=""):
+        if not base:
+            return {"rotulo": rotulo, "pct": None, "valor": None, "texto": "sem dados"}
+        pct = max(0, min(100, round(100.0 * valor / base)))
+        return {"rotulo": rotulo, "pct": pct,
+                "valor": f"{valor:g}/{base:g}{sufixo}" if not texto else texto}
+
+    painel = [
+        _linha("Aderência", realizadas, base, texto=(f"{aderencia:g}%" if aderencia is not None else "")),
+        _linha("Meta do mês", realizadas, meta_mes or 0),
+        _linha("Esforço médio", round(pse_media or 0, 1), 10 if pse_media else 0,
+               texto=(f"PSE {pse_media:.1f}" if pse_media else "")),
+        _linha("Carga registrada", com_carga, realizadas),
+    ]
+
     return {
         "mes": ini[:7], "inicio": ini, "fim": fim,
+        "painel": painel, "pse_media": round(pse_media, 1) if pse_media else None,
         "realizadas": realizadas, "faltas": faltas, "canceladas": canceladas,
         "agendadas": agendadas, "total": realizadas + faltas + canceladas + agendadas,
         "aderencia": aderencia, "meta_mes": meta_mes,
@@ -1429,9 +1783,15 @@ async def evolucao(exercicio: Optional[str] = Query(None, description="Nome do e
     nomes = [r["nome"] for r in await cur.fetchall()]
     serie = []
     if exercicio:
+        # A carga do dia é a maior série executada; sem séries lançadas, cai no
+        # resumo do exercício — assim o histórico antigo continua no gráfico.
         cur = await db.execute("""
-            SELECT a.data, MAX(ae.carga) carga, MAX(ae.series) series, MAX(ae.repeticoes) repeticoes
-              FROM aula_exercicios ae JOIN aulas a ON a.id = ae.aula_id
+            SELECT a.data,
+                   MAX(COALESCE(s.carga, ae.carga)) carga,
+                   MAX(ae.series) series, MAX(ae.repeticoes) repeticoes
+              FROM aula_exercicios ae
+              JOIN aulas a ON a.id = ae.aula_id
+         LEFT JOIN aula_series s ON s.aula_exercicio_id = ae.id AND s.feito = 1
              WHERE a.status='realizada' AND ae.nome=?
           GROUP BY a.data ORDER BY a.data
         """, (exercicio,))
