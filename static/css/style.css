@@ -465,7 +465,7 @@ tbody tr:hover { background: var(--card-2); }
   .ex-row, .ex-head { grid-template-columns: 1fr 1fr 1fr; }
   .ex-head { display: none; }
   .ex-row { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; }
-  .ex-row .ex-nome, .ex-row .ex-obs { grid-column: 1 / -1; }
+  .ex-row .ex-busca-wrap, .ex-row .ex-obs { grid-column: 1 / -1; }
 }
 
 @media (max-width: 560px) {
@@ -746,3 +746,38 @@ tbody tr:hover { background: var(--card-2); }
   font-family: var(--font); font-size: 16px; line-height: 1.7; color: var(--text);
   background: var(--card-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
 }
+
+/* ── Escolher exercício ────────────────────────────────────────────────────
+   A lupa fica DENTRO do campo: no celular, um botão ao lado roubaria a largura
+   do nome do exercício, que é o dado que importa ler. */
+.ex-busca-wrap { position: relative; display: block; min-width: 0; }
+.ex-busca-wrap .ex-nome { width: 100%; padding-right: 38px; }
+.ex-lupa {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  width: 30px; height: 30px; border: 0; background: none; cursor: pointer;
+  font-size: 15px; line-height: 1; padding: 0; opacity: .65;
+}
+.ex-lupa:active { opacity: 1; }
+.ex-op {
+  display: flex; align-items: center; width: 100%; padding: 11px 12px; margin-bottom: 6px;
+  cursor: pointer; text-align: left; font-family: var(--font); color: var(--text);
+  background: var(--card-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+.ex-op:active { border-color: var(--primary); background: var(--primary-l); }
+.ex-op > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ex-op .n { font-weight: 700; font-size: 14px; }
+.ex-op .s { font-size: 11px; color: var(--muted); font-weight: 600; }
+
+/* As ações do bloco de exercícios ("Aplicar modelo…" + "+ Exercício") ficavam
+   como inline dentro de um <span>: no celular o select encostava no botão e
+   roubava o toque dele. Flex com gap garante alvos separados. */
+#a-ex-acoes { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+#a-ex-acoes .sel-compacto { max-width: 200px; }
+
+/* ── Empilhamento de modais ───────────────────────────────────────────────
+   Modais que abrem DE DENTRO de outro modal precisam ficar acima dele. Com o
+   mesmo z-index vence quem vem depois no HTML — e o modal da aula vem depois,
+   então o seletor de exercício e a régua abriam atrás dele e travavam a tela.
+   Já aconteceu uma vez com a régua sobre o modo treino; agora é regra explícita. */
+#m-escolher-ex, #m-regua { z-index: 220; }
+#m-pix-aviso { z-index: 240; }   /* aviso de pagamento fica acima de tudo */

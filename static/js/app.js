@@ -739,7 +739,11 @@ function addLinhaEx(containerId, it = {}) {
   if (it.id) div.dataset.itemId = it.id;
   const comFeito = containerId === 'a-ex';
   div.innerHTML = `
-    <input class="ex-nome" list="dl-ex" placeholder="Exercício" value="${esc(it.nome || '')}">
+    <span class="ex-busca-wrap">
+      <input class="ex-nome" list="dl-ex" placeholder="Exercício" value="${esc(it.nome || '')}">
+      <button type="button" class="ex-lupa" title="Escolher na biblioteca"
+              onclick="abrirEscolherEx(this)">🔍</button>
+    </span>
     <input class="ex-series" type="number" min="1" placeholder="Séries" value="${it.series ?? ''}">
     <input class="ex-reps" placeholder="Reps" value="${esc(it.repeticoes || '')}">
     <input class="ex-carga" type="number" step="0.5" placeholder="Carga" value="${it.carga ?? ''}">
@@ -2247,4 +2251,75 @@ async function loadAerobico() {
       }
     }
   });
+}
+
+// ═══════════════ ESCOLHER EXERCÍCIO NA BIBLIOTECA ════════════════════════════
+// O <input list=…> resolve no computador e falha no celular: o Safari do iPhone
+// transforma o datalist em três sugestões na barra do teclado, sem seta e sem
+// rolagem — a biblioteca existe, mas não há como navegá-la. Este seletor é o
+// caminho explícito, com busca, favoritos e grupos.
+let _exAlvo = null;      // input .ex-nome que receberá o nome escolhido
+let _exGrupo = '';       // filtro de grupo ativo
+
+function abrirEscolherEx(botao) {
+  _exAlvo = botao.closest('.ex-row').querySelector('.ex-nome');
+  _exGrupo = '';
+  setVal('ex-busca', '');
+  const grupos = [...new Set(_exercicios.map(e => e.grupo).filter(Boolean))].sort();
+  document.getElementById('ex-grupos').innerHTML =
+    `<button class="tab active" onclick="filtrarEscolherEx('')">Todos</button>` +
+    (_exercicios.some(e => e.favorito) ? `<button class="tab" onclick="filtrarEscolherEx('⭐')">⭐</button>` : '') +
+    grupos.map(g => `<button class="tab" onclick="filtrarEscolherEx('${esc(g).replace(/'/g, "\\'")}')">${esc(g)}</button>`).join('');
+  renderEscolherEx();
+  abrirModal('m-escolher-ex');
+}
+
+function filtrarEscolherEx(g) {
+  _exGrupo = g;
+  document.querySelectorAll('#ex-grupos .tab').forEach(t =>
+    t.classList.toggle('active', t.textContent === (g || 'Todos')));
+  renderEscolherEx();
+}
+
+function renderEscolherEx() {
+  const b = val('ex-busca').toLowerCase();
+  const itens = _exercicios.filter(e => {
+    if (_exGrupo === '⭐' && !e.favorito) return false;
+    if (_exGrupo && _exGrupo !== '⭐' && e.grupo !== _exGrupo) return false;
+    if (!b) return true;
+    return (e.nome + ' ' + (e.equipamento || '') + ' ' + (e.grupo || '')).toLowerCase().includes(b);
+  });
+  const box = document.getElementById('ex-lista');
+  if (!itens.length) {
+    box.innerHTML = `<div class="empty">Nada encontrado.
+      <button class="btn btn-sm" style="margin-top:10px" onclick="usarNomeDigitado()">
+        Usar “${esc(val('ex-busca') || '—')}” mesmo assim</button></div>`;
+    return;
+  }
+  // Favoritos primeiro: são os que ele repete toda semana.
+  itens.sort((a, x) => (x.favorito || 0) - (a.favorito || 0) ||
+    (a.grupo || '').localeCompare(x.grupo || '') || a.nome.localeCompare(x.nome));
+  box.innerHTML = itens.map(e => `
+    <button type="button" class="ex-op" onclick="escolherEx(${e.id})">
+      <span>
+        <span class="n">${e.favorito ? '⭐ ' : ''}${esc(e.nome)}</span>
+        <span class="s">${esc(e.grupo || 'sem grupo')}${e.equipamento ? ' · ' + esc(e.equipamento) : ''}</span>
+      </span>
+    </button>`).join('');
+}
+
+function escolherEx(id) {
+  const e = _exercicios.find(x => x.id === id);
+  if (e && _exAlvo) {
+    _exAlvo.value = e.nome;
+    _exAlvo.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  fecharModal('m-escolher-ex');
+}
+
+// Exercício que não está na biblioteca continua permitido: quem prescreve não
+// pode ficar preso ao cadastro.
+function usarNomeDigitado() {
+  if (_exAlvo) _exAlvo.value = val('ex-busca');
+  fecharModal('m-escolher-ex');
 }

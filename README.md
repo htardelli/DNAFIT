@@ -21,6 +21,7 @@ dos exercícios de cada treino.
 | Tipo de exercício | **Treinos** — biblioteca por grupo muscular e equipamento; tipo da aula (Força, Hipertrofia, HIIT…) |
 | Descrição dos exercícios | **Treinos** (execução de cada exercício) e, na aula, séries/reps/carga/descanso/observação |
 | Avisar que paguei e saber que ele recebeu | **Financeiro → Informar pagamento** — ele confirma em um aviso sobre a tela inicial |
+| Achar um exercício sem digitar o nome inteiro | Toque na **🔍** dentro do campo *Exercício* — busca, favoritos e grupos |
 | Registrar o treino **enquanto treino** | **Agenda → Treinar agora** — modo treino, uma série por toque |
 | Saber quanto levantei da última vez | Aparece sozinho no modo treino: *última: 55 kg × 10 · 28/08* |
 | Acompanhar peso e medidas | **Progresso → Corpo** — peso, IMC, meta, ritmo real e gráfico |

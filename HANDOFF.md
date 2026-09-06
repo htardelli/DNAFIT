@@ -313,6 +313,18 @@ projeto (já está no `.gitignore`).
     começou. O valor continua sendo enviado na criação: é ele que fecha o mês;
   - a tabela de aulas cabe exatamente na largura de 390px — mexer em colunas exige
     remedir.
+- **`<datalist>` não serve como biblioteca no celular.** O campo do exercício tem
+  `list="dl-ex"`, que no computador abre uma lista navegável e no Safari do iPhone
+  vira só três sugestões na barra do teclado — sem seta, sem rolagem. Por isso
+  existe o botão 🔍 dentro do campo, que abre `#m-escolher-ex` (busca, ⭐ e grupos)
+  e escreve o nome escolhido. O datalist fica como conveniência de desktop; o
+  seletor é o caminho de verdade. Nome fora da biblioteca continua permitido —
+  quem prescreve não pode ficar preso ao cadastro.
+- **Empilhamento de modais:** com o mesmo `z-index`, vence quem vem depois no
+  HTML — e `#m-aula` vem depois de quase todos. Modal que abre DE DENTRO de outro
+  precisa de z-index próprio: `#m-escolher-ex` e `#m-regua` em 220, `#m-pix-aviso`
+  em 240, modo treino em 120, demais modais em 200. Já quebrou duas vezes (régua
+  atrás do modo treino, seletor atrás da aula) — confira ao criar modal novo.
 - Ícones: status usa 📅 ✅ ❌ 🚫; ações usam ✅ (concluir) e 🔁 (remarcar). **Nenhum
   ícone de ação pode repetir o ícone de status da mesma linha.**
 - No celular a barra lateral é `display: none` **e o botão de menu também** — logo,
