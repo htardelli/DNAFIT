@@ -33,8 +33,9 @@ Os treinos que vêm do seu **treinador de corrida** entram como modalidade
 **Aeróbico** — ele não tem conta no app, então quem cola a prescrição é você.
 
 1. Marque o dia na agenda como **Aeróbico** (em *Dias do mês* ou em *+ Aula*).
-2. Escolha o **tipo**: a lista muda para o vocabulário de corrida — *Longo,
-   Intervalado, Tiros, Ritmo, Progressivo, Regenerativo, Subida, Prova/teste*.
+2. Escolha o **tipo**: a lista muda para o vocabulário de corrida — *Caminhada,
+   Longo, Intervalado, Tiros, Ritmo, Progressivo, Regenerativo, Subida,
+   Prova/teste*.
 3. Cole o texto do treinador exatamente como ele manda — *"6km / 2km trote
    aquecendo; 2x 1km progressivo a cada 250m; 2km de trote, desaquecendo."*
    Não há série nem carga aqui: corrida não tem essa forma, e o app não finge que tem.
@@ -47,6 +48,12 @@ barras** com **ritmo em linha** — e o eixo do ritmo é invertido de propósito
 porque em corrida um número menor é melhor.
 
 Corrida **não entra no valor pago ao personal** — é outro profissional.
+
+**Caminhada é um treino aeróbico como outro qualquer:** marque o dia como
+Aeróbico, tipo *Caminhada*, e registre distância e tempo ao concluir. Se preferir
+tratá-la como exercício de uma sessão de musculação, os exercícios
+**Caminhada na esteira** e **Caminhada na rua** continuam na biblioteca, em
+**Treinos → Biblioteca → Músculo → Cardio** (ou em *Aparelho*: Máquina e Livre).
 
 ## Com o personal ou sozinho
 

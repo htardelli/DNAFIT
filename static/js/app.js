@@ -335,7 +335,7 @@ function podeMontarTreino(modalidade) {
 const TIPOS_TREINO = {
   forca:   ['Força', 'Hipertrofia', 'Funcional', 'HIIT', 'Cardio', 'Mobilidade', 'Avaliação'],
   // Vocabulário de treinador de corrida, na ordem em que costuma prescrever.
-  corrida: ['Longo', 'Intervalado', 'Tiros', 'Ritmo', 'Progressivo',
+  corrida: ['Caminhada', 'Longo', 'Intervalado', 'Tiros', 'Ritmo', 'Progressivo',
             'Regenerativo', 'Subida', 'Prova / teste']
 };
 

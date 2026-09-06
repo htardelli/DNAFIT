@@ -497,13 +497,21 @@ aviso na tela: pendência escondida é o que faz o gráfico mentir.
 
 **O `tipo` de treino muda com a modalidade** (`TIPOS_TREINO` no front,
 `preencherTipos()`): musculação lista Força/Hipertrofia/…, corrida lista
-Longo/Intervalado/Tiros/Ritmo/Progressivo/Regenerativo/Subida/Prova. Corrida não
+Caminhada/Longo/Intervalado/Tiros/Ritmo/Progressivo/Regenerativo/Subida/Prova. Corrida não
 se classifica em "Hipertrofia" e musculação não se classifica em "Intervalado" —
 lista única obrigaria a rolar por sete opções erradas. O valor já escolhido é
 mantido como opção mesmo fora do conjunto: trocar de modalidade não pode apagá-lo
 em silêncio. No banco `tipo` continua texto livre; a restrição é só de interface.
 No modal de **modelo** não há modalidade, então os dois conjuntos aparecem em
 `<optgroup>` separados.
+
+⚠️ Numa aula **aeróbica o bloco de exercícios não existe** — a prescrição é texto.
+Isso deixa os exercícios da biblioteca (Caminhada na rua, Corrida na esteira…)
+inalcançáveis *dentro dessa modalidade*; eles seguem disponíveis em aulas
+`sozinho`/`com_personal` e na aba Biblioteca. Foi a primeira coisa que o usuário
+estranhou ("não acho mais os treinos de caminhada"), e a resposta foi o tipo
+**Caminhada** na lista de corrida — não trazer linhas de série para uma tela onde
+elas não fazem sentido.
 
 ⚠️ Ao mexer em `aplicarModoAula()`, cuidado com a ordem: o bloco da modalidade
 roda **antes** de `const pode` existir. Usar `pode` ali dá *"Cannot access before
