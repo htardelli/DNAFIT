@@ -329,6 +329,29 @@ function podeMontarTreino(modalidade) {
 
 // Letra + cor + forma por modalidade: P azul redondo, I verde quadrado,
 // A laranja losango. Cor sozinha falha de relance e para quem enxerga mal cor.
+// Tipo de treino por modalidade. Corrida não se classifica em "Hipertrofia" e
+// musculação não se classifica em "Intervalado": misturar as duas listas obriga
+// a rolar por sete opções erradas para achar a certa.
+const TIPOS_TREINO = {
+  forca:   ['Força', 'Hipertrofia', 'Funcional', 'HIIT', 'Cardio', 'Mobilidade', 'Avaliação'],
+  // Vocabulário de treinador de corrida, na ordem em que costuma prescrever.
+  corrida: ['Longo', 'Intervalado', 'Tiros', 'Ritmo', 'Progressivo',
+            'Regenerativo', 'Subida', 'Prova / teste']
+};
+
+// Monta a lista do tipo mantendo o valor atual como opção mesmo que ele não
+// pertença ao conjunto — trocar de modalidade não pode apagar o que já estava
+// escolhido sem o usuário ver.
+function preencherTipos(modalidade, valor) {
+  const sel = document.getElementById('a-tipo');
+  if (!sel) return;
+  const lista = [...TIPOS_TREINO[ehAerobico(modalidade) ? 'corrida' : 'forca']];
+  if (valor && !lista.includes(valor)) lista.unshift(valor);
+  sel.innerHTML = '<option value="">—</option>' + lista.map(t =>
+    `<option${t === valor ? ' selected' : ''}>${esc(t)}</option>`).join('');
+  sel.value = valor || '';
+}
+
 const MODO_BADGE = {
   com_personal: { l: 'P', cls: 'modo-p', t: 'Com o personal' },
   sozinho:      { l: 'I', cls: 'modo-i', t: 'Individual — você treina sozinho' },
@@ -438,7 +461,8 @@ function limparAula() {
   document.getElementById('a-energia').innerHTML = opcoesEscala(NIVEIS, '');
   document.getElementById('a-fadiga').innerHTML = opcoesEscala(NIVEIS, '');
   preencherCad('a-professor', 'professor', ''); preencherCad('a-local', 'local', '');
-  setVal('a-duracao', 60); setVal('a-status', 'agendada'); setVal('a-tipo', '');
+  setVal('a-duracao', 60); setVal('a-status', 'agendada');
+  preencherTipos('com_personal', '');
   setVal('a-modalidade', 'com_personal');
   setVal('a-plano', ''); setVal('a-modelo', ''); setVal('a-repetir', 0);
   document.querySelectorAll('#a-dias input').forEach(c => c.checked = false);
@@ -474,7 +498,7 @@ async function abrirAula(id, remarcar) {
     limparAula();
     setVal('a-id', a.id); setVal('a-data', a.data); setVal('a-hora', a.hora || '');
     setVal('a-duracao', a.duracao_min || 60); setVal('a-status', a.status);
-    setVal('a-tipo', a.tipo || ''); setVal('a-foco', a.foco || '');
+    preencherTipos(a.modalidade, a.tipo || ''); setVal('a-foco', a.foco || '');
     preencherCad('a-local', 'local', a.local || '');
     preencherCad('a-professor', 'professor', a.professor || '');
     setVal('a-plano', a.plano_id || ''); setVal('a-modelo', a.modelo_id || '');
@@ -528,6 +552,7 @@ function aplicarModoAula() {
   document.getElementById('w-plano').style.display = proprio ? 'none' : '';
   // Corrida não tem série × carga: troca o bloco de exercícios pela prescrição
   // em texto, que é a forma em que ela chega do treinador.
+  preencherTipos(val('a-modalidade'), val('a-tipo'));
   document.getElementById('a-aer-bloco').style.display = aer ? '' : 'none';
   document.getElementById('a-ex-bloco').style.display = aer ? 'none' : '';
   document.getElementById('a-aer-result').style.display = (novo || !comecou) ? 'none' : '';
@@ -697,7 +722,9 @@ document.addEventListener('change', e => {
         !confirm('Substituir os exercícios já listados pelos do modelo?')) return;
     document.getElementById('a-ex').innerHTML = '';
     (m.itens || []).forEach(it => addLinhaEx('a-ex', it));
-    if (!val('a-tipo') && m.tipo) setVal('a-tipo', m.tipo);
+    // via preencherTipos: o tipo do modelo pode não estar na lista da modalidade,
+    // e setVal num <select> sem a opção correspondente não grava nada.
+    if (!val('a-tipo') && m.tipo) preencherTipos(val('a-modalidade'), m.tipo);
     if (!val('a-foco') && m.foco) setVal('a-foco', m.foco);
     setVal('a-modelo', m.id);
     toast(`Modelo "${m.nome}" aplicado`);

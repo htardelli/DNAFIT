@@ -495,6 +495,16 @@ como queda.
 sem ritmo é ruído. Os realizados sem distância aparecem como `sem_registro`, com
 aviso na tela: pendência escondida é o que faz o gráfico mentir.
 
+**O `tipo` de treino muda com a modalidade** (`TIPOS_TREINO` no front,
+`preencherTipos()`): musculação lista Força/Hipertrofia/…, corrida lista
+Longo/Intervalado/Tiros/Ritmo/Progressivo/Regenerativo/Subida/Prova. Corrida não
+se classifica em "Hipertrofia" e musculação não se classifica em "Intervalado" —
+lista única obrigaria a rolar por sete opções erradas. O valor já escolhido é
+mantido como opção mesmo fora do conjunto: trocar de modalidade não pode apagá-lo
+em silêncio. No banco `tipo` continua texto livre; a restrição é só de interface.
+No modal de **modelo** não há modalidade, então os dois conjuntos aparecem em
+`<optgroup>` separados.
+
 ⚠️ Ao mexer em `aplicarModoAula()`, cuidado com a ordem: o bloco da modalidade
 roda **antes** de `const pode` existir. Usar `pode` ali dá *"Cannot access before
 initialization"* e o modal simplesmente não abre.
@@ -523,6 +533,15 @@ pergunta ser respondível em pé, suado.
 `energia`/`fadiga` entram em `CAMPOS_APOS_REALIZADA` e em
 `CAMPOS_ALUNO_EM_AULA_DO_PERSONAL`: é feedback do aluno, vale em qualquer
 modalidade e depois da aula fechada.
+
+### Data "no futuro" tolera um dia
+
+`_valida_nao_futuro()` recusa datas acima de **hoje + 1**, não acima de hoje. O
+calendário do aparelho segue o fuso dele; o app raciocina em UTC-3. Com o celular
+em outro fuso (viagem, aparelho desconfigurado), "hoje" na tela pode ser um dia à
+frente de `_hoje()`, e registrar um pagamento ou uma pesagem que acabou de
+acontecer devolvia HTTP 400. Um dia à frente é desencontro de relógio; dois já é
+engano de digitação. Vale para `/api/pagamentos` e `/api/medidas`.
 
 ### Segurança já implementada
 

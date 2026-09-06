@@ -376,6 +376,18 @@ def _valida_status_no_tempo(status: Optional[str], data_iso: str, hora: Optional
             f"(ou 'cancelada', se você já sabe que não vai).")
 
 
+def _valida_nao_futuro(data_iso: str, o_que: str):
+    """Recusa data no futuro, tolerando UM dia de diferença.
+
+    O calendário do aparelho segue o fuso DELE; o app raciocina em UTC-3. Quem
+    abre o app com o telefone em outro fuso (viagem, celular desconfigurado) vê
+    "hoje" um dia à frente e tomava um erro ao registrar algo que acabou de
+    fazer. Um dia à frente é desencontro de relógio; dois já é engano de digitação.
+    """
+    if data_iso > (_hoje() + timedelta(days=1)).isoformat():
+        raise HTTPException(400, f"{o_que} não pode ser no futuro.")
+
+
 def _parse_data(s: str) -> str:
     """Aceita 'YYYY-MM-DD' ou 'DD/MM/YYYY' e devolve sempre ISO."""
     s = (s or "").strip()
@@ -1595,8 +1607,7 @@ async def informar_pagamento(body: PagamentoIn, user=Depends(require_dono),
     if not re.fullmatch(r"\d{4}-\d{2}", mes):
         raise HTTPException(400, "Mês inválido (use AAAA-MM).")
     data = _parse_data(body.data_pix) if body.data_pix else _hoje().isoformat()
-    if data > _hoje().isoformat():
-        raise HTTPException(400, "A data do pagamento não pode ser no futuro.")
+    _valida_nao_futuro(data, "A data do pagamento")
     cur = await db.execute("""
         INSERT INTO pagamentos (mes, valor, data_pix, obs, informado_por)
         VALUES (?,?,?,?,?)
@@ -1805,8 +1816,7 @@ async def salvar_medida(body: MedidaIn, user=Depends(require_dono),
     """Uma linha por dia: pesar duas vezes no mesmo dia corrige o registro em vez
     de criar dois pontos no gráfico. Só o dono registra — é o corpo dele."""
     data = _parse_data(body.data) if body.data else _hoje().isoformat()
-    if data > _hoje().isoformat():
-        raise HTTPException(400, "Não dá para registrar uma medida no futuro.")
+    _valida_nao_futuro(data, "A data da medida")
     dados = {k: v for k, v in body.dict(exclude_unset=True).items() if k in _CAMPOS_MEDIDA}
     if not dados:
         raise HTTPException(400, "Informe ao menos um valor.")
