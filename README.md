@@ -34,6 +34,9 @@ Os treinos que vêm do seu **treinador de corrida** entram como modalidade
 **Aeróbico** — ele não tem conta no app, então quem cola a prescrição é você.
 
 1. Marque o dia na agenda como **Aeróbico** (em *Dias do mês* ou em *+ Aula*).
+   Pode marcar um dia que **já tem treino com o personal ou sozinho** — correr de
+   manhã e treinar ao meio-dia são duas coisas no mesmo dia, e uma não apaga a
+   outra. O ponto azul no canto do dia avisa que já há outra aula ali.
 2. Escolha o **tipo**: a lista muda para o vocabulário de corrida — *Caminhada,
    Longo, Intervalado, Tiros, Ritmo, Progressivo, Regenerativo, Subida,
    Prova/teste*.

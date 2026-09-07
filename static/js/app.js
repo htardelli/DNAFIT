@@ -779,9 +779,12 @@ async function abrirDiasDoMes(mod) {
   _dmMod = mod || 'com_personal';
   document.querySelectorAll('#m-dias .tm-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.mod === _dmMod));
-  document.getElementById('dm-ajuda').innerHTML = _dmMod === 'com_personal'
-    ? 'Marque os dias de aula <b>com o personal</b>. Elas entram como <b>agendadas</b>, prontas para ele montar o treino — e já contam no valor do mês.'
-    : 'Marque os dias em que você vai <b>treinar sozinho</b>. Você mesmo monta o treino, e essas aulas <b>não entram no valor pago ao personal</b>.';
+  document.getElementById('dm-ajuda').innerHTML =
+    _dmMod === 'com_personal'
+      ? 'Marque os dias de aula <b>com o personal</b>. Elas entram como <b>agendadas</b>, prontas para ele montar o treino — e já contam no valor do mês.'
+      : ehAerobico(_dmMod)
+        ? 'Marque os dias de <b>corrida</b>. Depois é só colar a prescrição do treinador em cada dia. Não entram no valor pago ao personal.'
+        : 'Marque os dias em que você vai <b>treinar sozinho</b>. Você mesmo monta o treino, e essas aulas <b>não entram no valor pago ao personal</b>.';
   _dmSel = new Set();
   _dmTravados = {};
   _dmOutras = {};
@@ -799,11 +802,14 @@ async function abrirDiasDoMes(mod) {
     'Dias de aula — ' + _mesRef.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
   setVal('dm-hora', _cfg.hora_padrao || '');
   setVal('dm-duracao', _cfg.duracao_padrao || 60);
-  preencherCad('dm-prof', 'professor', _dmMod === 'sozinho' ? '' : (_cfg.professor_padrao || ''));
-  document.getElementById('dm-prof').closest('div').style.display =
-    _dmMod === 'sozinho' ? 'none' : '';
+  // Só a aula COM O PERSONAL tem professor e preço. Aeróbico vinha com o valor da
+  // hora-aula e entrava no fechamento do mês como se fosse dele.
+  const proprio = podeMontarMod(_dmMod);
+  preencherCad('dm-prof', 'professor', proprio ? '' : (_cfg.professor_padrao || ''));
+  document.getElementById('dm-prof').closest('div').style.display = proprio ? 'none' : '';
   preencherCad('dm-local', 'local', _cfg.local_padrao || '');
-  setVal('dm-valor', _dmMod === 'sozinho' ? 0 : (_cfg.valor_hora_vigente || _cfg.valor_hora || ''));
+  setVal('dm-valor', proprio ? 0 : (_cfg.valor_hora_vigente || _cfg.valor_hora || ''));
+  document.getElementById('dm-valor').closest('div').style.display = proprio ? 'none' : '';
   dmGrid(_mesRef.getFullYear(), _mesRef.getMonth());
   abrirModal('m-dias');
 }
@@ -821,12 +827,15 @@ function dmGrid(ano, mes) {
     const travado = _dmTravados[d];
     const outra = _dmOutras[d];
     const f = feriadoDe(`${ano}-${String(mes + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
-    let cls = outra ? 'outra' : (travado ? 'travado' : '') + (_dmSel.has(d) ? ' on' : '');
+    // 'outra' é informação, não estado: vem como marca discreta e nunca no lugar
+    // de 'on'. Antes, um dia marcado que também tinha aula de outra modalidade
+    // aparecia como se não estivesse marcado.
+    let cls = (travado ? 'travado' : '') + (_dmSel.has(d) ? ' on' : '') + (outra ? ' tem-outra' : '');
     if (f) cls += f.tipo === 'feriado' ? ' fer' : ' facu';
     const tits = [];
     if (f) tits.push(f.nome);
-    if (outra) tits.push(`já tem aula ${rotuloModalidade(outra).toLowerCase()}`);
-    else if (travado) tits.push(`${travado} — não pode ser removida aqui`);
+    if (outra) tits.push(`neste dia também há aula ${rotuloModalidade(outra).toLowerCase()}`);
+    if (travado) tits.push(`${travado} — não pode ser removida aqui`);
     html += `<button class="dm-dia ${cls}" onclick="dmToggle(${d})"
                      ${tits.length ? `title="${esc(tits.join(' · '))}"` : ''}>${d}</button>`;
   }
@@ -835,7 +844,10 @@ function dmGrid(ano, mes) {
 }
 
 function dmToggle(d) {
-  if (_dmOutras[d]) { toast(`Dia ${d} já tem aula ${rotuloModalidade(_dmOutras[d]).toLowerCase()}`, 'warn'); return; }
+  // Dia que já tem aula de OUTRA modalidade continua marcável: correr de manhã e
+  // fazer academia ao meio-dia é rotina, não conflito. Cada modalidade tem a sua
+  // agenda no banco, e marcar uma nunca apaga a outra — o bloqueio aqui era o que
+  // impedia de programar corrida nos dias em que já havia treino.
   if (_dmTravados[d]) { toast(`Dia ${d}: ${_dmTravados[d]} — abra a aula para alterar`, 'warn'); return; }
   if (_dmSel.has(d)) _dmSel.delete(d); else _dmSel.add(d);
   dmGrid(_mesRef.getFullYear(), _mesRef.getMonth());
@@ -865,8 +877,8 @@ function dmTotal() {
     ? `<div class="dm-alerta">⚠ ${nosFeriados.length} dia(s) em feriado: ${nosFeriados.map(x => `${x.d} (${esc(x.f.nome)})`).join(', ')}</div>`
     : '';
   document.getElementById('dm-resumo').innerHTML = n
-    ? (_dmMod === 'sozinho'
-        ? `${n} treino${n > 1 ? 's' : ''} sozinho` +
+    ? (podeMontarMod(_dmMod)
+        ? `${n} treino${n > 1 ? 's' : ''} ${ehAerobico(_dmMod) ? 'de corrida' : 'sozinho'}` +
           `<div style="font-weight:600;font-size:12px;opacity:.85">não entra no valor pago ao personal</div>` + alerta
         : `${n} aula${n > 1 ? 's' : ''} × ${fmtR(v)} = <b>${fmtR(n * v)}</b>` +
           `<div style="font-weight:600;font-size:12px;opacity:.85">` +
@@ -1421,7 +1433,11 @@ async function carregarHoje() {
       </div>`;
       return;
     }
-    const n = (a.exercicios || []).length;
+    // "Tem treino montado" depende da modalidade: musculacao conta exercicios,
+    // corrida tem a prescricao em texto. Contando so exercicios, o cartao de
+    // hoje nunca oferecia "Treinar agora" para um dia de corrida.
+    const aer = ehAerobico(a.modalidade);
+    const n = aer ? ((a.descricao || "").trim() ? 1 : 0) : (a.exercicios || []).length;
     const feitos = (a.exercicios || []).filter(e => e.feito).length;
     const quando = d.eh_hoje ? 'Hoje' : `${diaSemana(a.data)} ${fmtDataCurta(a.data)}`;
     const titulo = a.foco || a.tipo || (ehAerobico(a.modalidade) ? 'Treino de corrida'
@@ -1429,7 +1445,8 @@ async function carregarHoje() {
     const linhas = [
       a.hora ? `${a.hora}` : null,
       rotuloModalidade(a.modalidade).toLowerCase(),
-      n ? `${n} ${n === 1 ? 'exercício' : 'exercícios'}${feitos ? ` · ${feitos} ${feitos === 1 ? 'feito' : 'feitos'}` : ''}`
+      aer ? (n ? 'prescrição pronta' : 'sem prescrição ainda')
+        : n ? `${n} ${n === 1 ? 'exercício' : 'exercícios'}${feitos ? ` · ${feitos} ${feitos === 1 ? 'feito' : 'feitos'}` : ''}`
         : 'treino ainda não montado'
     ].filter(Boolean).join(' · ');
 
@@ -1444,7 +1461,7 @@ async function carregarHoje() {
       <div class="acoes">
         ${podeTreinar ? `<button class="btn btn-primary" onclick="tmAbrir(${a.id})">Treinar agora</button>` : ''}
         <button class="btn btn-ghost" onclick="abrirAula(${a.id})">
-          ${n ? 'Ver treino' : (a.pode_montar ? 'Montar treino' : 'Ver aula')}</button>
+          ${n ? 'Ver treino' : (a.pode_montar ? (aer ? 'Colar prescrição' : 'Montar treino') : 'Ver aula')}</button>
       </div>
     </div>`;
   } catch (e) { box.innerHTML = ''; }

@@ -320,6 +320,15 @@ projeto (já está no `.gitignore`).
   e escreve o nome escolhido. O datalist fica como conveniência de desktop; o
   seletor é o caminho de verdade. Nome fora da biblioteca continua permitido —
   quem prescreve não pode ficar preso ao cadastro.
+- **Um dia comporta mais de uma modalidade.** Em *Dias do mês*, dia que já tem
+  aula de outra modalidade continua **marcável** — correr de manhã e treinar ao
+  meio-dia é rotina, não conflito. O backend nunca impediu (cada modalidade tem a
+  sua agenda e o lote só apaga aulas da própria); o bloqueio era só de interface
+  e impedia programar corrida nos dias em que já havia treino. A marca `tem-outra`
+  é um ponto no canto do dia — informação, nunca estado que substitua o `on`.
+- **"Tem treino montado" depende da modalidade:** musculação conta exercícios,
+  corrida tem a prescrição em `descricao`. Contar só exercícios fazia o cartão de
+  hoje nunca oferecer "Treinar agora" num dia de corrida.
 - **Empilhamento de modais:** com o mesmo `z-index`, vence quem vem depois no
   HTML — e `#m-aula` vem depois de quase todos. Modal que abre DE DENTRO de outro
   precisa de z-index próprio: `#m-escolher-ex` e `#m-regua` em 220, `#m-pix-aviso`
@@ -553,6 +562,15 @@ pergunta ser respondível em pé, suado.
 `energia`/`fadiga` entram em `CAMPOS_APOS_REALIZADA` e em
 `CAMPOS_ALUNO_EM_AULA_DO_PERSONAL`: é feedback do aluno, vale em qualquer
 modalidade e depois da aula fechada.
+
+### Teste de fumaça (`smoke`)
+
+Existe um teste que **abre toda página e todo modal** e falha em qualquer erro de
+execução. Ele nasceu porque o mesmo defeito passou duas vezes: uma `const` usada
+antes da declaração dentro da própria função (TDZ). `node --check` aceita — a
+sintaxe é válida —, o olho não vê, e o modal simplesmente não abre. Só executar
+pega. Rode-o depois de qualquer mudança em `aplicarModoAula`, `abrirDiasDoMes` ou
+em qualquer função que monte tela.
 
 ### Data "no futuro" tolera um dia
 

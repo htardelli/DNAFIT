@@ -380,7 +380,7 @@ tbody tr:hover { background: var(--card-2); }
 /* ── Grade de dias do mês ─────────────────────────────────────────────────── */
 .dm-grid { display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap: 6px; }
 .dm-dow { text-align: center; font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; }
-.dm-dia {
+.dm-dia { position: relative;
   aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center;
   border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card-2);
   font-size: 13.5px; font-weight: 700; cursor: pointer; user-select: none; padding: 0; color: var(--text);
@@ -388,7 +388,13 @@ tbody tr:hover { background: var(--card-2); }
 .dm-dia:hover { border-color: var(--primary); }
 .dm-dia.on { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
 .dm-dia.travado { background: var(--warn-l); border-color: var(--warn); color: var(--warn-ink); cursor: not-allowed; }
-.dm-dia.outra { background: var(--info-l); border-color: var(--info); color: var(--info-ink); cursor: not-allowed; }
+/* Dia que também tem aula de outra modalidade: marca discreta no canto, não
+   um estado que impeça o toque. Correr de manhã e treinar ao meio-dia é rotina. */
+.dm-dia.tem-outra::after {
+  content: ''; position: absolute; right: 4px; top: 4px; width: 5px; height: 5px;
+  border-radius: 50%; background: var(--info);
+}
+.dm-dia.on.tem-outra::after { background: var(--on-primary); }
 .dm-dia.vazio { border: none; background: none; cursor: default; }
 .dm-dia.fer  { background: var(--fer-l); border-color: var(--fer); color: var(--fer-ink); }
 .dm-dia.facu { border-color: var(--fer); border-style: dashed; color: var(--fer-ink); }
