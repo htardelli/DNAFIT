@@ -329,6 +329,11 @@ projeto (já está no `.gitignore`).
 - **"Tem treino montado" depende da modalidade:** musculação conta exercícios,
   corrida tem a prescrição em `descricao`. Contar só exercícios fazia o cartão de
   hoje nunca oferecer "Treinar agora" num dia de corrida.
+- **Tabela larga no celular esconde ação.** A lista de Acessos era `<table>` com
+  cinco colunas e três botões: 508px dentro de 360px. O botão "Resetar senha"
+  caía fora da tela, alcançável só arrastando a tabela de lado — na prática,
+  invisível. Virou lista de cartões. Antes de pôr ação numa tabela, meça:
+  `tabela.scrollWidth > wrapper.clientWidth` a 390px já é o aviso.
 - **Empilhamento de modais:** com o mesmo `z-index`, vence quem vem depois no
   HTML — e `#m-aula` vem depois de quase todos. Modal que abre DE DENTRO de outro
   precisa de z-index próprio: `#m-escolher-ex` e `#m-regua` em 220, `#m-pix-aviso`

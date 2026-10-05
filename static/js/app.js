@@ -1307,25 +1307,41 @@ async function loadUsuarios() {
   try {
     const us = await api('GET', '/api/usuarios');
     document.getElementById('lista-usuarios').innerHTML = us.map(u => `
-      <tr>
-        <td><b>${esc(u.nome)}</b></td>
-        <td class="muted">${esc(u.email)}</td>
-        <td>${u.role === 'aluno' ? 'Aluno (dono)' : 'Personal'}</td>
-        <td><span class="badge ${u.ativo ? 'b-realizada' : 'b-cancelada'}">${u.ativo ? 'ativo' : 'inativo'}</span>
-          ${u.deve_trocar_senha ? '<span class="badge b-falta" title="ainda não escolheu a própria senha">senha provisória</span>' : ''}</td>
-        <td class="right">
-          <button class="btn btn-sm" onclick="resetarSenha(${u.id}, '${esc(u.nome).replace(/'/g, "\\'")}')">Resetar senha</button>
+      <div class="acesso">
+        <div class="acesso-topo">
+          <div style="min-width:0">
+            <div class="n">${esc(u.nome)}</div>
+            <div class="e">${esc(u.email)}</div>
+          </div>
+          <span class="badge ${u.ativo ? 'b-realizada' : 'b-cancelada'}">${u.ativo ? 'ativo' : 'inativo'}</span>
+        </div>
+        <div class="acesso-tags">
+          <span class="ex-tag">${u.role === 'aluno' ? 'Aluno (dono)' : 'Personal'}</span>
+          ${u.deve_trocar_senha ? '<span class="ex-tag pend" title="ainda não escolheu a própria senha">senha provisória</span>' : ''}
+        </div>
+        <div class="acesso-acoes">
+          <button class="btn btn-sm btn-primary" onclick="resetarSenha(${u.id}, '${esc(u.nome).replace(/'/g, "\\'")}')">Resetar senha</button>
           <button class="btn btn-sm" onclick="abrirUsuario(${u.id})">Editar</button>
           ${u.id !== _user.id ? `<button class="btn btn-sm btn-danger" onclick="removerUsuario(${u.id})">Remover</button>` : ''}
-        </td>
-      </tr>`).join('');
+        </div>
+      </div>`).join('') || '<div class="empty">Nenhum acesso cadastrado.</div>';
   } catch (e) { toast(e.message, 'err'); }
 }
 
 let _usuariosCache = [];
+function rotuloSenhaUsuario(novo) {
+  // O mesmo campo significa coisas diferentes ao criar e ao editar: em branco,
+  // criar sorteia uma senha e editar não mexe em nada.
+  document.getElementById('u-senha-rot').textContent =
+    novo ? 'Senha provisória' : 'Trocar a senha (opcional)';
+  document.getElementById('u-senha').placeholder =
+    novo ? 'deixe vazio para sortear' : 'deixe vazio para não alterar';
+}
+
 function novoUsuario() {
   ['u-id','u-nome','u-email','u-senha'].forEach(i => setVal(i, ''));
   setVal('u-role', 'personal');
+  rotuloSenhaUsuario(true);
   document.getElementById('m-user-titulo').textContent = 'Novo acesso';
   abrirModal('m-user');
 }
@@ -1337,6 +1353,7 @@ async function abrirUsuario(id) {
     if (!u) return;
     setVal('u-id', u.id); setVal('u-nome', u.nome); setVal('u-email', u.email);
     setVal('u-role', u.role); setVal('u-senha', '');
+    rotuloSenhaUsuario(false);
     document.getElementById('m-user-titulo').textContent = u.nome;
     abrirModal('m-user');
   } catch (e) { toast(e.message, 'err'); }
