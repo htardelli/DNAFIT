@@ -1,0 +1,1096 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FITPLAN — Controle de Aulas</title>
+<meta name="theme-color" content="#16A34A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="FITPLAN">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2316A34A'/%3E%3Cg stroke='white' stroke-width='9' stroke-linecap='round'%3E%3Cpath d='M30 32v36M70 32v36M18 42v16M82 42v16M30 50h40'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/css/style.css?v=7.3">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<!-- ── Login ── -->
+<div class="auth" id="auth">
+  <div class="auth-box">
+    <div class="auth-logo">
+      <b>FITPLAN</b>
+      <div>Controle de aulas · aluno + personal</div>
+    </div>
+    <div style="margin-bottom:12px">
+      <label>E-mail</label>
+      <input id="log-email" type="email" placeholder="seu@email.com" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <div style="margin-bottom:16px">
+      <label>Senha</label>
+      <input id="log-senha" type="password" placeholder="••••••" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <div id="log-erro" style="display:none;color:var(--danger);font-size:12px;margin-bottom:10px;text-align:center"></div>
+    <button class="btn btn-primary" style="width:100%;height:42px" onclick="doLogin()">Entrar</button>
+  </div>
+</div>
+
+<div id="app" style="display:none">
+<div class="overlay" id="overlay" onclick="fecharMenu()"></div>
+
+<aside class="sidebar" id="sidebar">
+  <div class="side-logo">
+    <h1>FITPLAN</h1>
+    <div class="sub">Aulas · Treinos · Frequência</div>
+  </div>
+  <nav class="side-nav">
+    <button class="nav-item active" data-page="agenda" onclick="nav('agenda')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+      Agenda
+    </button>
+    <button class="nav-item" data-page="treinos" onclick="nav('treinos')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6.5 6.5v11M17.5 6.5v11M3 9v6M21 9v6M6.5 12h11"/></svg>
+      Treinos
+    </button>
+    <button class="nav-item" data-page="frequencia" onclick="nav('frequencia')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
+      Progresso
+    </button>
+    <button class="nav-item" data-page="financeiro" onclick="nav('financeiro')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/></svg>
+      Financeiro
+    </button>
+    <button class="nav-item" data-page="config" onclick="nav('config')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 008 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9c.14.36.43.65.79.79H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      Configurações
+    </button>
+  </nav>
+  <div class="side-foot">
+    <div id="side-user" style="color:#94A3B8;font-weight:700"></div>
+    <a href="#" onclick="sair();return false" style="color:#64748B">Sair</a>
+  </div>
+</aside>
+
+<div class="main">
+  <div class="topbar">
+    <button class="hamb" onclick="abrirMenu()">
+      <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+    <span class="title" id="page-title">Agenda</span>
+    <button class="btn btn-sm btn-ghost" onclick="toggleTema()" title="Tema claro/escuro" id="btn-tema">🌙</button>
+    <button class="btn btn-sm" onclick="abrirDiasDoMes()" id="btn-dias">Dias do mês</button>
+    <button class="btn btn-sm btn-primary" id="btn-nova-aula" onclick="novaAula()">+ Aula</button>
+  </div>
+
+  <div class="content">
+
+  <div id="aviso-senha" class="aviso" style="display:none">
+    <b>Senha inicial em uso.</b> Este endereço está aberto na internet — troque a senha agora em
+    <a href="#" onclick="nav('config');return false">Configurações</a>.
+  </div>
+
+  <!-- ══ AGENDA ══ -->
+  <section class="page active" id="page-agenda">
+    <!-- O treino que importa agora. Fica antes de tudo porque, na academia, abrir
+         o app e ter que navegar até o dia é o atrito que fazia ele não usar. -->
+    <div id="hoje-card"></div>
+
+    <!-- Pedidos de transferência esperando o personal. O aviso sobre a tela
+         inicial pode ser dispensado em "Depois"; sem este trilho, o pedido
+         sumia até ele reabrir o app — e a aula do aluno fica travada enquanto
+         isso. Aqui ele reencontra o pedido a qualquer momento. -->
+    <div id="transf-trilho" class="aviso" style="display:none;margin-bottom:14px"></div>
+
+    <div class="card" id="card-painel" style="display:none">
+      <div class="card-head"><span class="card-title">Como está o mês</span></div>
+      <div class="card-body" id="painel-mes"></div>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="card">
+      <div class="card-head">
+        <div class="row">
+          <button class="btn btn-sm" onclick="mudarMes(-1)">‹</button>
+          <span class="card-title" id="cal-mes" style="min-width:150px;text-align:center"></span>
+          <button class="btn btn-sm" onclick="mudarMes(1)">›</button>
+          <button class="btn btn-sm" onclick="irHoje()">Hoje</button>
+        </div>
+        <div class="row legenda" style="font-size:11px;color:var(--muted)">
+          <span class="badge b-agendada">agendada</span>
+          <span class="badge b-realizada" title="realizada">feita</span>
+          <span class="badge b-falta">falta</span>
+          <span class="badge b-cancelada" title="cancelada">cancel</span>
+          <span class="badge b-transferida" title="transferida para outro dia">transf.</span>
+          <span class="badge b-credito" title="aula paga em outro mês, remanejada para cá">crédito</span>
+          <span class="legenda-modo"><i class="modo modo-p">P</i>personal</span>
+          <span class="legenda-modo"><i class="modo modo-i">I</i>individual</span>
+          <span class="legenda-modo"><i class="modo modo-a"><span>A</span></i>corrida</span>
+          <span class="legenda-fer"><i></i>feriado</span>
+          <span class="legenda-fer" title="ponto facultativo"><i class="facu"></i><span class="facult-lg">facultativo</span><span class="facult-sm">facult.</span></span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="cal-head">
+          <div>Seg</div><div>Ter</div><div>Qua</div><div>Qui</div><div>Sex</div><div>Sáb</div><div>Dom</div>
+        </div>
+        <div class="cal" id="cal"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">Aulas do mês</span>
+        <select id="f-status" onchange="renderLista()" style="width:auto">
+          <option value="">Todos os status</option>
+          <option value="agendada">Agendada</option>
+          <option value="realizada">Realizada</option>
+          <option value="falta">Falta</option>
+          <option value="cancelada">Cancelada</option>
+        </select>
+        <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:12px;color:var(--text)">
+          <input type="checkbox" id="f-sem-treino" onchange="renderLista()" style="width:auto"> só sem treino
+        </label>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Quando</th>
+            <th class="c-modo" title="P = com o personal · I = individual">Modo</th>
+            <th>Treino</th>
+            <th class="c-st">Status</th>
+            <th></th>
+          </tr></thead>
+          <tbody id="lista-aulas"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ TREINOS ══ -->
+  <section class="page" id="page-treinos">
+    <div class="tabs">
+      <button class="tab active" data-tab="modelos" onclick="tabTreino('modelos')">Modelos de treino</button>
+      <button class="tab" data-tab="exercicios" onclick="tabTreino('exercicios')">Biblioteca de exercícios</button>
+    </div>
+
+    <div id="tab-modelos">
+      <div class="card">
+        <div class="card-head">
+          <span class="card-title">Modelos (Treino A, B, C…)</span>
+          <button class="btn btn-sm btn-primary" onclick="novoModelo()">+ Novo modelo</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Nome</th><th>Tipo</th><th>Foco</th><th class="right">Exercícios</th><th></th></tr></thead>
+            <tbody id="lista-modelos"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-exercicios" style="display:none">
+      <div class="card">
+        <div class="card-head">
+          <span class="card-title">Biblioteca</span>
+          <div class="row">
+            <input id="f-ex-busca" placeholder="Buscar exercício…" oninput="renderExercicios()" style="width:180px">
+            <button class="btn btn-sm btn-primary" onclick="novoExercicio()">+ Novo</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <!-- Rótulos curtos de propósito: quatro abas precisam caber na largura
+               de um celular sem quebrar linha nem cortar a última. -->
+          <div class="tabs tabs-cat" style="margin-bottom:12px">
+            <button class="tab active" data-cat="grupo" onclick="catAba('grupo')">Músculo</button>
+            <button class="tab" data-cat="equipamento" onclick="catAba('equipamento')">Aparelho</button>
+            <button class="tab" data-cat="favoritos" onclick="catAba('favoritos')" title="Favoritos">⭐</button>
+            <button class="tab" data-cat="todos" onclick="catAba('todos')">Todos</button>
+          </div>
+          <div class="cat-grade" id="cat-grade"></div>
+          <div class="cat-volta" id="cat-volta" style="display:none">
+            <button class="btn btn-sm" onclick="catVoltar()">‹ Voltar</button>
+            <span class="card-title" id="cat-titulo" style="margin-left:8px"></span>
+          </div>
+        </div>
+        <div class="table-wrap" id="wrap-exercicios" style="display:none">
+          <table>
+            <thead><tr><th></th><th>Exercício</th><th>Grupo</th><th>Equipamento</th><th>Execução</th><th></th></tr></thead>
+            <tbody id="lista-exercicios"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ PROGRESSO (frequência + corpo) ══ -->
+  <section class="page" id="page-frequencia">
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">Corpo</span>
+        <button class="btn btn-sm btn-primary" id="btn-pesar" onclick="abrirMedida()">Registrar peso</button>
+      </div>
+      <div class="card-body" id="corpo-painel"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">Corrida</span>
+        <span class="muted" id="aer-ano" style="font-size:12px"></span>
+      </div>
+      <div class="card-body" id="aer-painel"></div>
+    </div>
+
+    <div class="card" id="card-aer-gr" style="display:none">
+      <div class="card-head"><span class="card-title">Volume e ritmo por mês</span></div>
+      <div class="card-body"><div class="chart-wrap"><canvas id="ch-aer"></canvas></div></div>
+    </div>
+
+    <div class="card" id="card-peso" style="display:none">
+      <div class="card-head"><span class="card-title">Evolução do peso</span></div>
+      <div class="card-body"><div class="chart-wrap"><canvas id="ch-peso"></canvas></div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">Aulas por mês</span>
+        <select id="f-ano" onchange="loadFrequencia()" style="width:auto"></select>
+      </div>
+      <div class="card-body"><div class="chart-wrap"><canvas id="ch-mensal"></canvas></div></div>
+    </div>
+
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">
+      <div class="card">
+        <div class="card-head"><span class="card-title">Últimas 12 semanas</span></div>
+        <div class="card-body"><div class="chart-wrap"><canvas id="ch-semanal"></canvas></div></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-title">Séries por grupo muscular</span></div>
+        <div class="card-body"><div class="chart-wrap"><canvas id="ch-grupo"></canvas></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">Evolução de carga</span>
+        <select id="f-evol" onchange="loadEvolucao()" style="width:auto;max-width:260px"></select>
+      </div>
+      <div class="card-body"><div class="chart-wrap"><canvas id="ch-evol"></canvas></div></div>
+    </div>
+  </section>
+
+  <!-- ══ FINANCEIRO ══ -->
+  <section class="page" id="page-financeiro">
+    <div class="kpis" id="fin-kpis"></div>
+
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">Pagamentos</span>
+        <button class="btn btn-sm btn-primary" id="btn-pix" onclick="abrirPix()">Informar pagamento</button>
+      </div>
+      <div class="card-body" id="pix-lista"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">Fechamento mês a mês</span>
+        <div class="row">
+          <span class="muted" id="fin-hora"></span>
+          <select id="f-fin-ano" onchange="loadFinanceiro()" style="width:auto"></select>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Mês</th><th class="right">Aulas</th><th class="right">Valor do mês</th>
+            <th class="right">Treinadas</th><th class="right">A treinar</th><th class="right">Perdidas</th>
+            <th class="right" title="↗ saíram daqui · ↘ chegaram como crédito">Transf.</th>
+          </tr></thead>
+          <tbody id="lista-financeiro"></tbody>
+        </table>
+      </div>
+      <div class="card-body" style="border-top:1px solid var(--border);font-size:12px;color:var(--muted)">
+        <b>Pré-pago, sem devolução.</b> O mês é pago quando as aulas entram na agenda, e o
+        <b>valor do mês</b> soma <b>todas</b> elas — nenhum status devolve dinheiro.
+        Não pôde ir num dia? <b>Mude a data</b> para outro dia do mesmo mês — direto, sem pedir nada.
+        Precisa cair em <b>outro mês</b>? Use <b>Transferir</b> dentro da aula: ela vira
+        <b>crédito</b> no dia novo, e o valor continua no mês em que foi pago (uma vez por aula,
+        com aprovação do personal). Se não remarcar de um jeito nem do outro, a aula entra em
+        <b>Perdidas</b> (falta ou cancelamento) e o valor não volta.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">Pacotes contratados</span>
+        <button class="btn btn-sm btn-primary" onclick="novoPlano()">+ Novo pacote</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Pacote</th><th>Vigência</th><th class="right">R$/hora</th><th class="right">Contratadas</th>
+            <th class="right">Usadas</th><th class="right">Saldo</th><th class="right">Meta/sem</th><th></th>
+          </tr></thead>
+          <tbody id="lista-planos"></tbody>
+        </table>
+      </div>
+      <div class="card-body" style="border-top:1px solid var(--border);font-size:12px;color:var(--muted)">
+        Opcional. Use se o combinado for pacote fechado (saldo de aulas). O <b>R$/hora</b> do pacote
+        vigente tem prioridade sobre o valor geral definido em Configurações.
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ CONFIG ══ -->
+  <section class="page" id="page-config">
+    <!-- No celular a barra lateral não é exibida, e era só lá que existia o
+         "Sair". Sem este cartão, não havia como deslogar pelo telefone. -->
+    <div class="card">
+      <div class="card-head"><span class="card-title">Minha conta</span></div>
+      <div class="card-body row" style="justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div>
+          <div id="cfg-usuario" style="font-weight:800"></div>
+          <div class="muted" id="cfg-usuario-sub" style="font-size:12px"></div>
+        </div>
+        <button class="btn btn-danger" onclick="sair()">Sair do aplicativo</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">Valor da hora-aula e padrões da agenda</span>
+        <span class="muted" id="cfg-aviso" style="font-size:12px"></span>
+      </div>
+      <div class="card-body">
+        <div class="form-grid" style="max-width:760px">
+          <div><label>Valor da hora-aula (R$) *</label><input id="cfg-valor" type="number" step="0.01" min="0"></div>
+          <div class="form-dt"><label>Horário padrão</label><input id="cfg-hora" type="time"></div>
+          <div><label>Duração padrão (min)</label><input id="cfg-duracao" type="number" min="10" step="5"></div>
+          <div><label>Professor padrão</label><input id="cfg-prof"></div>
+          <div><label>Local padrão</label><input id="cfg-local"></div>
+          <div><label>Altura (cm)</label><input id="cfg-altura" type="number" step="1" min="0" placeholder="para o IMC"></div>
+          <div><label>Meta de peso (kg)</label><input id="cfg-meta" type="number" step="0.1" min="0" placeholder="0 = sem meta"></div>
+          <div class="form-full"><button class="btn btn-primary" id="cfg-btn" onclick="salvarConfig()">Salvar</button></div>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-top:12px">
+          O valor é gravado em cada aula no momento em que ela entra na agenda. Reajuste depois
+          só vale para as aulas novas — o histórico e os meses já fechados não mudam.
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><span class="card-title">Minha senha</span></div>
+      <div class="card-body">
+        <div class="form-grid" style="max-width:520px">
+          <div><label>Senha atual</label><input id="sn-atual" type="password"></div>
+          <div><label>Nova senha</label><input id="sn-nova" type="password" placeholder="mín. 8 caracteres"></div>
+          <div class="form-full"><button class="btn btn-primary" onclick="trocarSenha()">Alterar senha</button></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><span class="card-title">Professores e locais</span></div>
+      <div class="card-body">
+        <p class="muted" style="font-size:12px;margin:0 0 12px">
+          Alimenta as listas de <b>Professor</b> e <b>Local</b> na hora de marcar as aulas.
+          Os dois perfis podem cadastrar. Remover uma opção não altera as aulas já marcadas.
+        </p>
+        <div class="grid g2">
+          <div>
+            <label>Professores</label>
+            <div class="row" style="margin-bottom:8px">
+              <input id="cad-prof-novo" placeholder="Nome do professor"
+                     onkeydown="if(event.key==='Enter')addCadastro('professor')">
+              <button class="btn btn-sm btn-primary" onclick="addCadastro('professor')">+</button>
+            </div>
+            <div id="cad-professores"></div>
+          </div>
+          <div>
+            <label>Locais</label>
+            <div class="row" style="margin-bottom:8px">
+              <input id="cad-local-novo" placeholder="Nome do local"
+                     onkeydown="if(event.key==='Enter')addCadastro('local')">
+              <button class="btn btn-sm btn-primary" onclick="addCadastro('local')">+</button>
+            </div>
+            <div id="cad-locais"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="card-usuarios" style="display:none">
+      <div class="card-head">
+        <span class="card-title">Acessos</span>
+        <button class="btn btn-sm btn-primary" onclick="novoUsuario()">+ Novo acesso</button>
+      </div>
+      <!-- Lista, não tabela: com cinco colunas e três botões, a tabela ficava com
+           508px dentro de 360px no celular e as ações ficavam fora da tela, só
+           alcançáveis arrastando — ou seja, invisíveis na prática. -->
+      <div class="card-body" id="lista-usuarios"></div>
+      <div class="card-body" style="border-top:1px solid var(--border);font-size:12px;color:var(--muted)">
+        <b>Aluno</b> = dono da conta (gerencia acessos). <b>Personal</b> = professor: monta treinos,
+        agenda e registra as aulas, mas não mexe nos acessos.
+      </div>
+    </div>
+  </section>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+<!-- Navegação inferior (celular) — espelha a sidebar do desktop -->
+<nav class="tabbar" id="tabbar">
+  <button class="tabbar-item active" data-page="agenda" onclick="nav('agenda')">
+    <span class="tb-icone"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>
+    <span>Agenda</span>
+  </button>
+  <button class="tabbar-item" data-page="treinos" onclick="nav('treinos')">
+    <span class="tb-icone"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6.5 6.5v11M17.5 6.5v11M3 9v6M21 9v6M6.5 12h11"/></svg></span>
+    <span>Treinos</span>
+  </button>
+  <button class="tabbar-item" data-page="frequencia" onclick="nav('frequencia')">
+    <span class="tb-icone"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg></span>
+    <span>Progresso</span>
+  </button>
+  <button class="tabbar-item" data-page="financeiro" onclick="nav('financeiro')">
+    <span class="tb-icone"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/></svg></span>
+    <span>Financeiro</span>
+  </button>
+  <button class="tabbar-item" data-page="config" onclick="nav('config')">
+    <span class="tb-icone"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 008 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9c.14.36.43.65.79.79H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></span>
+    <span>Ajustes</span>
+  </button>
+</nav>
+
+</div><!-- /app -->
+
+<!-- ══ Modal: Concluir treino ══
+     Substitui o confirm() do navegador. O momento de fechar o treino é o único
+     em que energia, fadiga e esforço têm resposta confiável — perguntar depois é
+     perguntar à memória, não ao corpo. ══ -->
+<div class="modal-bg" id="m-concluir">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-head">
+      <span class="modal-title">Concluir treino</span>
+      <button class="btn btn-sm btn-ghost" onclick="fecharModal('m-concluir')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="aviso" id="cc-aviso" style="margin-bottom:14px"></div>
+      <div class="grid g2" id="cc-aerobico" style="display:none">
+        <div><label>Distância (km)</label>
+          <input type="number" step="0.1" min="0" id="cc-distancia" inputmode="decimal"></div>
+        <div><label>Tempo (min)</label>
+          <input type="number" step="1" min="0" id="cc-tempo" inputmode="numeric"></div>
+      </div>
+      <div><label>Nível de energia</label><select id="cc-energia"></select></div>
+      <div><label>Nível de fadiga</label><select id="cc-fadiga"></select></div>
+      <div><label>Percepção de esforço (PSE)</label><select id="cc-pse"></select></div>
+      <div><label>Como foi o treino</label>
+        <textarea id="cc-obs" rows="3" placeholder="dor, sono, o que rendeu, o que travou…"></textarea></div>
+      <p class="muted" style="font-size:11px;margin-top:10px">
+        Todos opcionais — dá para preencher ou corrigir depois, dentro da aula.
+      </p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="fecharModal('m-concluir')">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarConclusao()">Confirmar treino feito</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Aviso prioritário de pagamento ══
+     Fica POR CIMA da tela inicial porque confirmar o pagamento é a única coisa no app
+     que a outra pessoa está esperando. Um cartão no meio da página seria rolado
+     e esquecido — e o combustível de discussão sobre dinheiro é justamente o
+     "eu avisei" / "eu não vi". ══ -->
+<div class="modal-bg" id="m-pix-aviso">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-head">
+      <span class="modal-title" id="pix-av-titulo">Pagamento</span>
+    </div>
+    <div class="modal-body" id="pix-av-corpo"></div>
+    <div class="modal-foot" id="pix-av-acoes"></div>
+  </div>
+</div>
+
+<!-- ══ Modal: Informar pagamento ══ -->
+<div class="modal-bg" id="m-pix">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-head">
+      <span class="modal-title">Informar pagamento ao personal</span>
+      <button class="btn btn-sm btn-ghost" onclick="fecharModal('m-pix')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="grid g2">
+        <div><label>Mês referente</label><input type="month" id="px-mes"></div>
+        <div class="form-dt"><label>Data do pagamento</label><input type="date" id="px-data"></div>
+      </div>
+      <div><label>Valor pago (R$) *</label>
+        <input type="number" step="0.01" min="0" id="px-valor" inputmode="decimal"></div>
+      <div><label>Observação</label><input id="px-obs" placeholder="Pix, dinheiro, parcela…"></div>
+      <p class="muted" style="font-size:11px;margin-top:10px">
+        O personal recebe este aviso em destaque ao abrir o app e confirma o recebimento.
+        Enquanto ele não confirmar, o pagamento fica marcado como <b>pendente</b> para os dois.
+      </p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="fecharModal('m-pix')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarPix()">Informar pagamento</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODO TREINO ══ Tela cheia, um exercício por vez. ══ -->
+<div class="treino-modo" id="modo-treino">
+  <div class="tm-topo">
+    <button class="tm-x" onclick="tmFechar()">✕</button>
+    <div style="flex:1;min-width:0">
+      <div class="tm-nome" id="tm-titulo">Treino</div>
+      <div class="tm-sub" id="tm-subtitulo"></div>
+    </div>
+    <button class="btn btn-sm" onclick="tmAbrirAula()">Detalhes</button>
+  </div>
+  <div class="tm-passos" id="tm-passos"></div>
+  <div class="tm-corpo">
+    <div class="tm-ex-nome" id="tm-ex-nome">—</div>
+    <div class="tm-ex-meta" id="tm-ex-meta"></div>
+    <div class="tm-rot"><span></span><span>Carga</span><span>Reps</span><span></span></div>
+    <div id="tm-series"></div>
+    <p class="muted" id="tm-como" style="font-size:12px;margin-top:16px;line-height:1.5"></p>
+    <div class="tm-descanso" id="tm-descanso">
+      <span class="t" id="tm-descanso-t">00:00</span>
+      <span class="l">descanso</span>
+      <button onclick="tmDescansoMais(30)">+30s</button>
+      <button onclick="tmDescansoParar()">Pular</button>
+    </div>
+  </div>
+  <div class="tm-rodape">
+    <button class="btn nav-lat" onclick="tmIr(-1)" id="tm-ant">‹</button>
+    <button class="btn btn-primary" id="tm-proximo" onclick="tmIr(1)">Próximo</button>
+  </div>
+</div>
+
+<!-- ══ Modal: Transferir aula para outro dia ══ -->
+<!-- ══ Modal: ver o treino (leitura) ══
+     "Ver treino" abria o formulário completo da aula: 15 campos de cadastro
+     antes de chegar nos exercícios. Quem só quer saber o que vai treinar hoje
+     não precisa ver status, pacote, valor e modelo. Aqui é só leitura. -->
+<div class="modal-bg" id="m-ver-treino">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-head">
+      <span class="modal-title" id="vt-titulo">Treino</span>
+      <button class="btn btn-sm btn-ghost" onclick="fecharModal('m-ver-treino')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="vt-meta" id="vt-meta"></div>
+      <div id="vt-corpo"></div>
+    </div>
+    <div class="modal-foot" id="vt-acoes"></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="m-transferir">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-head">
+      <span class="modal-title">Transferir aula</span>
+      <button class="btn btn-sm btn-ghost" onclick="fecharModal('m-transferir')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="aviso" style="margin-bottom:14px" id="tr-contexto"></div>
+      <div class="grid g2">
+        <div class="form-dt"><label>Novo dia *</label><input type="date" id="tr-data"></div>
+        <div class="form-dt"><label>Horário</label><input type="time" id="tr-hora"></div>
+      </div>
+      <div><label>Motivo (o personal vai ler)</label>
+        <input id="tr-motivo" placeholder="viagem de trabalho, compromisso…"></div>
+      <p class="muted" style="font-size:11px;margin-top:10px">
+        O valor <b>continua no mês em que você pagou</b> — a aula original fica lá,
+        marcada como transferida. No novo dia ela entra como <b>crédito</b>, sem
+        custo. Cada aula pode ser transferida <b>uma única vez</b>, e só vale
+        depois que o personal aprovar.
+      </p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="fecharModal('m-transferir')">Cancelar</button>
+      <button class="btn btn-primary" onclick="pedirTransferencia()">Pedir transferência</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Aviso prioritário: transferências aguardando o personal ══ -->
+<div class="modal-bg" id="m-transf-aviso">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-head"><span class="modal-title">🔄 Transferência de aula</span></div>
+    <div class="modal-body" id="tv-corpo"></div>
+    <div class="modal-foot" id="tv-acoes"></div>
+  </div>
+</div>
+
+<!-- ══ Modal: Trocar a senha (obrigatório) ══
+     Sem ✕ e sem Cancelar de propósito: com a troca pendente o servidor recusa
+     toda rota do app (HTTP 423), então um modal fechável só daria a impressão
+     de escapar para uma tela que não responderia nada. ══ -->
+<div class="modal-bg" id="m-trocar-senha">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-head">
+      <span class="modal-title">Escolha a sua senha</span>
+    </div>
+    <div class="modal-body">
+      <div class="aviso" style="margin-bottom:14px">
+        <b>Primeiro acesso.</b> A senha que você usou foi definida por outra
+        pessoa. Escolha a sua para continuar — ela não fica visível para ninguém.
+      </div>
+      <div><label>Senha atual (a provisória) *</label>
+        <input id="ts-atual" type="password" autocomplete="current-password"></div>
+      <div><label>Nova senha *</label>
+        <input id="ts-nova" type="password" autocomplete="new-password" placeholder="mín. 8 caracteres"></div>
+      <div><label>Repita a nova senha *</label>
+        <input id="ts-nova2" type="password" autocomplete="new-password"
+               onkeydown="if(event.key==='Enter')concluirTrocaSenha()"></div>
+      <div id="ts-erro" class="muted" style="color:var(--danger);font-size:12px;margin-top:8px"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="sair()">Sair</button>
+      <button class="btn btn-primary" onclick="concluirTrocaSenha()">Salvar e entrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Modal: Senha provisória gerada ══ -->
+<div class="modal-bg" id="m-senha-nova">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-head">
+      <span class="modal-title">Senha provisória</span>
+      <button class="btn btn-sm btn-ghost" onclick="fecharModal('m-senha-nova')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin:0 0 10px" id="sn-quem"></p>
+      <div class="senha-caixa"><code id="sn-valor"></code>
+        <button class="btn btn-sm" onclick="copiarSenha()">Copiar</button></div>
+      <p class="muted" style="font-size:12px;margin-top:12px">
+        Anote ou envie agora: <b>ela não é mostrada de novo</b> — o app guarda só
+        o embaralhado, não a senha. No próximo acesso, o app obriga a pessoa a
+        escolher a senha dela.
+      </p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-primary" onclick="fecharModal('m-senha-nova')">Entendi</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Modal: Escolher exercício ══
+     O <datalist> do campo funciona no computador (abre uma lista), mas no
+     Safari do iPhone ele vira apenas três sugestões na barra do teclado — sem
+     seta, sem rolagem, sem como navegar. Na prática, a biblioteca sumia no
+     celular. Este seletor é o caminho explícito: busca, favoritos e grupos. ══ -->
+<div class="modal-bg" id="m-escolher-ex">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-head">
+      <span class="modal-title">Escolher exercício</span>
+      <button class="btn btn-sm btn-ghost" onclick="fecharModal('m-escolher-ex')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input id="ex-busca" placeholder="Buscar na biblioteca…" oninput="renderEscolherEx()"
+             autocomplete="off" style="margin-bottom:10px">
+      <div class="tabs tabs-cat" id="ex-grupos" style="margin-bottom:10px"></div>
+      <div id="ex-lista" style="max-height:52vh;overflow-y:auto"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Modal: Régua ══ Seletor de valor sem teclado (evita o zoom do iOS). ══ -->
+<div class="modal-bg" id="m-regua">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-head">
+      <span class="modal-title" id="rg-titulo">Valor</span>
+      <button class="btn btn-sm btn-ghost" onclick="fecharModal('m-regua')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="regua-box">
+        <div class="regua-valor"><span id="rg-valor">0</span><small id="rg-unidade"></small></div>
+      </div>
+      <div style="position:relative">
+        <div class="regua" id="rg-regua">
+          <div class="regua-fita" id="rg-fita"></div>
+        </div>
+        <div class="regua-agulha"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="fecharModal('m-regua')">Cancelar</button>
+      <button class="btn btn-primary" onclick="rgConfirmar()">Usar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Modal: Usar modelo em um dia ══ -->
+<div class="modal-bg" id="m-usar-modelo">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-head">
+      <span class="modal-title" id="um-titulo">Usar modelo</span>
+      <button class="btn btn-sm btn-ghost" onclick="fecharModal('m-usar-modelo')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="muted" style="font-size:12px;margin:0 0 12px">
+        Escolha o dia. Em treino <b>individual</b> o modelo é aplicado na hora; em aula
+        <b>com o personal</b> ele vira uma <b>sugestão</b> — quem prescreve continua sendo ele.
+      </p>
+      <div id="um-lista"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Modal: Medida corporal ══ -->
+<div class="modal-bg" id="m-medida">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-head">
+      <span class="modal-title">Registrar medida</span>
+      <button class="btn btn-sm btn-ghost" onclick="fecharModal('m-medida')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="grid g2">
+        <div><label>Data</label><input type="date" id="md-data"></div>
+        <div><label>Peso (kg)</label>
+          <input type="number" step="0.1" id="md-peso" inputmode="decimal"
+                 onclick="reguaPara('md-peso','Peso','kg',30,200,0.1)"></div>
+      </div>
+      <div class="grid g2">
+        <div><label>Cintura (cm)</label><input type="number" step="0.5" id="md-cintura" inputmode="decimal"></div>
+        <div><label>Quadril (cm)</label><input type="number" step="0.5" id="md-quadril" inputmode="decimal"></div>
+      </div>
+      <div class="grid g2">
+        <div><label>Peito (cm)</label><input type="number" step="0.5" id="md-peito" inputmode="decimal"></div>
+        <div><label>Braço (cm)</label><input type="number" step="0.5" id="md-braco" inputmode="decimal"></div>
+      </div>
+      <div class="grid g2">
+        <div><label>Coxa (cm)</label><input type="number" step="0.5" id="md-coxa" inputmode="decimal"></div>
+        <div><label>Observação</label><input id="md-obs" placeholder="jejum, pós-treino…"></div>
+      </div>
+      <p class="muted" style="font-size:11px;margin-top:8px">
+        Um registro por dia — pesar de novo no mesmo dia corrige o valor em vez de criar outro ponto.
+      </p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="fecharModal('m-medida')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarMedida()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Modal: Aula ══ -->
+<div class="modal-bg" id="m-aula">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="modal-title" id="m-aula-titulo">Nova aula</span>
+      <button class="btn btn-sm btn-ghost" onclick="fecharModal('m-aula')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="a-id">
+      <!-- Texto trocado em aplicarModoAula(): quem MONTA o treino pode corrigi-lo
+           depois de feito; quem só o executou, não. -->
+      <div id="a-aviso-feito" class="aviso aviso-ok" style="display:none"></div>
+
+      <div id="a-aviso-sugestao" class="aviso aviso-info" style="display:none"></div>
+      <div id="a-aviso-transf" class="aviso" style="display:none"></div>
+
+      <div id="a-aviso-futuro" class="aviso" style="display:none">
+        Aula <b>ainda não começou</b> — não dá para fazer nem para faltar a ela.
+        Já sabe que não vai? <b>Mude a data</b> para outro dia do mesmo mês, ou use
+        <b>Transferir</b> para levá-la a outro mês. Remarcar é o que preserva o valor já
+        pago. Cancelar é o último caso — o valor não volta.
+      </div>
+
+      <div class="form-grid">
+        <div class="form-dt"><label>Data *</label><input id="a-data" type="date" onchange="aplicarModoAula()"></div>
+        <div class="form-dt"><label>Hora</label><input id="a-hora" type="time" onchange="aplicarModoAula()"></div>
+        <div><label>Duração (min)</label><input id="a-duracao" type="number" min="10" step="5" value="60"></div>
+        <div><label>Como vai treinar *</label>
+          <select id="a-modalidade" onchange="aplicarModoAula()">
+            <option value="com_personal">Com o personal</option>
+            <option value="sozinho">Sozinho</option>
+            <option value="aerobico">Aeróbico (corrida)</option>
+          </select>
+        </div>
+        <div id="w-status"><label>Status</label>
+          <select id="a-status">
+            <option value="agendada">Agendada</option>
+            <option value="realizada">Realizada</option>
+            <option value="falta">Falta</option>
+            <option value="cancelada">Cancelada</option>
+          </select>
+        </div>
+        <div><label>Tipo de treino</label>
+          <!-- Preenchido por preencherTipos(): a lista muda com a modalidade —
+               corrida não se classifica em Hipertrofia, musculação não se
+               classifica em Intervalado. -->
+          <select id="a-tipo"></select>
+        </div>
+        <div><label>Foco (grupos)</label><input id="a-foco" placeholder="Peito e tríceps"></div>
+        <div><label>Local</label>
+          <select id="a-local" onchange="cadNovoSe(this,'local')"></select></div>
+        <div id="w-professor"><label>Professor</label>
+          <select id="a-professor" onchange="cadNovoSe(this,'professor')"></select></div>
+        <div id="w-plano"><label>Pacote</label><select id="a-plano"><option value="">—</option></select></div>
+        <div><label>Modelo de treino</label><select id="a-modelo"><option value="">—</option></select></div>
+        <div id="w-pse"><label>Percepção de esforço</label><select id="a-pse"></select></div>
+        <div id="w-energia"><label>Nível de energia</label><select id="a-energia"></select></div>
+        <div id="w-fadiga"><label>Nível de fadiga</label><select id="a-fadiga"></select></div>
+        <div id="w-valor"><label>Valor da aula (R$)</label><input id="a-valor" type="number" step="0.01" min="0"></div>
+        <div class="form-full" style="margin-top:-4px">
+          <span style="font-size:11px;color:var(--muted)">Remarcação: a data muda livremente <b>dentro do mês</b>. Para <b>outro mês</b>, use o botão <b>Transferir</b> — a aula vira crédito lá, e o valor fica aqui.</span>
+        </div>
+        <div class="form-full"><label>Descrição do treino</label><textarea id="a-descricao" placeholder="O que será feito na aula"></textarea></div>
+        <div class="form-full"><label>Observações (como foi)</label><textarea id="a-obs"></textarea></div>
+      </div>
+
+      <div id="a-recorrencia">
+        <div class="sec-title">Repetir na agenda</div>
+        <div class="form-grid">
+          <div><label>Repetir por (semanas)</label><input id="a-repetir" type="number" min="0" max="52" value="0"></div>
+          <div class="form-full">
+            <label>Dias da semana</label>
+            <div class="dow" id="a-dias">
+              <label><input type="checkbox" value="0">Seg</label>
+              <label><input type="checkbox" value="1">Ter</label>
+              <label><input type="checkbox" value="2">Qua</label>
+              <label><input type="checkbox" value="3">Qui</label>
+              <label><input type="checkbox" value="4">Sex</label>
+              <label><input type="checkbox" value="5">Sáb</label>
+              <label><input type="checkbox" value="6">Dom</label>
+            </div>
+            <div style="font-size:11px;color:var(--muted);margin-top:6px">
+              Deixe em 0 semanas para criar só esta aula. Aulas já existentes no mesmo dia e horário são ignoradas.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Treino aeróbico: a prescrição chega pronta, em texto, do treinador de
+           corrida. O bloco de séries × carga fica escondido — não é essa a forma
+           deste treino. -->
+      <div id="a-aer-bloco" style="display:none">
+        <div class="sec-title">Treino de corrida</div>
+        <div><label>Prescrição do treinador</label>
+          <textarea id="a-aer-texto" rows="7" style="font-family:var(--font);line-height:1.6"
+            placeholder="6km&#10;2km trote aquecendo;&#10;2x 1km progressivo a cada 250m (leve, moderado, forte e muito forte);&#10;2km de trote, desaquecendo."></textarea></div>
+        <div class="grid g2" id="a-aer-result">
+          <div><label>Distância (km)</label>
+            <input type="number" step="0.1" min="0" id="a-distancia" inputmode="decimal" oninput="atualizarPace()"></div>
+          <div><label>Tempo (min)</label>
+            <input type="number" step="1" min="0" id="a-tempo" inputmode="numeric" oninput="atualizarPace()"></div>
+        </div>
+        <div class="muted" id="a-aer-pace" style="font-size:12px;margin-top:6px"></div>
+      </div>
+
+      <div id="a-ex-bloco">
+        <div class="sec-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+          <span>Exercícios da aula</span>
+          <span id="a-ex-acoes">
+            <select id="a-aplicar-modelo" class="sel-compacto" style="width:auto"><option value="">Aplicar modelo…</option></select>
+            <button class="btn btn-sm" onclick="addLinhaEx('a-ex')">+ Exercício</button>
+          </span>
+        </div>
+        <div id="a-ex-aviso" class="aviso" style="display:none;margin-bottom:10px">
+          <b>Treino do personal.</b> Aqui você só acompanha o que foi prescrito. O que é seu:
+          marcar como <b>realizada</b>, <b>falta</b> ou <b>cancelada</b>, remarcar (no mesmo mês
+          pela data, em outro mês pelo botão <b>Transferir</b>) e escrever em <b>Observações</b>
+          como foi a aula.
+        </div>
+        <div class="ex-head">
+          <span>Exercício</span><span>Séries</span><span>Reps</span><span>Carga</span><span>Desc.(s)</span><span>Obs</span><span>Feito</span>
+        </div>
+        <div id="a-ex"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-danger" id="a-btn-del" onclick="excluirAula()" style="margin-right:auto;display:none">Excluir</button>
+      <button class="btn" id="a-btn-transf" onclick="abrirTransferencia()" style="display:none">Transferir</button>
+      <button class="btn" onclick="fecharModal('m-aula')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarAula()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Modal: dias do mês ══ -->
+<div class="modal-bg" id="m-dias">
+  <div class="modal" style="max-width:620px">
+    <div class="modal-head">
+      <span class="modal-title" id="m-dias-titulo">Dias de aula do mês</span>
+      <button class="btn btn-sm btn-ghost" onclick="fecharModal('m-dias')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="toggle-modalidade">
+        <button type="button" class="tm-btn active" data-mod="com_personal" onclick="dmModalidade('com_personal')">Com o personal</button>
+        <button type="button" class="tm-btn" data-mod="sozinho" onclick="dmModalidade('sozinho')">Sozinho</button>
+        <button type="button" class="tm-btn" data-mod="aerobico" onclick="dmModalidade('aerobico')">Aeróbico</button>
+      </div>
+      <div id="dm-ajuda" style="font-size:13px;color:var(--muted);margin-bottom:12px"></div>
+      <div class="row" style="margin-bottom:12px">
+        <button class="btn btn-sm" onclick="dmSemana([1,3,5])">Seg/Qua/Sex</button>
+        <button class="btn btn-sm" onclick="dmSemana([2,4])">Ter/Qui</button>
+        <button class="btn btn-sm" onclick="dmSemana([1,2,3,4,5])">Seg a Sex</button>
+        <button class="btn btn-sm" onclick="dmSemana([])">Limpar</button>
+      </div>
+      <div id="dm-grid" class="dm-grid"></div>
+      <div class="sec-title">Padrão das aulas criadas</div>
+      <div class="form-grid">
+        <div class="form-dt"><label>Horário</label><input id="dm-hora" type="time"></div>
+        <div><label>Duração (min)</label><input id="dm-duracao" type="number" min="10" step="5"></div>
+        <div><label>Professor</label>
+          <select id="dm-prof" onchange="cadNovoSe(this,'professor')"></select></div>
+        <div><label>Local</label>
+          <select id="dm-local" onchange="cadNovoSe(this,'local')"></select></div>
+        <div><label>Valor da aula (R$)</label><input id="dm-valor" type="number" step="0.01" min="0" oninput="dmTotal()"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <div id="dm-resumo" class="dm-resumo"></div>
+      <button class="btn" onclick="fecharModal('m-dias')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarDiasDoMes()">Salvar agenda do mês</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Modal: Exercício ══ -->
+<div class="modal-bg" id="m-ex">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-head">
+      <span class="modal-title" id="m-ex-titulo">Novo exercício</span>
+      <button class="btn btn-sm btn-ghost" onclick="fecharModal('m-ex')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="e-id">
+      <div class="form-grid">
+        <div class="form-full"><label>Nome *</label><input id="e-nome"></div>
+        <div><label>Grupo muscular</label>
+          <select id="e-grupo">
+            <option value="">—</option><option>Peito</option><option>Costas</option><option>Pernas</option>
+            <option>Ombro</option><option>Braços</option><option>Core</option><option>Cardio</option><option>Mobilidade</option>
+          </select>
+        </div>
+        <div><label>Equipamento</label>
+          <select id="e-equip">
+            <option value="">—</option><option>Barra</option><option>Halter</option><option>Máquina</option>
+            <option>Cabo</option><option>Peso corporal</option><option>Elástico</option><option>Livre</option>
+          </select>
+        </div>
+        <div class="form-full"><label>Execução</label><textarea id="e-desc" placeholder="Como executar o movimento"></textarea></div>
+        <div class="form-full"><label>Vídeo (link)</label><input id="e-video" placeholder="https://…"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="fecharModal('m-ex')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarExercicio()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Modal: Modelo ══ -->
+<div class="modal-bg" id="m-mod">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="modal-title" id="m-mod-titulo">Novo modelo</span>
+      <button class="btn btn-sm btn-ghost" onclick="fecharModal('m-mod')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="mo-id">
+      <div class="form-grid">
+        <div class="form-full"><label>Nome *</label><input id="mo-nome" placeholder="Treino A — Peito/Tríceps"></div>
+        <div><label>Tipo</label>
+          <select id="mo-tipo">
+            <option value="">—</option>
+            <optgroup label="Musculação">
+              <option>Força</option><option>Hipertrofia</option><option>Funcional</option>
+              <option>HIIT</option><option>Cardio</option><option>Mobilidade</option>
+            </optgroup>
+            <optgroup label="Corrida">
+              <option>Caminhada</option><option>Longo</option>
+              <option>Intervalado</option><option>Tiros</option>
+              <option>Ritmo</option><option>Progressivo</option><option>Regenerativo</option>
+              <option>Subida</option><option>Prova / teste</option>
+            </optgroup>
+          </select>
+        </div>
+        <div><label>Foco</label><input id="mo-foco" placeholder="Peito e tríceps"></div>
+        <div class="form-full"><label>Observações</label><textarea id="mo-obs"></textarea></div>
+      </div>
+      <div class="sec-title" style="display:flex;justify-content:space-between;align-items:center">
+        <span>Exercícios do modelo</span>
+        <button class="btn btn-sm" onclick="addLinhaEx('mo-ex')">+ Exercício</button>
+      </div>
+      <div class="ex-head">
+        <span>Exercício</span><span>Séries</span><span>Reps</span><span>Carga</span><span>Desc.(s)</span><span>Obs</span><span></span>
+      </div>
+      <div id="mo-ex"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-danger" id="mo-btn-del" onclick="excluirModelo()" style="margin-right:auto;display:none">Excluir</button>
+      <button class="btn" onclick="fecharModal('m-mod')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarModelo()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Modal: Plano ══ -->
+<div class="modal-bg" id="m-plano">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-head">
+      <span class="modal-title" id="m-plano-titulo">Novo pacote</span>
+      <button class="btn btn-sm btn-ghost" onclick="fecharModal('m-plano')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="p-id">
+      <div class="form-grid">
+        <div class="form-full"><label>Nome *</label><input id="p-nome" placeholder="Pacote 12 aulas — Set/2026"></div>
+        <div class="form-dt"><label>Início</label><input id="p-inicio" type="date"></div>
+        <div class="form-dt"><label>Fim</label><input id="p-fim" type="date"></div>
+        <div><label>Aulas contratadas</label><input id="p-aulas" type="number" min="0"></div>
+        <div><label>Meta por semana</label><input id="p-freq" type="number" min="0" max="7"></div>
+        <div><label>Valor da hora-aula (R$)</label><input id="p-hora" type="number" step="0.01" min="0" placeholder="usa o valor geral"></div>
+        <div><label>Valor total do pacote (R$)</label><input id="p-valor" type="number" step="0.01" min="0"></div>
+        <div><label>Professor</label><input id="p-prof"></div>
+        <div class="form-full"><label>Observações</label><textarea id="p-obs"></textarea></div>
+        <div class="form-full"><label><input type="checkbox" id="p-ativo" checked style="width:auto"> Pacote ativo</label></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-danger" id="p-btn-del" onclick="excluirPlano()" style="margin-right:auto;display:none">Excluir</button>
+      <button class="btn" onclick="fecharModal('m-plano')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarPlano()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Modal: Usuário ══ -->
+<div class="modal-bg" id="m-user">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-head">
+      <span class="modal-title" id="m-user-titulo">Novo acesso</span>
+      <button class="btn btn-sm btn-ghost" onclick="fecharModal('m-user')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="u-id">
+      <div class="form-grid">
+        <div class="form-full"><label>Nome *</label><input id="u-nome"></div>
+        <div class="form-full"><label>E-mail *</label><input id="u-email" type="email"></div>
+        <div><label>Perfil</label>
+          <select id="u-role"><option value="personal">Personal</option><option value="aluno">Aluno (dono)</option></select>
+        </div>
+        <div class="form-full"><label id="u-senha-rot">Senha provisória</label>
+          <input id="u-senha" type="text" autocomplete="off" placeholder="deixe vazio para sortear"></div>
+        <div class="form-full muted" style="font-size:11px">
+          A senha é <b>provisória</b>: no primeiro acesso o app obriga a pessoa a
+          escolher a dela, e a partir daí ninguém mais conhece a senha do outro.
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="fecharModal('m-user')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarUsuario()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toasts"></div>
+<script src="/static/js/app.js?v=7.3"></script>
+</body>
+</html>

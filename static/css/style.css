@@ -1,0 +1,944 @@
+/* ── Ruda ──────────────────────────────────────────────────────────────────
+   Servida pelo próprio app (static/fonts), não pelo Google. Assim não depende
+   de CDN externo, funciona se a rede da academia bloquear o Google e não
+   entrega o IP de quem usa para terceiros. É fonte VARIÁVEL: um arquivo cobre
+   todos os pesos de 400 a 900. */
+@font-face {
+  font-family: 'Ruda';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('/static/fonts/ruda-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+                 U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122,
+                 U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Ruda';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('/static/fonts/ruda-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+                 U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF,
+                 U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* FITPLAN — visual inspirado no app da academia: verde vivo, superfícies escuras
+   com um toque de verde, cartões de raio grande e navegação por barra inferior no
+   celular. Os dois temas (claro e escuro) seguem o mesmo sistema de tokens. */
+
+:root {
+  /* verde da marca — no claro é mais fechado para contrastar no branco */
+  --primary: #00A85C;
+  --primary-d: #00874A;
+  --primary-l: #DDF7EA;
+  --on-primary: #FFFFFF;
+
+  --danger: #DC2626;  --danger-l: #FEE2E2;  --danger-ink: #B91C1C;
+  --warn:   #C2620A;  --warn-l:   #FDF0DC;  --warn-ink:   #8A4708;
+  --info:   #0E86C4;  --info-l:   #DDF0FA;  --info-ink:   #0B6A9C;
+  --fer:    #7C3AED;  --fer-l:    #EDE9FE;  --fer-ink:    #5B21B6;
+  /* Crédito tinha a cor do feriado (--fer, roxo): no calendário o dia 12
+     feriado e um dia com crédito ficavam iguais. Magenta não colide com
+     feriado (roxo), agendada (azul), falta (vermelho) nem transferida
+     (laranja) — e não lê como perda, que é o ponto do crédito. */
+  --cred:   #BE185D;  --cred-l:   #FCE7F3;  --cred-ink:   #9D174D;
+  --neutro: #7C8B83;  --neutro-l: #E8EDEA;  --neutro-ink: #4A5A52;
+
+  /* neutros com leve viés verde, para conversarem com o acento */
+  --bg: #F1F5F2;
+  --card: #FFFFFF;
+  --card-2: #F6F9F7;
+  --side: #0D1512;
+  --text: #0E1A14;
+  --muted: #63756B;
+  --border: #E1E9E4;
+
+  /* Ruda vem do próprio app (ver @font-face acima). A pilha de reserva mantém
+     o texto legível enquanto ela carrega. */
+  --font: 'Ruda', 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
+
+  --radius: 18px;
+  --radius-sm: 12px;
+  --shadow: 0 1px 2px rgba(14,26,20,.05), 0 6px 18px rgba(14,26,20,.05);
+  --sidebar-w: 216px;
+  --barra-h: 68px;          /* barra de navegação inferior (celular) */
+}
+
+/* O tema escuro é o do app de referência: quase preto puxando para o verde,
+   acento muito saturado e texto escuro sobre o verde. */
+:root[data-theme="dark"], html[data-theme="dark"] {
+  --primary: #00E27A;
+  --primary-d: #00C46A;
+  --primary-l: #12301F;
+  --on-primary: #06170F;
+
+  --danger-l: #341A1A;  --danger-ink: #FCA5A5;
+  --warn-l:   #33240F;  --warn-ink:   #FBBF24;
+  --info-l:   #0E2A3A;  --info-ink:   #7DD3FC;
+  --fer: #A78BFA;  --fer-l: #241E3D;  --fer-ink: #C4B5FD;
+  --neutro-l: #1E2A24;  --neutro-ink: #9FB3A8;
+
+  --bg: #0A100D;
+  --card: #131B17;
+  --card-2: #1A241E;
+  --side: #080D0A;
+  --text: #E7F0EA;
+  --muted: #8B9C92;
+  --border: #22302A;
+  --shadow: none;
+}
+
+* { box-sizing: border-box; }
+html, body { max-width: 100%; overflow-x: hidden; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: var(--font);
+  font-size: 14px; -webkit-text-size-adjust: 100%;
+}
+a { color: var(--primary); }
+button, input, select, textarea { font-family: inherit; font-size: inherit; color: var(--text); }
+
+input, select, textarea {
+  width: 100%; min-width: 0; max-width: 100%;
+  background: var(--card-2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 11px 12px; outline: none;
+}
+input:focus, select:focus, textarea:focus {
+  border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-l);
+}
+input:disabled, select:disabled, textarea:disabled {
+  background: var(--bg); color: var(--muted); cursor: not-allowed; opacity: 1;
+}
+textarea { resize: vertical; min-height: 72px; }
+label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+
+/* Campos nativos de data e hora: sem a aparência do sistema, que ignora a
+   largura do container no iOS e centraliza o valor. */
+input[type="date"], input[type="time"], input[type="datetime-local"] {
+  -webkit-appearance: none; appearance: none;
+  text-align: left; min-height: 44px; line-height: 1.2;
+}
+input[type="date"]::-webkit-date-and-time-value,
+input[type="time"]::-webkit-date-and-time-value,
+input[type="datetime-local"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator { margin-left: auto; }
+
+/* ── Login ────────────────────────────────────────────────────────────────── */
+.auth {
+  position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: var(--side); z-index: 999; padding: 20px;
+}
+.auth-box {
+  background: var(--card); border: 1px solid var(--border); border-radius: 22px;
+  padding: 34px 28px; width: 100%; max-width: 380px;
+}
+.auth-logo { text-align: center; margin-bottom: 26px; }
+.auth-logo b { font-size: 26px; font-weight: 800; letter-spacing: -.5px; color: var(--primary); }
+.auth-logo div { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+/* ── Estrutura ────────────────────────────────────────────────────────────── */
+.sidebar {
+  position: fixed; left: 0; top: 0; bottom: 0; width: var(--sidebar-w);
+  background: var(--side); color: #A8BCB0; display: flex; flex-direction: column; z-index: 60;
+}
+.sidebar h1 { font-size: 21px; font-weight: 800; margin: 0; color: #fff; letter-spacing: -.5px; }
+.sidebar .sub { font-size: 11px; color: #5E7268; margin-top: 2px; }
+.side-logo { padding: 22px 20px 16px; }
+.side-nav { flex: 1; padding: 8px 12px; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; }
+.side-foot { padding: 14px 18px; border-top: 1px solid rgba(255,255,255,.06); font-size: 11px; color: #5E7268; }
+
+.nav-item {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: none;
+  background: none; color: #A8BCB0; border-radius: 999px; cursor: pointer;
+  font-size: 14px; font-weight: 600; text-align: left; width: 100%;
+}
+.nav-item svg { width: 20px; height: 20px; flex: none; }
+.nav-item:hover { background: rgba(255,255,255,.05); color: #E7F0EA; }
+.nav-item.active { background: var(--primary); color: var(--on-primary); font-weight: 700; }
+
+.overlay { display: none; }
+.main { margin-left: var(--sidebar-w); min-height: 100vh; }
+.topbar {
+  position: sticky; top: 0; z-index: 50; background: var(--bg);
+  height: 62px; display: flex; align-items: center; gap: 10px; padding: 0 18px;
+}
+.topbar .title { font-size: 22px; font-weight: 700; flex: 1; letter-spacing: -.3px; }
+.hamb { display: none; }
+.content { padding: 4px 18px 28px; max-width: 1240px; }
+.page { display: none; }
+.page.active { display: block; }
+
+/* ── Barra de navegação inferior (celular) ────────────────────────────────── */
+.tabbar { display: none; }
+.tabbar-item {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  border: none; background: none; color: var(--muted); cursor: pointer;
+  padding: 8px 4px; font-size: 10.5px; font-weight: 600;
+}
+.tabbar-item svg { width: 22px; height: 22px; }
+.tabbar-item .tb-icone {
+  display: flex; align-items: center; justify-content: center;
+  width: 56px; height: 30px; border-radius: 999px;
+}
+.tabbar-item.active { color: var(--primary); }
+.tabbar-item.active .tb-icone { background: var(--primary); color: var(--on-primary); }
+
+/* ── Cartões ──────────────────────────────────────────────────────────────── */
+.card {
+  background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
+  border: 1px solid var(--border); margin-bottom: 14px;
+}
+.card-head {
+  padding: 16px 18px; display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; flex-wrap: wrap;
+}
+.card-head + .table-wrap, .card-head + div > table { border-top: 1px solid var(--border); }
+.card-title { font-size: 15px; font-weight: 700; }
+.card-body { padding: 18px; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.grid { display: grid; gap: 14px; }
+.muted { color: var(--muted); }
+.right { text-align: right; }
+
+/* ── Botões ───────────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 42px; padding: 0 18px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--card); color: var(--text);
+  font-size: 13.5px; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.btn:hover { border-color: var(--primary); color: var(--primary); }
+.btn-primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 700; }
+.btn-primary:hover { background: var(--primary-d); border-color: var(--primary-d); color: var(--on-primary); }
+.btn-danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+.btn-danger:hover { background: #B91C1C; border-color: #B91C1C; color: #fff; }
+.btn-ghost { background: none; border-color: transparent; }
+.btn-sm { height: 34px; padding: 0 14px; font-size: 12.5px; }
+
+/* ── KPIs ─────────────────────────────────────────────────────────────────── */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.kpi {
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 16px 18px;
+}
+.kpi-label { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.kpi-value {
+  font-size: 27px; font-weight: 800; margin-top: 6px; line-height: 1.15; letter-spacing: -.5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums;
+}
+.kpi-value.sm { font-size: 19px; }
+.kpi-sub { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+
+/* ── Etiquetas ────────────────────────────────────────────────────────────── */
+.badge { display: inline-block; padding: 4px 11px; border-radius: 999px; font-size: 11.5px; font-weight: 700; }
+.b-realizada { background: var(--primary-l); color: var(--primary-d); }
+.b-agendada  { background: var(--info-l);    color: var(--info-ink); }
+.b-falta     { background: var(--danger-l);  color: var(--danger-ink); }
+.b-cancelada { background: var(--neutro-l);  color: var(--neutro-ink); }
+/* Transferida: laranja — a aula ficou no dia original, mas o treino saiu daqui.
+   Crédito: roxo — aula paga em outro mês que caiu neste. As duas precisam se
+   distinguir de "falta" (vermelho) e "cancelada" (cinza), porque nenhuma das
+   duas é perda: o dinheiro continua valendo um treino. */
+.b-transferida { background: var(--warn-l); color: var(--warn-ink); }
+/* O contorno repete o da barra no calendário: a legenda precisa parecer
+   a mesma coisa que ele vê na grade, senão não liga uma na outra. */
+.b-credito     { background: var(--cred-l); color: var(--cred-ink);
+                 box-shadow: inset 0 0 0 1.5px var(--cred); }
+/* O mesmo "C" da barra no calendário: é o que liga a legenda à grade. */
+.b-credito::before {
+  content: 'C'; display: inline-block; width: 13px; height: 13px; line-height: 13px;
+  text-align: center; border-radius: 4px; background: var(--cred); color: #fff;
+  font-size: 9px; font-weight: 800; margin-right: 5px; vertical-align: 1px;
+}
+.chip-transferida { background: var(--warn-l); border-left-color: var(--warn); color: var(--warn-ink); }
+/* O crédito marcava a barra com um ponto de 5px. Na grade do celular a barra
+   tem 9px de altura e nenhum texto: o ponto desaparecia. A barra inteira muda
+   de cor — é o único sinal que sobrevive àquele tamanho. */
+.chip.credito {
+  background: var(--cred-l) !important; color: var(--cred-ink) !important;
+  border-left-color: var(--cred) !important;
+  box-shadow: inset 0 0 0 1px var(--cred);
+}
+/* A marca vai ANTES do texto: a barrinha corta pela direita (ellipsis), então
+   um rótulo no fim vira "CRÉ…" justamente no dia cheio, que é quando mais
+   importa distinguir. */
+.chip.credito::before {
+  content: 'C'; display: inline-block; width: 14px; height: 14px; line-height: 14px;
+  text-align: center; border-radius: 4px; background: var(--cred); color: #fff;
+  font-size: 9px; font-weight: 800; margin-right: 5px; vertical-align: 1px;
+}
+.chip { position: relative; }
+.badge-solo  { background: var(--info-l);    color: var(--info-ink); }
+:root[data-theme="dark"] .b-realizada { color: var(--primary); }
+
+/* ── Tabelas ──────────────────────────────────────────────────────────────── */
+table { width: 100%; border-collapse: collapse; }
+th {
+  text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--muted); padding: 12px; border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+td { padding: 13px 12px; border-bottom: 1px solid var(--border); }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: var(--card-2); }
+.table-wrap { overflow-x: auto; }
+.empty { padding: 32px; text-align: center; color: var(--muted); font-size: 13px; }
+
+/* linha da aula ------------------------------------------------------------ */
+.c-quando { white-space: nowrap; line-height: 1.25; }
+.c-quando b { font-variant-numeric: tabular-nums; }
+.q-sub { margin-top: 3px; font-size: 12px; }
+.q-sub .muted { margin-right: 6px; }
+.c-modo, .c-st { width: 1%; white-space: nowrap; text-align: center; }
+.c-treino { min-width: 70px; }
+.c-acoes { white-space: nowrap; width: 1%; }
+.linha-aula { cursor: pointer; }
+.ex-tag {
+  display: inline-block; margin-left: 6px; padding: 2px 8px; border-radius: 999px;
+  background: var(--card-2); color: var(--muted); font-size: 11px; font-weight: 600; white-space: nowrap;
+}
+.ex-tag.pend { background: var(--warn-l); color: var(--warn-ink); }
+
+/* Convenção única no app: PERSONAL = azul e redondo · INDIVIDUAL = verde e
+   quadrado. Cor sozinha não basta — quem enxerga mal cor, ou olha de relance
+   no meio da série, lê a FORMA. */
+.modo {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; font-size: 12px; font-weight: 800; color: #fff;
+}
+.modo-p { background: var(--info);    border-radius: 999px; }
+.modo-i { background: var(--primary); border-radius: 8px; color: var(--on-primary); }
+
+.st { display: inline-flex; align-items: center; justify-content: center;
+      width: 30px; height: 30px; border-radius: 999px; font-size: 15px; line-height: 1; }
+.pend-dot { color: var(--warn); font-weight: 800; margin-left: 3px; }
+.ic {
+  background: var(--card-2); border: 1px solid var(--border); border-radius: 999px;
+  width: 36px; height: 36px; font-size: 16px; line-height: 1; cursor: pointer; padding: 0; margin-left: 5px;
+}
+.ic:hover { border-color: var(--primary); background: var(--primary-l); }
+
+/* ── Calendário ───────────────────────────────────────────────────────────── */
+.cal-head { display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap: 6px; margin-bottom: 8px; }
+.cal-head div { text-align: center; font-size: 10.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.cal { display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap: 6px; }
+.cal-day {
+  background: var(--card-2); border: 1px solid transparent; border-radius: var(--radius-sm);
+  min-height: 92px; padding: 8px; cursor: pointer; display: flex; flex-direction: column; gap: 4px;
+}
+.cal-day:hover { border-color: var(--primary); }
+.cal-day.out { opacity: .35; }
+.cal-day.today { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-l); }
+.cal-num { font-size: 12.5px; font-weight: 700; color: var(--muted); }
+.cal-day.today .cal-num { color: var(--primary); }
+.chip {
+  font-size: 11px; font-weight: 700; padding: 3px 7px; border-radius: 7px; line-height: 1.25;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+  border-left: 3px solid transparent;
+}
+.chip-agendada  { background: var(--info-l);    color: var(--info-ink);   border-left-color: var(--info); }
+.chip-realizada { background: var(--primary-l); color: var(--primary-d);  border-left-color: var(--primary); }
+.chip-falta     { background: var(--danger-l);  color: var(--danger-ink); border-left-color: var(--danger); }
+.chip-cancelada { background: var(--neutro-l);  color: var(--neutro-ink); border-left-color: var(--neutro); text-decoration: line-through; }
+:root[data-theme="dark"] .chip-realizada { color: var(--primary); }
+.chip.solo { border-left-style: dashed; }
+/* Listrado = individual. Sobrevive à barrinha compacta do celular, que zera a
+   borda esquerda e apagava a única marca de modalidade que existia lá. */
+.chip.solo {
+  background-image: repeating-linear-gradient(135deg,
+    rgba(255,255,255,.55) 0 3px, transparent 3px 7px);
+}
+
+/* feriados */
+.cal-day.fer  { background: var(--fer-l); border-color: var(--fer); }
+.cal-day.facu { border-color: var(--fer); border-style: dashed; }
+.cal-day.fer .cal-num, .cal-day.facu .cal-num { color: var(--fer-ink); }
+.cal-fer {
+  font-size: 9px; font-weight: 800; line-height: 1.1; color: var(--fer-ink);
+  text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.legenda-fer { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
+.legenda-fer i { width: 12px; height: 12px; border-radius: 4px; display: inline-block;
+                 background: var(--fer-l); border: 1px solid var(--fer); }
+.legenda-fer i.facu { background: none; border-style: dashed; }
+.facult-sm { display: none; }
+
+/* ── Modais ───────────────────────────────────────────────────────────────── */
+.modal-bg { position: fixed; inset: 0; background: rgba(6,14,10,.6); display: none; z-index: 200;
+            align-items: center; justify-content: center; padding: 16px; }
+.modal-bg.open { display: flex; }
+.modal {
+  background: var(--card); border: 1px solid var(--border); border-radius: 22px;
+  width: 100%; max-width: 760px; max-height: 92vh; display: flex; flex-direction: column;
+  box-shadow: 0 24px 60px rgba(0,0,0,.35);
+}
+.modal-head { padding: 18px 20px; display: flex; align-items: center; justify-content: space-between; }
+.modal-title { font-size: 17px; font-weight: 700; }
+.modal-body { padding: 4px 20px 20px; overflow-y: auto; }
+.modal-foot { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; gap: 10px;
+              justify-content: flex-end; flex-wrap: wrap; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
+.form-grid > * { min-width: 0; display: flex; flex-direction: column; justify-content: flex-end; }
+.form-full { grid-column: 1 / -1; }
+.ex-row > *, .ex-head > * { min-width: 0; }
+.sec-title {
+  font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--muted); margin: 22px 0 10px; padding-top: 18px; border-top: 1px solid var(--border);
+}
+.dow { display: flex; gap: 6px; flex-wrap: wrap; }
+.dow label { display: flex; align-items: center; gap: 5px; margin: 0; font-size: 12.5px; font-weight: 600;
+             color: var(--text); background: var(--card-2); padding: 9px 13px; border-radius: 999px; cursor: pointer; }
+.dow input { width: auto; }
+
+.ex-row { display: grid; grid-template-columns: 2.2fr .6fr .8fr .8fr .8fr 1.4fr auto; gap: 6px;
+          align-items: center; margin-bottom: 7px; }
+.ex-row input, .ex-row select { padding: 9px 10px; font-size: 13px; }
+.ex-head { display: grid; grid-template-columns: 2.2fr .6fr .8fr .8fr .8fr 1.4fr auto; gap: 6px;
+           font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; margin-bottom: 5px; }
+.ex-del { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 16px; padding: 0 6px; }
+
+/* ── Abas e alternadores ──────────────────────────────────────────────────── */
+.tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+.tab {
+  padding: 10px 16px; border: none; background: none; color: var(--muted);
+  font-size: 14px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent;
+}
+.tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+.toggle-modalidade { display: flex; gap: 8px; margin-bottom: 14px; }
+.tm-btn {
+  flex: 1; padding: 11px 10px; border: 1px solid var(--border); background: var(--card-2);
+  color: var(--text); border-radius: 999px; font-size: 13.5px; font-weight: 600; cursor: pointer;
+}
+.tm-btn.active { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 700; }
+.tm-btn[data-mod="sozinho"].active { background: var(--info); border-color: var(--info); color: #fff; }
+
+/* ── Grade de dias do mês ─────────────────────────────────────────────────── */
+.dm-grid { display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap: 6px; }
+.dm-dow { text-align: center; font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; }
+.dm-dia { position: relative;
+  aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card-2);
+  font-size: 13.5px; font-weight: 700; cursor: pointer; user-select: none; padding: 0; color: var(--text);
+}
+.dm-dia:hover { border-color: var(--primary); }
+.dm-dia.on { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+.dm-dia.travado { background: var(--warn-l); border-color: var(--warn); color: var(--warn-ink); cursor: not-allowed; }
+/* Dia que também tem aula de outra modalidade: marca discreta no canto, não
+   um estado que impeça o toque. Correr de manhã e treinar ao meio-dia é rotina. */
+.dm-dia.tem-outra::after {
+  content: ''; position: absolute; right: 4px; top: 4px; width: 5px; height: 5px;
+  border-radius: 50%; background: var(--info);
+}
+.dm-dia.on.tem-outra::after { background: var(--on-primary); }
+.dm-dia.vazio { border: none; background: none; cursor: default; }
+.dm-dia.fer  { background: var(--fer-l); border-color: var(--fer); color: var(--fer-ink); }
+.dm-dia.facu { border-color: var(--fer); border-style: dashed; color: var(--fer-ink); }
+.dm-dia.on.fer, .dm-dia.on.facu { background: var(--primary); color: var(--on-primary); border-color: var(--fer); border-width: 2px; }
+.dm-resumo {
+  margin-right: auto; padding: 10px 16px; border-radius: 999px; background: var(--primary-l);
+  color: var(--primary-d); font-weight: 700; font-size: 14px; line-height: 1.35;
+}
+:root[data-theme="dark"] .dm-resumo { color: var(--primary); }
+.dm-alerta { font-weight: 700; font-size: 12px; margin-top: 6px; color: var(--fer-ink); }
+
+/* ── Avisos e toasts ──────────────────────────────────────────────────────── */
+.aviso {
+  background: var(--warn-l); border-left: 4px solid var(--warn); color: var(--warn-ink);
+  padding: 14px 16px; border-radius: var(--radius-sm); margin-bottom: 16px; font-size: 13px; line-height: 1.5;
+}
+.aviso a { color: inherit; font-weight: 700; }
+.aviso-ok { background: var(--primary-l); border-left-color: var(--primary); color: var(--primary-d); }
+.aviso-info { background: var(--info-l); border-left-color: var(--info); color: var(--info-ink); }
+:root[data-theme="dark"] .aviso-ok { color: var(--primary); }
+
+.toast-wrap { position: fixed; bottom: 24px; right: 20px; z-index: 300; display: flex; flex-direction: column; gap: 8px; }
+.toast {
+  background: var(--card); border: 1px solid var(--border); border-left: 4px solid var(--primary);
+  border-radius: var(--radius-sm); padding: 12px 18px; box-shadow: 0 8px 24px rgba(0,0,0,.25);
+  font-size: 13px; font-weight: 600;
+}
+.toast.err { border-left-color: var(--danger); }
+.toast.warn { border-left-color: var(--warn); }
+
+.chart-wrap { position: relative; height: 260px; }
+
+/* ── Celular ──────────────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .sidebar { display: none; }
+  .main { margin-left: 0; padding-bottom: calc(var(--barra-h) + 12px); }
+  .content { padding: 4px 14px 20px; }
+  .topbar { padding: 0 14px; }
+  .topbar .title { font-size: 20px; }
+
+  /* barra inferior: o padrão do app que serviu de referência */
+  /* No Safari do iPhone, esconder a barra de endereços ao rolar muda a altura
+     visível SEM mover o que está em position:fixed — sobra uma fresta entre a
+     barra do app e a do navegador, e o conteúdo da página aparece por ela.
+     Duas defesas: o JS reposiciona pela VisualViewport, e o ::after pinta o
+     fundo abaixo da barra para que nada vaze mesmo que o JS não rode. */
+  .tabbar {
+    display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 70;
+    background: var(--card); border-top: 1px solid var(--border);
+    height: var(--barra-h); padding-bottom: env(safe-area-inset-bottom);
+    will-change: transform;
+  }
+  .tabbar::after {
+    content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 160px;
+    background: var(--card); pointer-events: none;
+  }
+
+  /* campo com menos de 16px faz o iOS dar zoom na página e não voltar */
+  input, select, textarea, .ex-row input, .ex-row select, .sel-compacto { font-size: 16px; }
+  .ex-row input, .ex-row select { padding: 9px 8px; }
+  .sel-compacto { padding: 7px 10px; }
+
+  .cal-day { min-height: 62px; padding: 5px; }
+  .cal-fer { display: none; }
+  .cal-num { font-size: 11.5px; }
+  /* cada aula vira uma barra na cor cheia do status */
+  .chip { font-size: 0; padding: 0; height: 9px; border-radius: 4px; border-left-width: 0; }
+  .chip-agendada  { background: var(--info); }
+  .chip-realizada { background: var(--primary); }
+  .chip-falta     { background: var(--danger); }
+  .chip-cancelada { background: var(--neutro); }
+  /* Crédito: barra MAIS ALTA e na cor cheia. Aqui não há texto nem borda
+     esquerda, então altura e cor são os dois únicos sinais disponíveis — e
+     crédito é a coisa mais fácil de esquecer que existe na agenda. */
+  .chip.credito {
+    background: var(--cred) !important; height: 13px; border-radius: 5px;
+    box-shadow: 0 0 0 2px var(--cred-l);
+  }
+  .chip.credito::before { content: none; }   /* a marca não cabe numa barra de 13px */
+
+  .kpi-value { font-size: 24px; }
+  .ex-row, .ex-head { grid-template-columns: 1fr 1fr 1fr; }
+  .ex-head { display: none; }
+  .ex-row { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; }
+  .ex-row .ex-busca-wrap, .ex-row .ex-obs { grid-column: 1 / -1; }
+}
+
+@media (max-width: 560px) {
+  .form-grid { grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); }
+  .form-dt { grid-column: 1 / -1; }
+  .modal { max-height: 94vh; }
+  .modal-body { padding: 4px 16px 16px; }
+  .modal-head, .modal-foot { padding: 14px 16px; }
+  .dm-resumo { flex: 1 1 100%; margin-right: 0; text-align: center; }
+  .dm-grid { gap: 4px; }
+
+  th, td { padding: 11px 6px; }
+  .c-quando { font-size: 13px; }
+  .q-sub { font-size: 11.5px; }
+  .c-treino { font-size: 13px; min-width: 62px; }
+  .c-treino .ex-tag { display: block; margin: 4px 0 0; width: fit-content; }
+  .ic { width: 34px; height: 34px; margin-left: 3px; }
+
+  .legenda { gap: 5px; font-size: 10px; }
+  .legenda .badge { padding: 3px 8px; font-size: 10px; }
+  .legenda .legenda-fer { gap: 4px; font-size: 10px; }
+  .legenda .legenda-fer i { width: 10px; height: 10px; }
+  .legenda .facult-lg { display: none; }
+  .legenda .facult-sm { display: inline; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MODO TREINO — a tela que se usa em pé, na academia, com uma mão só.
+   Ocupa a tela inteira: sem sidebar, sem tabbar, sem calendário. Um exercício
+   por vez, alvos de toque grandes e nada que exija mira fina ou teclado.
+   ══════════════════════════════════════════════════════════════════════════ */
+.treino-modo {
+  position: fixed; inset: 0; z-index: 120; display: none;
+  background: var(--bg); flex-direction: column;
+}
+.treino-modo.open { display: flex; }
+
+.tm-topo {
+  display: flex; align-items: center; gap: 10px;
+  padding: max(10px, env(safe-area-inset-top)) 14px 10px;
+  background: var(--card); border-bottom: 1px solid var(--border);
+}
+.tm-topo .tm-nome { font-weight: 800; font-size: 15px; line-height: 1.2; flex: 1; min-width: 0; }
+.tm-topo .tm-sub { font-size: 11px; color: var(--muted); font-weight: 600; }
+.tm-x {
+  width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--border);
+  background: var(--card-2); color: var(--text); font-size: 16px; cursor: pointer; flex: none;
+}
+
+/* Barra de progresso segmentada: um traço por exercício do treino. Copiada das
+   telas de referência — diz onde você está sem ocupar linha de texto. */
+.tm-passos { display: flex; gap: 4px; padding: 10px 14px 0; }
+.tm-passos i {
+  flex: 1; height: 4px; border-radius: 2px; background: var(--border);
+  transition: background .2s;
+}
+.tm-passos i.ok  { background: var(--primary); }
+.tm-passos i.now { background: var(--primary); box-shadow: 0 0 0 2px var(--primary-l); }
+
+.tm-corpo { flex: 1; overflow-y: auto; padding: 14px; -webkit-overflow-scrolling: touch; }
+
+.tm-ex-nome { font-size: 22px; font-weight: 800; line-height: 1.15; margin: 4px 0 6px; }
+.tm-ex-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.tm-chip {
+  font-size: 12px; font-weight: 700; padding: 5px 10px; border-radius: 999px;
+  background: var(--card-2); border: 1px solid var(--border); color: var(--muted);
+}
+.tm-chip.ult { background: var(--primary-l); border-color: transparent; color: var(--primary-d); }
+
+/* Uma série = uma linha. Carga e repetições já vêm preenchidas (última carga /
+   prescrição): no caso comum, o único toque é o ✓. */
+.tm-serie {
+  display: grid; grid-template-columns: 26px 1fr 1fr 46px; gap: 8px;
+  align-items: center; padding: 8px 0; border-top: 1px solid var(--border);
+}
+.tm-serie:first-of-type { border-top: 0; }
+.tm-serie.feita { opacity: .55; }
+.tm-serie-n { font-weight: 800; color: var(--muted); font-size: 13px; text-align: center; }
+.tm-campo { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.tm-campo button {
+  width: 30px; height: 38px; flex: none; border: 1px solid var(--border);
+  background: var(--card-2); color: var(--text); font-size: 17px; font-weight: 700;
+  border-radius: 9px; cursor: pointer;
+}
+.tm-campo button:active { background: var(--border); }
+.tm-campo .tm-valor {
+  flex: 1; min-width: 0; height: 38px; border: 0; background: transparent;
+  text-align: center; font-family: var(--font); font-size: 16px; font-weight: 800;
+  color: var(--text); cursor: pointer; padding: 0;
+}
+.tm-campo .tm-un { font-size: 10px; color: var(--muted); font-weight: 700; flex: none; }
+.tm-check {
+  width: 46px; height: 40px; border-radius: 11px; border: 2px solid var(--border);
+  background: var(--card-2); font-size: 18px; cursor: pointer; color: var(--muted);
+}
+.tm-check.on { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+
+.tm-rot { font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+          color: var(--muted); display: grid; grid-template-columns: 26px 1fr 1fr 46px; gap: 8px;
+          padding-bottom: 6px; }
+.tm-rot span:nth-child(2), .tm-rot span:nth-child(3) { text-align: center; }
+
+/* Descanso: aparece sozinho quando uma série é marcada e some ao zerar. */
+.tm-descanso {
+  position: sticky; bottom: 0; margin-top: 14px; display: none;
+  background: var(--side); color: #fff; border-radius: var(--radius);
+  padding: 12px 14px; align-items: center; gap: 12px;
+}
+.tm-descanso.on { display: flex; }
+.tm-descanso .t { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.tm-descanso .l { flex: 1; font-size: 12px; opacity: .8; font-weight: 600; }
+.tm-descanso button {
+  border: 0; background: rgba(255,255,255,.16); color: #fff; font-weight: 700;
+  padding: 8px 12px; border-radius: 9px; cursor: pointer; font-family: var(--font); font-size: 12px;
+}
+
+.tm-rodape {
+  display: flex; gap: 8px; padding: 12px 14px max(12px, env(safe-area-inset-bottom));
+  background: var(--card); border-top: 1px solid var(--border);
+}
+.tm-rodape .btn { flex: 1; height: 48px; font-size: 14px; }
+.tm-rodape .btn.nav-lat { flex: none; width: 52px; }
+
+/* ── Régua de valores ──────────────────────────────────────────────────────
+   O seletor das telas de referência (altura/peso). Os traços são um gradiente
+   repetido, não elementos: 1400 posições sem 1400 nós no DOM. */
+.regua-box { text-align: center; padding: 6px 0 2px; }
+.regua-valor { font-size: 44px; font-weight: 800; line-height: 1; }
+.regua-valor small { font-size: 15px; font-weight: 700; color: var(--muted); margin-left: 4px; }
+.regua {
+  position: relative; height: 74px; margin-top: 14px; overflow-x: auto; overflow-y: hidden;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.regua::-webkit-scrollbar { display: none; }
+.regua-fita { position: relative; height: 56px; }
+/* A escala é criada pelo JS com largura e recuo calculados a partir da largura
+   visível — é isso que faz o traço escolhido parar exatamente sob a agulha. */
+.regua-escala { position: absolute; top: 0; height: 56px; }
+.regua-escala i {
+  position: absolute; top: 4px; width: 2px; height: 30px; margin-left: -1px;
+  background: var(--muted); opacity: .75; border-radius: 1px;
+}
+.regua-escala b {
+  position: absolute; top: 40px; transform: translateX(-50%);
+  font-size: 11px; font-weight: 700; color: var(--muted); white-space: nowrap;
+}
+.regua-agulha {
+  position: absolute; left: 50%; top: 4px; width: 3px; height: 36px; border-radius: 2px;
+  background: var(--primary); transform: translateX(-50%); pointer-events: none;
+}
+
+/* ── Painel do mês (barras) ────────────────────────────────────────────── */
+.painel-linha { display: grid; grid-template-columns: 1fr 100px auto; gap: 10px;
+                align-items: center; padding: 7px 0; }
+.painel-linha .r { font-size: 13px; font-weight: 600; color: var(--text); }
+.painel-linha .b { height: 7px; border-radius: 4px; background: var(--border); overflow: hidden; }
+.painel-linha .b > i { display: block; height: 100%; border-radius: 4px; background: var(--primary); }
+.painel-linha .v { font-size: 12px; font-weight: 700; color: var(--muted); min-width: 54px;
+                   text-align: right; }
+.painel-linha.vazia .v { font-style: italic; }
+
+/* ── Catálogo de exercícios (grupo / equipamento / favoritos) ───────────── */
+.cat-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.cat-item {
+  display: flex; align-items: center; gap: 10px; padding: 12px; cursor: pointer;
+  background: var(--card-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  text-align: left; font-family: var(--font); color: var(--text);
+}
+.cat-item:active, .cat-item.sel { border-color: var(--primary); background: var(--primary-l); }
+.cat-item .n { font-weight: 700; font-size: 13px; display: block; }
+.cat-item .q { font-size: 11px; color: var(--muted); font-weight: 600; }
+.cat-volta { margin-bottom: 10px; }
+.ex-fav { background: none; border: 0; font-size: 17px; cursor: pointer; line-height: 1; padding: 2px; }
+
+/* ── Cartão do treino de hoje ──────────────────────────────────────────── */
+.hoje-card { background: var(--side); color: #fff; border-radius: var(--radius); padding: 16px;
+             margin-bottom: 14px; }
+.hoje-card .et { font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+                 color: var(--primary); }
+.hoje-card h3 { font-size: 19px; font-weight: 800; margin: 6px 0 2px; }
+.hoje-card .sub { font-size: 12px; opacity: .75; font-weight: 600; }
+.hoje-card .acoes { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.hoje-card .btn { height: 44px; flex: 1; min-width: 130px; }
+.hoje-card .btn-ghost { background: rgba(255,255,255,.12); color: #fff; border-color: transparent; }
+
+/* ── Corpo (peso e medidas) ────────────────────────────────────────────── */
+.corpo-num { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.corpo-num .p { font-size: 38px; font-weight: 800; line-height: 1; }
+.corpo-num .u { font-size: 14px; font-weight: 700; color: var(--muted); }
+.corpo-num .d { font-size: 13px; font-weight: 700; padding: 3px 8px; border-radius: 999px; }
+.corpo-num .d.sobe { background: var(--danger-l); color: var(--danger-ink); }
+.corpo-num .d.desce { background: var(--primary-l); color: var(--primary-d); }
+.corpo-fatos { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+               gap: 8px; margin-top: 14px; }
+.corpo-fato { background: var(--card-2); border: 1px solid var(--border);
+              border-radius: var(--radius-sm); padding: 10px; }
+.corpo-fato .k { font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase;
+                 color: var(--muted); }
+.corpo-fato .v { font-size: 17px; font-weight: 800; margin-top: 3px; }
+.corpo-fato .o { font-size: 11px; color: var(--muted); font-weight: 600; }
+
+@media (max-width: 720px) {
+  .tm-ex-nome { font-size: 20px; }
+  .regua-valor { font-size: 38px; }
+  .painel-linha { grid-template-columns: 1fr 78px auto; }
+}
+
+/* Abas do catálogo: nunca quebram linha e, se um dia não couberem, rolam em vez
+   de esconder a última fora da tela. */
+.tabs-cat { overflow-x: auto; scrollbar-width: none; }
+.tabs-cat::-webkit-scrollbar { display: none; }
+.tabs-cat .tab { white-space: nowrap; flex: none; }
+
+
+/* ── Escolher o dia para um modelo ─────────────────────────────────────────
+   Lista das próximas aulas: escolher entre dias que já existem na agenda é mais
+   seguro do que digitar uma data e criar aula duplicada sem perceber. */
+.dia-op {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 12px;
+  margin-bottom: 8px; cursor: pointer; text-align: left; font-family: var(--font);
+  background: var(--card-2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text);
+}
+.dia-op:active { border-color: var(--primary); background: var(--primary-l); }
+/* data em cima, dia da semana e situação embaixo — em linha única elas quebram
+   no meio da frase e a data perde o destaque */
+.dia-op > span:first-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dia-op .q { font-weight: 800; font-size: 14px; }
+.dia-op .s { font-size: 11px; color: var(--muted); font-weight: 600; }
+.dia-op .m { margin-left: auto; font-size: 11px; font-weight: 800; padding: 3px 8px;
+             border-radius: 999px; flex: none; }
+.dia-op .m.p { background: var(--info-l); color: var(--info-ink); }
+.dia-op .m.i { background: var(--primary-l); color: var(--primary-d); }
+
+/* Legenda de modalidade: mesma bolinha/quadradinho da tabela, em miniatura, para
+   que a leitura da lista não dependa de tooltip (que no celular não existe). */
+.legenda-modo { display: inline-flex; align-items: center; gap: 4px; }
+.legenda-modo .modo { width: 16px; height: 16px; font-size: 9px; }
+.legenda-modo .modo-i { border-radius: 5px; }
+
+/* ── Pagamentos (Pix) ─────────────────────────────────────────────────────── */
+.pix-linha {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 10px 0; border-top: 1px solid var(--border);
+}
+.pix-linha:first-child { border-top: 0; }
+.pix-linha .q { font-weight: 800; font-size: 14px; }
+.pix-linha .s { font-size: 11px; color: var(--muted); font-weight: 600; }
+.pix-linha > div:first-child { flex: 1; min-width: 0; }
+.pix-tag { font-size: 11px; font-weight: 800; padding: 4px 9px; border-radius: 999px; white-space: nowrap; }
+.pix-tag.ok   { background: var(--primary-l); color: var(--primary-d); }
+.pix-tag.pend { background: var(--warn-l);    color: var(--warn-ink); }
+.pix-destaque { font-size: 34px; font-weight: 800; line-height: 1; color: var(--primary-d); }
+:root[data-theme="dark"] .pix-destaque { color: var(--primary); }
+
+/* ── Base de professores e locais ─────────────────────────────────────────── */
+.cad-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 7px 10px; margin-bottom: 6px; font-size: 13px; font-weight: 600;
+  background: var(--card-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+
+/* ── Aeróbico ─────────────────────────────────────────────────────────────
+   Terceira modalidade: laranja e losango. Junto com P (azul, redondo) e
+   I (verde, quadrado), as três se distinguem por cor E por forma. */
+.modo-a { background: var(--warn); border-radius: 6px; transform: rotate(45deg); }
+.modo-a > * { transform: rotate(-45deg); }
+.legenda-modo .modo-a { border-radius: 4px; }
+/* No calendário a cor da barrinha é do status; a modalidade entra na textura:
+   lisa = personal, listrada = individual, pontilhada = corrida. */
+.chip.aer {
+  background-image: repeating-linear-gradient(90deg,
+    rgba(255,255,255,.65) 0 2px, transparent 2px 6px);
+}
+/* Prescrição de corrida no modo treino: texto do treinador, como ele escreveu. */
+.tm-aer {
+  margin: 0; padding: 14px; white-space: pre-wrap; word-break: break-word;
+  font-family: var(--font); font-size: 16px; line-height: 1.7; color: var(--text);
+  background: var(--card-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+
+/* ── Escolher exercício ────────────────────────────────────────────────────
+   A lupa fica DENTRO do campo: no celular, um botão ao lado roubaria a largura
+   do nome do exercício, que é o dado que importa ler. */
+.ex-busca-wrap { position: relative; display: block; min-width: 0; }
+.ex-busca-wrap .ex-nome { width: 100%; padding-right: 38px; }
+.ex-lupa {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  width: 30px; height: 30px; border: 0; background: none; cursor: pointer;
+  font-size: 15px; line-height: 1; padding: 0; opacity: .65;
+}
+.ex-lupa:active { opacity: 1; }
+.ex-op {
+  display: flex; align-items: center; width: 100%; padding: 11px 12px; margin-bottom: 6px;
+  cursor: pointer; text-align: left; font-family: var(--font); color: var(--text);
+  background: var(--card-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+.ex-op:active { border-color: var(--primary); background: var(--primary-l); }
+.ex-op > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ex-op .n { font-weight: 700; font-size: 14px; }
+.ex-op .s { font-size: 11px; color: var(--muted); font-weight: 600; }
+
+/* As ações do bloco de exercícios ("Aplicar modelo…" + "+ Exercício") ficavam
+   como inline dentro de um <span>: no celular o select encostava no botão e
+   roubava o toque dele. Flex com gap garante alvos separados. */
+#a-ex-acoes { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+#a-ex-acoes .sel-compacto { max-width: 200px; }
+
+/* ── Empilhamento de modais ───────────────────────────────────────────────
+   Modais que abrem DE DENTRO de outro modal precisam ficar acima dele. Com o
+   mesmo z-index vence quem vem depois no HTML — e o modal da aula vem depois,
+   então o seletor de exercício e a régua abriam atrás dele e travavam a tela.
+   Já aconteceu uma vez com a régua sobre o modo treino; agora é regra explícita. */
+#m-escolher-ex, #m-regua, #m-transferir { z-index: 220; }
+/* Avisos prioritários: sobem acima de qualquer modal aberto */
+#m-pix-aviso, #m-transf-aviso { z-index: 240; }
+
+/* ── Senha provisória ─────────────────────────────────────────────────────
+   Mostrada uma vez só: fonte monoespaçada e tamanho grande porque ela vai ser
+   lida em voz alta ou digitada à mão do outro lado. */
+.senha-caixa {
+  display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+  background: var(--card-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+.senha-caixa code {
+  flex: 1; min-width: 0; font-size: 20px; font-weight: 700; letter-spacing: .06em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  word-break: break-all; user-select: all; color: var(--text);
+}
+/* Com a troca pendente, nada atrás do modal deve parecer clicável */
+#m-trocar-senha { z-index: 260; background: rgba(6,14,10,.82); }
+
+/* ── Acessos ──────────────────────────────────────────────────────────────
+   Um cartão por pessoa. Como tabela, as cinco colunas mais três botões davam
+   508px dentro de 360px no celular: as ações ficavam fora da tela, alcançáveis
+   só arrastando a tabela de lado — na prática, invisíveis. */
+.acesso {
+  padding: 14px 0; border-top: 1px solid var(--border);
+}
+.acesso:first-child { border-top: 0; padding-top: 0; }
+.acesso-topo { display: flex; align-items: flex-start; gap: 10px; justify-content: space-between; }
+.acesso .n { font-weight: 800; font-size: 15px; }
+.acesso .e { font-size: 12px; color: var(--muted); font-weight: 600; word-break: break-all; }
+.acesso-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.acesso-acoes { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.acesso-acoes .btn { flex: 1 1 auto; min-width: 104px; justify-content: center; }
+
+/* ── Ver treino (leitura) ─────────────────────────────────────────────────
+   "Ver treino" levava ao formulário de cadastro da aula. Quem abre o app na
+   academia quer ler o que vai fazer, não editar 15 campos. Esta tela é só
+   leitura: um cartão por exercício, número grande, nada clicável por engano. */
+.vt-meta {
+  display: flex; flex-wrap: wrap; gap: 6px 10px; margin-bottom: 14px;
+  font-size: 12px; color: var(--muted);
+}
+.vt-meta b { color: var(--text); font-weight: 600; }
+/* Sem separador, "Com o personal com Rafael" lê como uma frase só. */
+.vt-meta > span:not(:last-child)::after { content: '·'; margin-left: 10px; opacity: .5; }
+.vt-ex {
+  display: flex; gap: 12px; align-items: flex-start; padding: 12px 0;
+  border-bottom: 1px solid var(--border); position: relative;
+}
+.vt-ex:last-child { border-bottom: 0; }
+.vt-ex .n {
+  flex: 0 0 26px; height: 26px; border-radius: 50%; display: flex;
+  align-items: center; justify-content: center; font-size: 12px; font-weight: 700;
+  background: var(--card-2); color: var(--muted);
+}
+.vt-ex.feito .n { background: var(--ok, #11A05A); color: #fff; }
+.vt-ex .c { flex: 1; min-width: 0; }
+.vt-ex .nome { font-weight: 600; font-size: 15px; color: var(--text); }
+.vt-ex .nome s { color: var(--muted); font-weight: 500; }
+.vt-ex .dados { margin-top: 3px; font-size: 13px; color: var(--muted); }
+.vt-ex .dados b { color: var(--text); font-weight: 700; }
+.vt-ex .obs { margin-top: 4px; font-size: 12px; color: var(--muted); font-style: italic; }
+.vt-texto {
+  white-space: pre-wrap; font-size: 14px; line-height: 1.55; color: var(--text);
+  background: var(--card-2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 12px 14px;
+}
+
+/* ── Checklist dentro de "Ver treino" ─────────────────────────────────────
+   O alvo de toque é a linha inteira (<label>), não o quadradinho: na academia,
+   com a mão suada, errar um alvo de 20px é o que faz a pessoa desistir de
+   marcar e perder o registro do treino. */
+.vt-progresso { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; }
+.vt-barra {
+  flex: 1; height: 6px; border-radius: 3px; background: var(--card-2); overflow: hidden;
+}
+.vt-barra span {
+  display: block; height: 100%; background: var(--pri, #11A05A);
+  border-radius: 3px; transition: width .18s ease;
+}
+.vt-conta { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.vt-conta b { color: var(--text); }
+.vt-ex.marcavel { cursor: pointer; margin: 0; -webkit-tap-highlight-color: transparent; }
+.vt-ex.marcavel:active { background: var(--card-2); }
+.vt-check { position: absolute; opacity: 0; pointer-events: none; }
+.vt-ex.marcavel .n { border: 1.5px solid var(--border); transition: all .15s ease; }
+.vt-ex.marcavel.feito .n { border-color: transparent; }
+
+/* ── Cartão de hoje com a aula já encerrada ───────────────────────────────
+   Antes o cartão não mudava: quem finalizava o treino via o mesmo botão verde
+   "Treinar agora" e ficava sem saber se o registro tinha entrado. A faixa verde
+   à esquerda é o "pronto, está gravado" visto de longe. */
+.hoje-card.feito { border-left: 4px solid var(--pri, #11A05A); }
+.hoje-card.feito .et { color: #7BE3A8; }
+.hoje-card .sub.prox { margin-top: 8px; opacity: .6; }
+
+/* ── Linha transferida na lista ───────────────────────────────────────────
+   Só o ícone de status não bastava: a linha parecia uma aula como as outras,
+   e o treino dela nem aconteceu ali. Nome riscado, linha apagada e uma faixa
+   laranja à esquerda — o mesmo laranja da etiqueta "transferida". */
+.linha-aula.transferida { opacity: .62; }
+.linha-aula.transferida td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+.linha-aula.transferida .c-treino s { color: var(--muted); text-decoration-thickness: 1.5px; }
+.linha-aula.transferida .c-quando b { text-decoration: line-through; }
+/* O destino é a informação seguinte de quem bate o olho: para onde foi. */
+.seta-transf {
+  display: inline-block; margin-left: 6px; font-size: 11px; font-weight: 700;
+  color: var(--warn-ink); white-space: nowrap;
+}
+.linha-aula.credito td:first-child { box-shadow: inset 3px 0 0 var(--cred); }
+.linha-aula.credito .seta-transf { color: var(--cred-ink); }
