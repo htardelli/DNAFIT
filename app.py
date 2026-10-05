@@ -867,6 +867,20 @@ async def listar_aulas(ini: Optional[str] = None, fim: Optional[str] = None,
         cont = {r["aula_id"]: r["n"] for r in await cur.fetchall()}
         for a in aulas:
             a["qtd_exercicios"] = cont.get(a["id"], 0)
+        # Datas das duas pontas de uma transferência: a lista precisa dizer PARA
+        # ONDE a aula foi (ou DE ONDE o crédito veio) sem uma consulta por linha.
+        alvos = {a["transferida_para"] for a in aulas if a["transferida_para"]}
+        alvos |= {a["credito_de"] for a in aulas if a["credito_de"]}
+        if alvos:
+            ph2 = ",".join("?" * len(alvos))
+            cur = await db.execute(
+                f"SELECT id, data, hora FROM aulas WHERE id IN ({ph2})", list(alvos))
+            outro = {r["id"]: {"data": r["data"], "hora": r["hora"]} for r in await cur.fetchall()}
+            for a in aulas:
+                if a["transferida_para"] and a["transferida_para"] in outro:
+                    a["destino"] = outro[a["transferida_para"]]
+                if a["credito_de"] and a["credito_de"] in outro:
+                    a["origem"] = outro[a["credito_de"]]
     return aulas
 
 

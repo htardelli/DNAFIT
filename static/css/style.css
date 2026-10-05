@@ -926,3 +926,19 @@ tbody tr:hover { background: var(--card-2); }
 .hoje-card.feito { border-left: 4px solid var(--pri, #11A05A); }
 .hoje-card.feito .et { color: #7BE3A8; }
 .hoje-card .sub.prox { margin-top: 8px; opacity: .6; }
+
+/* ── Linha transferida na lista ───────────────────────────────────────────
+   Só o ícone de status não bastava: a linha parecia uma aula como as outras,
+   e o treino dela nem aconteceu ali. Nome riscado, linha apagada e uma faixa
+   laranja à esquerda — o mesmo laranja da etiqueta "transferida". */
+.linha-aula.transferida { opacity: .62; }
+.linha-aula.transferida td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+.linha-aula.transferida .c-treino s { color: var(--muted); text-decoration-thickness: 1.5px; }
+.linha-aula.transferida .c-quando b { text-decoration: line-through; }
+/* O destino é a informação seguinte de quem bate o olho: para onde foi. */
+.seta-transf {
+  display: inline-block; margin-left: 6px; font-size: 11px; font-weight: 700;
+  color: var(--warn-ink); white-space: nowrap;
+}
+.linha-aula.credito td:first-child { box-shadow: inset 3px 0 0 var(--cred); }
+.linha-aula.credito .seta-transf { color: var(--cred-ink); }

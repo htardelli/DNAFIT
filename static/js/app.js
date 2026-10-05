@@ -440,21 +440,32 @@ function renderLista() {
     const treino = esc(a.tipo || a.foco || a.descricao || '—');
     // Crédito e pendência não são status — são o estado da transferência. Ficam
     // como etiqueta, sem disputar a coluna de status.
+    // Transferida: o treino NÃO aconteceu neste dia. Só o ícone de status não
+    // dizia isso — a linha parecia uma aula normal. Risca o nome e mostra para
+    // onde foi, que é a pergunta seguinte de quem bate o olho na lista.
+    const transf = a.status === 'transferida';
     const selo = a.credito_de
-      ? `<span class="badge b-credito" title="aula paga em outro mês">crédito</span>`
-      : (a.transf_status === 'pendente'
-          ? `<span class="badge b-transferida" title="aguardando o personal">transf. pendente</span>` : '');
+      ? `<span class="badge b-credito" title="aula paga em outro mês${
+           a.origem ? ', remarcada de ' + fmtDataCurta(a.origem.data) : ''}">crédito</span>${
+           a.origem ? `<span class="seta-transf" title="aula original">de ${fmtDataCurta(a.origem.data)}</span>` : ''}`
+      : transf
+        ? `<span class="badge b-transferida" title="o treino foi para outro dia">transferida</span>${
+            a.destino ? `<span class="seta-transf" title="dia em que o treino acontece">→ ${
+              fmtDataCurta(a.destino.data)}${a.destino.hora ? ' ' + a.destino.hora : ''}</span>` : ''}`
+        : (a.transf_status === 'pendente'
+            ? `<span class="badge b-transferida" title="aguardando o personal">transf. pendente</span>` : '');
     const nEx = a.qtd_exercicios
       ? `<span class="ex-tag">${a.qtd_exercicios} ex</span>`
       : (semTreino(a) ? '<span class="ex-tag pend" title="sem treino montado">sem treino</span>' : '');
     return `
-    <tr class="linha-aula" onclick="abrirAula(${a.id})" title="Abrir a aula">
+    <tr class="linha-aula${transf ? ' transferida' : ''}${a.credito_de ? ' credito' : ''}"
+        onclick="abrirAula(${a.id})" title="${transf ? 'Aula transferida — o treino está no dia de destino' : 'Abrir a aula'}">
       <td class="c-quando">
         <b>${fmtDataCurta(a.data)}</b>
         <div class="q-sub"><span class="muted">${diaSemana(a.data)}</span><b>${a.hora || '—'}</b></div>
       </td>
       <td class="c-modo"><span class="modo ${mod.cls}" title="${mod.t}"><span>${mod.l}</span></span></td>
-      <td class="c-treino">${treino}${selo}${nEx}</td>
+      <td class="c-treino">${transf ? `<s>${treino}</s>` : treino}${selo}${transf ? '' : nEx}</td>
       <td class="c-st"><span class="st b-${a.status}" title="${st.t}">${st.i}</span></td>
       <td class="right c-acoes">
         ${a.status === 'agendada' && jaComecou(a.data, a.hora)

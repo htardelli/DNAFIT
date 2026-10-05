@@ -281,6 +281,9 @@ aula. Você remarca, e o personal aprova no app.
 - **No calendário o crédito é magenta, com um "C".** No celular a barra dele é mais
   alta que as outras. A cor é só dele: feriado é roxo, aula agendada é azul, falta
   é vermelho, transferida é laranja.
+- **Na lista, a aula transferida aparece riscada**, apagada, com faixa laranja e a
+  seta **→ 23/10/26** dizendo para onde o treino foi. A aula de crédito tem faixa
+  magenta e diz **de 25/09/26**, de onde ela veio.
 - **Só aula com o personal, só se estiver agendada.** Treino sozinho e aeróbico não
   custam nada: para esses, **mude a data direto**, inclusive para outro mês — não
   há o que transferir onde não há dinheiro. E um crédito não é transferido de

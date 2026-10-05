@@ -780,6 +780,15 @@ desktop entra um selo **"C"** *antes* do texto: o chip corta pela direita com
 ellipsis, então rótulo no fim virava "CRÉ…" justamente no dia cheio. A legenda e a
 etiqueta da lista repetem o mesmo "C" para o olho ligar uma coisa na outra.
 
+**Na lista.** A linha transferida só tinha o ícone 🔄 na coluna de status —
+parecia uma aula como as outras, e o treino dela nem aconteceu ali. Agora: data e
+nome **riscados**, linha a 62% de opacidade, faixa laranja à esquerda, etiqueta
+*transferida* e **→ 23/10/26 17:33**, o dia de destino. A contagem de exercícios
+sai da linha: o treino não é dali. A linha de crédito ganha o espelho disso —
+faixa magenta e **de 25/09/26**. `/api/aulas` resolve as duas pontas em **uma**
+consulta extra (`transferida_para` e `credito_de` juntos num `IN`), devolvendo
+`destino` e `origem`; por linha seriam N consultas.
+
 Teste: `tcredito.py` cria um crédito **em 12/10, que é feriado**, e compara as cores
 computadas do chip, do dia de feriado e de uma aula comum, no celular e no desktop.
 
