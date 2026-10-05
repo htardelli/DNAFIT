@@ -616,6 +616,33 @@ Nunca é gravada em texto puro (só o hash) e não vai para log. Quem perder o v
 pede outro reset. Alfabeto sem `0/O/1/l/I`: ela é ditada por WhatsApp ou lida em
 voz alta, e caractere ambíguo vira chamado de "não entro".
 
+### Cartão de hoje: três estados, não um
+
+`/api/aulas/hoje` escolhia a **primeira aula do dia por horário**, qualquer que
+fosse o status, e `carregarHoje()` desenhava sempre o mesmo cartão. Quem
+finalizava o treino via o mesmo botão verde *Treinar agora* e ficava sem saber se
+o registro tinha entrado. O usuário relatou exatamente assim: *"finalizei o treino
+e ele continua na tela"*.
+
+Agora:
+
+1. **Pendente** — cartão normal, *Treinar agora* + *Ver treino*. A query ordena
+   `(status='agendada') DESC`: quem treinou às 7h e tem outra às 19h vê a das 19h,
+   não a da manhã já encerrada.
+2. **Encerrada** — `.hoje-card.feito` (faixa verde à esquerda), tarja com o status
+   (✅ Treino feito), o fechamento (`energia 4/5 · fadiga 2/5 · esforço 6/10`, mais
+   km e minutos em corrida) e a linha **Próximo: qua 07/10 às 12:45 · Costas**.
+   Ações: *Ver o que foi feito* e *Ver o próximo*. Nenhum botão de ação pendente.
+3. **Sem aula hoje** — a próxima agendada, como antes.
+
+A rota ganhou `proxima` (a próxima `agendada`, hoje ou depois, excluindo a do
+cartão), calculada **só** quando a aula do cartão já está encerrada: fora disso é
+consulta à toa.
+
+Teste: `thoje.py` — agendada oferece treinar; depois de finalizar pela leitura o
+cartão muda de estado, some o *Treinar agora*, aparecem o fechamento e a próxima
+aula; e uma segunda aula pendente no mesmo dia assume o cartão.
+
 ### Ver treino: checklist, não cadastro
 
 O cartão de hoje tinha dois botões: *Treinar agora* (modo treino) e *Ver treino*,

@@ -104,6 +104,17 @@ foram mantidas.
 
 ---
 
+## O cartão de hoje muda quando você termina
+
+Enquanto a aula está em aberto, o cartão preto no topo da Agenda mostra o treino
+com **Treinar agora**. Assim que você finaliza, ele vira o resumo do que foi
+feito: **✅ Treino feito**, com energia, fadiga e esforço que você registrou, e a
+linha **Próximo: qua 07/10 às 12:45 · Costas**. O botão verde some — não há mais
+nada a fazer ali.
+
+Se você treina duas vezes no mesmo dia, o cartão mostra a aula que **ainda falta**.
+A da manhã, já encerrada, sai da frente.
+
 ## Ver treino — a lista para ir riscando
 
 No cartão de hoje, **Ver treino** abre o treino que o personal montou: o dia, a

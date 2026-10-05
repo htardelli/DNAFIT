@@ -1661,6 +1661,36 @@ async function carregarHoje() {
 
     const sug = a.sugestao_modelo_id
       ? (_modelos.find(m => m.id === a.sugestao_modelo_id) || {}).nome : null;
+
+    // Aula encerrada não pede ação nenhuma. Antes o cartão continuava igual,
+    // com o botão verde "Treinar agora", e quem acabou de finalizar ficava sem
+    // saber se o registro entrou — parecia que nada tinha acontecido.
+    if (a.status !== 'agendada') {
+      const st = ICONE_STATUS[a.status] || { i: '•', t: a.status };
+      const fechamento = a.status === 'realizada'
+        ? [a.energia ? `energia ${a.energia}/5` : '', a.fadiga ? `fadiga ${a.fadiga}/5` : '',
+           a.pse ? `esforço ${a.pse}/10` : '',
+           aer ? [a.distancia_km ? fmtN(a.distancia_km) + ' km' : '',
+                  a.tempo_min ? fmtN(a.tempo_min) + ' min' : ''].filter(Boolean).join(' · ') : ''
+          ].filter(Boolean).join(' · ')
+        : '';
+      const px = d.proxima;
+      box.innerHTML = `<div class="hoje-card feito">
+        <div class="et">${st.i} ${esc(st.t)}</div>
+        <h3>${esc(titulo)}</h3>
+        <div class="sub">${esc(quando)}${fechamento ? ' · ' + esc(fechamento) : ''}</div>
+        ${px ? `<div class="sub prox">Próximo: <b>${diaSemana(px.data)} ${fmtDataCurta(px.data)}</b>${
+                 px.hora ? ' às <b>' + px.hora + '</b>' : ''}${
+                 px.foco || px.tipo ? ' · ' + esc(px.foco || px.tipo) : ''}</div>`
+              : `<div class="sub prox">Sem próxima aula agendada.</div>`}
+        <div class="acoes">
+          ${n ? `<button class="btn btn-ghost" onclick="verTreino(${a.id})">Ver o que foi feito</button>` : ''}
+          ${px ? `<button class="btn btn-ghost" onclick="verTreino(${px.id})">Ver o próximo</button>` : ''}
+        </div>
+      </div>`;
+      return;
+    }
+
     const podeTreinar = n > 0 && a.ja_comecou && a.status !== 'cancelada';
     box.innerHTML = `<div class="hoje-card">
       <div class="et">${d.eh_hoje ? 'Treino de hoje' : 'Próximo treino'}</div>

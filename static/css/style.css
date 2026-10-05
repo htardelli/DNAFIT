@@ -884,3 +884,11 @@ tbody tr:hover { background: var(--card-2); }
 .vt-check { position: absolute; opacity: 0; pointer-events: none; }
 .vt-ex.marcavel .n { border: 1.5px solid var(--border); transition: all .15s ease; }
 .vt-ex.marcavel.feito .n { border-color: transparent; }
+
+/* ── Cartão de hoje com a aula já encerrada ───────────────────────────────
+   Antes o cartão não mudava: quem finalizava o treino via o mesmo botão verde
+   "Treinar agora" e ficava sem saber se o registro tinha entrado. A faixa verde
+   à esquerda é o "pronto, está gravado" visto de longe. */
+.hoje-card.feito { border-left: 4px solid var(--pri, #11A05A); }
+.hoje-card.feito .et { color: #7BE3A8; }
+.hoje-card .sub.prox { margin-top: 8px; opacity: .6; }

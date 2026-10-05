@@ -879,8 +879,13 @@ async def aula_de_hoje(user=Depends(get_current_user),
     em vez de calendário → dia → aula.
     """
     hoje = _hoje().isoformat()
+    # Entre as aulas de hoje, a que ainda PEDE alguma coisa vem primeiro: quem
+    # treinou às 7h e tem outra às 19h não quer ver a da manhã, já encerrada.
+    # Se todas as de hoje já foram resolvidas, mostramos a resolvida mesmo — o
+    # "concluído ✓" é a confirmação de que o registro entrou.
     row = await (await db.execute(
-        "SELECT * FROM aulas WHERE data=? ORDER BY COALESCE(hora,'99:99') LIMIT 1",
+        "SELECT * FROM aulas WHERE data=? "
+        "ORDER BY (status='agendada') DESC, COALESCE(hora,'99:99') LIMIT 1",
         (hoje,))).fetchone()
     eh_hoje = row is not None
     if not row:
@@ -888,12 +893,21 @@ async def aula_de_hoje(user=Depends(get_current_user),
             "SELECT * FROM aulas WHERE data > ? AND status='agendada' "
             "ORDER BY data, COALESCE(hora,'99:99') LIMIT 1", (hoje,))).fetchone()
     if not row:
-        return {"aula": None, "eh_hoje": False, "hoje": hoje}
+        return {"aula": None, "eh_hoje": False, "hoje": hoje, "proxima": None}
     aula = dict(row)
     aula["exercicios"] = await _itens_da_aula(db, aula["id"])
     aula["pode_montar"] = _pode_montar_treino(user, row)
     aula["ja_comecou"] = _ja_comecou(aula["data"], aula["hora"])
-    return {"aula": aula, "eh_hoje": eh_hoje, "hoje": hoje}
+    # Aula do cartão já encerrada: o que importa depois dela é a próxima.
+    proxima = None
+    if aula["status"] != "agendada":
+        nx = await (await db.execute(
+            "SELECT id, data, hora, foco, tipo, modalidade FROM aulas "
+            "WHERE status='agendada' AND (data > ? OR (data = ? AND id <> ?)) "
+            "ORDER BY data, COALESCE(hora,'99:99') LIMIT 1",
+            (hoje, hoje, aula["id"]))).fetchone()
+        proxima = dict(nx) if nx else None
+    return {"aula": aula, "eh_hoje": eh_hoje, "hoje": hoje, "proxima": proxima}
 
 
 @app.get("/api/aulas/{aid}")
