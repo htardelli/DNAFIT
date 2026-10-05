@@ -724,6 +724,21 @@ senão deixava R$ 90 em outubro e o teste financeiro acusava dinheiro no crédit
 - Aviso na interface enquanto a senha inicial estiver em uso (`senha_padrao`).
 - Toda rota `/api/*` exige token.
 
+### Decidido: não construir notificação fora do app
+
+O app não avisa o personal por push, e-mail ou WhatsApp — nem para pedido de
+transferência, nem para aviso de pagamento. Ele descobre ao abrir o app, nos
+três pontos de entrada acima.
+
+**O usuário decidiu assim em 05/10/2026**, com estas palavras: *"Avisarei que
+coloquei no sistema pelo zap"*. Os dois já se falam por WhatsApp; o aviso é a
+mensagem que ele manda, e o papel do app é guardar quem pediu, quando, por quê e
+quem aprovou — que é o que some da memória depois de um mês.
+
+Não proponha push, e-mail ou integração de mensagem de novo sem ele pedir. Cada
+um traz canal externo, credencial e custo para resolver algo que hoje custa uma
+mensagem no celular.
+
 ### Ainda não existe (candidatos a próximo passo, se o usuário pedir)
 
 - **Comprovante anexado** ao Pix (hoje só valor, data e observação em texto).
