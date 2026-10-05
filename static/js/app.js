@@ -1481,6 +1481,84 @@ function reguaPara(inputId, titulo, unidade, min, max, step) {
 }
 
 // ══════════════════════════ TREINO DE HOJE (cartão) ══════════════════════════
+// ── Ver treino: leitura, não cadastro ───────────────────────────────────────
+// "Ver treino" abria abrirAula(), o formulário com data, status, professor,
+// pacote, valor, modelo... Quem abre o app na academia quer saber o que vai
+// fazer. Aqui só se lê; editar continua a um toque, em "Abrir aula".
+async function verTreino(aulaId) {
+  let a;
+  try { a = await api('GET', `/api/aulas/${aulaId}`); }
+  catch (e) { return toast(e.message, 'err'); }
+
+  const aer = ehAerobico(a.modalidade);
+  const exs = a.exercicios || [];
+  document.getElementById('vt-titulo').textContent =
+    a.foco || a.tipo || (aer ? 'Treino de corrida'
+      : a.modalidade === 'sozinho' ? 'Treino individual' : 'Treino com o personal');
+
+  const meta = [
+    `<span><b>${diaSemana(a.data)} ${fmtData(a.data)}</b>${a.hora ? ' às <b>' + a.hora + '</b>' : ''}</span>`,
+    `<span>${esc(rotuloModalidade(a.modalidade))}</span>`,
+    a.professor ? `<span>com <b>${esc(a.professor)}</b></span>` : '',
+    a.local ? `<span>em <b>${esc(a.local)}</b></span>` : '',
+    a.duracao_min ? `<span><b>${a.duracao_min}</b> min previstos</span>` : '',
+    `<span>${ICONE_STATUS[a.status] ? ICONE_STATUS[a.status].i + ' ' + esc(ICONE_STATUS[a.status].t) : esc(a.status)}</span>`
+  ].filter(Boolean).join('');
+  document.getElementById('vt-meta').innerHTML = meta;
+
+  let corpo;
+  if (aer) {
+    const texto = (a.descricao || '').trim();
+    const reg = [
+      a.distancia_km ? `<b>${fmtN(a.distancia_km)}</b> km` : '',
+      a.tempo_min ? `<b>${fmtN(a.tempo_min)}</b> min` : ''
+    ].filter(Boolean).join(' · ');
+    corpo = texto
+      ? `<div class="vt-texto">${esc(texto)}</div>` +
+        (reg ? `<p class="muted" style="font-size:13px;margin:10px 0 0">Registrado: ${reg}</p>` : '')
+      : `<div class="empty">A prescrição ainda não foi colada aqui.</div>`;
+  } else if (!exs.length) {
+    corpo = `<div class="empty">O treino deste dia ainda não foi montado${
+      a.modalidade === 'com_personal' ? ' pelo personal' : ''}.</div>`;
+  } else {
+    const feitos = exs.filter(e => e.feito).length;
+    corpo = `<p class="muted" style="font-size:12px;margin:0 0 4px">
+        ${exs.length} ${exs.length === 1 ? 'exercício' : 'exercícios'}${
+        feitos ? ` · <b>${feitos}</b> já ${feitos === 1 ? 'feito' : 'feitos'}` : ''}</p>` +
+      exs.map((e, i) => {
+        const dados = [
+          e.series && e.repeticoes ? `<b>${e.series} × ${esc(e.repeticoes)}</b>`
+            : e.series ? `<b>${e.series}</b> ${e.series === 1 ? 'série' : 'séries'}`
+            : e.repeticoes ? `<b>${esc(e.repeticoes)}</b>` : '',
+          e.carga ? `${fmtN(e.carga)} kg` : '',
+          e.descanso_seg ? `${e.descanso_seg}s de descanso` : ''
+        ].filter(Boolean).join(' · ');
+        return `<div class="vt-ex${e.feito ? ' feito' : ''}">
+          <span class="n">${e.feito ? '✓' : i + 1}</span>
+          <span class="c">
+            <span class="nome">${e.feito ? `<s>${esc(e.nome)}</s>` : esc(e.nome)}</span>
+            ${dados ? `<div class="dados">${dados}</div>` : ''}
+            ${e.obs ? `<div class="obs">${esc(e.obs)}</div>` : ''}
+          </span>
+        </div>`;
+      }).join('');
+  }
+  document.getElementById('vt-corpo').innerHTML = corpo;
+
+  const temTreino = aer ? !!(a.descricao || '').trim() : exs.length > 0;
+  const podeTreinar = temTreino && a.ja_comecou && a.status !== 'cancelada'
+                      && a.status !== 'transferida';
+  document.getElementById('vt-acoes').innerHTML = `
+    <button class="btn" style="margin-right:auto" onclick="vtAbrirAula(${a.id})">Abrir aula</button>
+    <button class="btn" onclick="fecharModal('m-ver-treino')">Fechar</button>
+    ${podeTreinar ? `<button class="btn btn-primary" onclick="vtTreinar(${a.id})">Treinar agora</button>` : ''}`;
+  abrirModal('m-ver-treino');
+}
+
+// O modo treino vive abaixo dos modais na pilha: sem fechar este, ele abriria atrás.
+function vtTreinar(id) { fecharModal('m-ver-treino'); tmAbrir(id); }
+function vtAbrirAula(id) { fecharModal('m-ver-treino'); abrirAula(id); }
+
 async function carregarHoje() {
   const box = document.getElementById('hoje-card');
   try {
@@ -1522,7 +1600,7 @@ async function carregarHoje() {
       ${sug ? `<div class="sub" style="margin-top:6px">💡 sugestão do aluno: <b>${esc(sug)}</b></div>` : ''}
       <div class="acoes">
         ${podeTreinar ? `<button class="btn btn-primary" onclick="tmAbrir(${a.id})">Treinar agora</button>` : ''}
-        <button class="btn btn-ghost" onclick="abrirAula(${a.id})">
+        <button class="btn btn-ghost" onclick="${n ? `verTreino(${a.id})` : `abrirAula(${a.id})`}">
           ${n ? 'Ver treino' : (a.pode_montar ? (aer ? 'Colar prescrição' : 'Montar treino') : 'Ver aula')}</button>
       </div>
     </div>`;

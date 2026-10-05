@@ -830,3 +830,37 @@ tbody tr:hover { background: var(--card-2); }
 .acesso-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .acesso-acoes { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .acesso-acoes .btn { flex: 1 1 auto; min-width: 104px; justify-content: center; }
+
+/* ── Ver treino (leitura) ─────────────────────────────────────────────────
+   "Ver treino" levava ao formulário de cadastro da aula. Quem abre o app na
+   academia quer ler o que vai fazer, não editar 15 campos. Esta tela é só
+   leitura: um cartão por exercício, número grande, nada clicável por engano. */
+.vt-meta {
+  display: flex; flex-wrap: wrap; gap: 6px 10px; margin-bottom: 14px;
+  font-size: 12px; color: var(--muted);
+}
+.vt-meta b { color: var(--text); font-weight: 600; }
+/* Sem separador, "Com o personal com Rafael" lê como uma frase só. */
+.vt-meta > span:not(:last-child)::after { content: '·'; margin-left: 10px; opacity: .5; }
+.vt-ex {
+  display: flex; gap: 12px; align-items: flex-start; padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.vt-ex:last-child { border-bottom: 0; }
+.vt-ex .n {
+  flex: 0 0 26px; height: 26px; border-radius: 50%; display: flex;
+  align-items: center; justify-content: center; font-size: 12px; font-weight: 700;
+  background: var(--card-2); color: var(--muted);
+}
+.vt-ex.feito .n { background: var(--ok, #11A05A); color: #fff; }
+.vt-ex .c { flex: 1; min-width: 0; }
+.vt-ex .nome { font-weight: 600; font-size: 15px; color: var(--text); }
+.vt-ex .nome s { color: var(--muted); font-weight: 500; }
+.vt-ex .dados { margin-top: 3px; font-size: 13px; color: var(--muted); }
+.vt-ex .dados b { color: var(--text); font-weight: 700; }
+.vt-ex .obs { margin-top: 4px; font-size: 12px; color: var(--muted); font-style: italic; }
+.vt-texto {
+  white-space: pre-wrap; font-size: 14px; line-height: 1.55; color: var(--text);
+  background: var(--card-2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 12px 14px;
+}

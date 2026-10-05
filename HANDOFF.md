@@ -616,6 +616,34 @@ Nunca é gravada em texto puro (só o hash) e não vai para log. Quem perder o v
 pede outro reset. Alfabeto sem `0/O/1/l/I`: ela é ditada por WhatsApp ou lida em
 voz alta, e caractere ambíguo vira chamado de "não entro".
 
+### Ver treino × abrir aula (leitura separada do cadastro)
+
+O cartão de hoje tinha dois botões: *Treinar agora* (modo treino) e *Ver treino*,
+que chamava `abrirAula()` — o **formulário de cadastro**: data, hora, duração,
+modalidade, status, tipo, foco, local, professor, pacote, modelo, valor,
+descrição, observações, PSE, energia, fadiga, e só então os exercícios. Quem abre
+o app na academia quer ler o que vai fazer.
+
+`verTreino(id)` (`#m-ver-treino`) é só leitura: cabeçalho com dia, hora,
+modalidade, professor, local, duração e status; um cartão por exercício com
+`séries × reps`, carga, descanso e observação; o que já foi feito aparece riscado
+com ✓. Corrida mostra a prescrição em texto, mais distância e tempo registrados.
+
+Rodapé: **Abrir aula** (o formulário, para quem realmente quer editar),
+**Fechar** e **Treinar agora**. `vtTreinar()` fecha a leitura **antes** de chamar
+`tmAbrir()`: o modo treino fica em z-index 120, abaixo dos modais (200), então
+sem fechar ele abriria atrás. Mesma armadilha da escada de empilhamento.
+
+A lista e o calendário continuam abrindo o formulário — ali o gesto é gerenciar a
+agenda, não ler o treino do dia. Se ele pedir leitura ali também, `verTreino` já
+serve: é só trocar a chamada.
+
+Teste: `tvertreino.py` — além de abrir, confere que **nenhum campo editável**
+existe na leitura (`input, select, textarea` = 0), que *Treinar agora* abre o modo
+treino com a leitura fechada, e que *Abrir aula* leva ao formulário. O setup
+monta o cenário real pela API (o aluno marca o dia, o personal prescreve) e apaga
+a aula no fim — ela nasce paga e poluía o financeiro de outubro.
+
 ### Transferência de aula paga (remarcar para outro dia)
 
 Única exceção sancionada ao "pré-pago, sem devolução". A transferência move o

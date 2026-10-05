@@ -104,6 +104,20 @@ foram mantidas.
 
 ---
 
+## Ver treino — só ler o que foi prescrito
+
+No cartão de hoje, **Ver treino** abre uma tela de **leitura**: o dia, a hora, com
+quem e onde, e a lista dos exercícios que o personal montou — `4 × 10 · 60 kg ·
+90s de descanso`, com a observação dele embaixo. O que você já fez aparece riscado
+com ✓. Em corrida, aparece a prescrição em texto com a distância e o tempo.
+
+Nada ali é editável — é para consultar no vestiário sem medo de mexer em algo sem
+querer. Os três botões: **Abrir aula** (o cadastro completo, se você realmente
+quiser editar), **Fechar** e **Treinar agora**.
+
+A lista de aulas e o calendário continuam abrindo o cadastro completo: ali o que
+você quer é gerenciar a agenda, não ler o treino do dia.
+
 ## Modo treino — a tela para usar na academia
 
 No topo da Agenda fica o **treino de hoje**. Um toque em **Treinar agora** abre a
