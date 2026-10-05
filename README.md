@@ -319,6 +319,52 @@ Em **Ajustes → Professores e locais** você monta a lista que aparece nos camp
 um atalho *"+ Cadastrar novo…"* dentro do próprio campo. Remover uma opção não
 altera as aulas já marcadas.
 
+## Backup: a cópia que fica com você
+
+Seus dados moram num volume do Railway. Volume é **ponto único de falha**: serviço
+apagado por engano, volume desconectado numa troca de configuração, defeito numa
+atualização. Nenhuma dessas hipóteses é remota o bastante para quem lança aula por
+aula desde setembro.
+
+**Ajustes → Backup e restauração → Baixar backup.** Sai um arquivo `.db` com
+**tudo**: agenda, treinos, exercícios, medidas, pagamentos e transferências.
+Guarde fora do celular — Drive, e-mail para você mesmo, pen drive.
+
+Antes de baixar, o cartão mostra o que tem no banco (aulas, período, pagamentos,
+tamanho). **Confira esses números contra o que você sabe que tem.** "3 aulas"
+quando você tem 40 é o sinal de que algo está errado — e o momento de descobrir
+isso é agora, não no dia em que precisar restaurar.
+
+**Baixe um backup antes de qualquer mexida no Railway.**
+
+### Restaurar
+
+No mesmo cartão: escolha o arquivo e toque em **Restaurar**. Isso substitui
+**tudo** que está no app.
+
+Três proteções, porque restaurar o arquivo errado é o jeito mais fácil de perder
+dado tentando salvá-lo:
+
+1. O app **recusa** arquivo que não é um banco do FITPLAN, ou que está corrompido —
+   antes de encostar nos seus dados.
+2. Antes de trocar, ele **guarda sozinho** uma cópia do estado atual no servidor.
+   Ela aparece em *Cópias automáticas*, com data e hora, e dá para baixar. Se você
+   restaurou o backup errado, baixe a cópia de antes e restaure ela.
+3. Você confirma duas vezes: no aviso do navegador e com a palavra que o servidor
+   exige. Clique errado sozinho não restaura nada.
+
+O app guarda as **5 cópias automáticas mais recentes** — as antigas saem sozinhas,
+senão o volume enche e aí sim o app para.
+
+Só o **dono** (perfil aluno) baixa e restaura. O personal não alcança essas telas.
+
+### E o backup do Railway?
+
+Na aba **Backups** do serviço, o Railway tira cópia do volume inteiro. Vale ligar:
+é automático e cobre o que você esquecer de baixar. Mas é backup **deles, no
+servidor deles** — o arquivo que você baixa aqui é seu, abre em qualquer leitor de
+SQLite e não depende de ninguém. Use os dois.
+
 ## Senhas: criar acesso e resetar
 
 Em **Ajustes → Acessos**:

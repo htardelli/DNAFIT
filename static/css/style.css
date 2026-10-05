@@ -942,3 +942,21 @@ tbody tr:hover { background: var(--card-2); }
 }
 .linha-aula.credito td:first-child { box-shadow: inset 3px 0 0 var(--cred); }
 .linha-aula.credito .seta-transf { color: var(--cred-ink); }
+
+/* ── Backup e restauração ─────────────────────────────────────────────────
+   Os números existem para o usuário CONFERIR a cópia antes de confiar nela:
+   "3 aulas" quando ele sabe que tem 40 é o sinal de que algo está errado. */
+.bkp-fatos { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+.bkp-fato {
+  background: var(--card-2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 10px 12px; min-width: 0;
+}
+.bkp-fato .l { display: block; font-size: 10px; text-transform: uppercase;
+               letter-spacing: .04em; color: var(--muted); margin-bottom: 3px; }
+.bkp-fato b { font-size: 16px; color: var(--text); }
+.bkp-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.bkp-form input[type=file] { flex: 1; min-width: 180px; font-size: 13px; }
+.bkp-sg {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 8px 0; border-top: 1px solid var(--border); font-size: 12px;
+}

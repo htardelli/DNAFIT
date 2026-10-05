@@ -122,7 +122,7 @@ function nav(page) {
   if (page === 'treinos') { loadExercicios(); loadModelos(); }
   if (page === 'frequencia') loadFrequencia();
   if (page === 'financeiro') { loadFinanceiro(); loadPlanos(); loadPix(); }
-  if (page === 'config') { loadConfig(); loadUsuarios(); renderCadastros(); }
+  if (page === 'config') { loadConfig(); loadUsuarios(); renderCadastros(); loadBackup(); }
 }
 
 function abrirMenu() { document.getElementById('sidebar').classList.add('open'); document.getElementById('overlay').classList.add('show'); }
@@ -148,6 +148,7 @@ async function iniciar() {
   // a tela não tenta carregar nada antes da troca.
   if (_user.deve_trocar_senha) return exigirTrocaSenha();
   document.getElementById('card-usuarios').style.display = _user.role === 'aluno' ? '' : 'none';
+  document.getElementById('card-backup').style.display = _user.role === 'aluno' ? '' : 'none';
   await Promise.all([carregarExercicios(), carregarModelos(), carregarPlanos(),
                      carregarConfig(), carregarCadastros()]);
   loadAgenda();
@@ -1341,6 +1342,91 @@ async function trocarSenha() {
     document.getElementById('aviso-senha').style.display = 'none';
     _user.senha_padrao = false;
     toast('Senha alterada');
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+// ── Backup e restauração ────────────────────────────────────────────────────
+// O banco mora num volume do Railway: serviço apagado por engano, volume
+// desconectado numa troca de configuração ou migração minha que corrompe dado
+// levam tudo junto. A cópia que sai daqui é um ARQUIVO do usuário, que ele lê
+// sem depender do Railway, de mim, ou de o app estar no ar.
+function fmtBytes(n) {
+  if (!n) return '0 B';
+  const u = ['B', 'KB', 'MB', 'GB']; let i = 0;
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return `${n.toFixed(i ? 1 : 0)} ${u[i]}`;
+}
+
+async function loadBackup() {
+  if (!_user || _user.role !== 'aluno') return;
+  const box = document.getElementById('bkp-resumo');
+  const sg = document.getElementById('bkp-salvaguardas');
+  if (!box) return;
+  let d;
+  try { d = await api('GET', '/api/backup/info'); }
+  catch (e) { box.innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+  const a = d.atual;
+  const periodo = a.primeira_aula
+    ? `${fmtDataCurta(a.primeira_aula)} a ${fmtDataCurta(a.ultima_aula)}` : 'S/D';
+  box.innerHTML = [
+    ['Aulas', a.aulas], ['Período', periodo],
+    ['Exercícios prescritos', a.exercicios_de_aula],
+    ['Biblioteca', a.exercicios], ['Pagamentos', a.pagamentos],
+    ['Medidas', a.medidas], ['Tamanho', fmtBytes(a.bytes)]
+  ].map(([l, v]) => `<div class="bkp-fato"><span class="l">${l}</span><b>${v}</b></div>`).join('');
+
+  sg.innerHTML = d.salvaguardas.length
+    ? `<div class="card-title" style="font-size:12px;margin:14px 0 6px">Cópias automáticas no servidor</div>
+       <p class="muted" style="font-size:11px;margin:0 0 8px">Guardadas antes de cada restauração.
+          Se restaurar o arquivo errado, baixe a cópia daqui e restaure ela.</p>` +
+      d.salvaguardas.map(x => `<div class="bkp-sg">
+        <span><b>${esc(x.em)}</b><span class="muted"> · ${fmtBytes(x.bytes)}</span></span>
+        <button class="btn btn-sm" onclick="baixarSalvaguarda('${esc(x.arquivo)}')">Baixar</button>
+      </div>`).join('')
+    : '';
+}
+
+// Download autenticado: a rota exige o token, então <a href> puro recebe 401.
+async function _baixarComToken(rota, nomePadrao) {
+  try {
+    const r = await fetch(rota, { headers: { Authorization: 'Bearer ' + Auth.token } });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || 'Falha ao baixar');
+    const cd = r.headers.get('Content-Disposition') || '';
+    const m = cd.match(/filename="?([^"]+)"?/);
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = (m && m[1]) || nomePadrao;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    toast('Backup baixado — guarde fora do celular');
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+function baixarBackup() { return _baixarComToken('/api/backup', 'fitplan.db'); }
+function baixarSalvaguarda(f) { return _baixarComToken('/api/backup/salvaguarda/' + encodeURIComponent(f), f); }
+
+async function restaurarBackup() {
+  const inp = document.getElementById('bkp-arquivo');
+  const f = inp.files && inp.files[0];
+  if (!f) return toast('Escolha o arquivo do backup', 'err');
+  // Duas barreiras, porque isto apaga tudo: a confirmação do navegador e a
+  // palavra que o servidor exige. Clique errado sozinho não restaura nada.
+  if (!confirm(`Restaurar "${f.name}"?\n\nTUDO que está no app agora será substituído pelo `
+             + `conteúdo deste arquivo. O app guarda uma cópia do estado atual antes de trocar.`))
+    return;
+  const fd = new FormData();
+  fd.append('arquivo', f);
+  fd.append('confirmacao', 'RESTAURAR');
+  try {
+    const r = await fetch('/api/restaurar', {
+      method: 'POST', headers: { Authorization: 'Bearer ' + Auth.token }, body: fd });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'Falha ao restaurar');
+    inp.value = '';
+    toast(`Restaurado: ${d.agora.aulas} aulas no app (antes eram ${d.antes.aulas})`);
+    await loadBackup();
+    loadAgenda(); carregarExercicios(); carregarModelos();
   } catch (e) { toast(e.message, 'err'); }
 }
 

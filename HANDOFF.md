@@ -827,6 +827,42 @@ Teste: `ttransf.py` (fluxo na tela, 390px, com cliques reais) e `apitransf.sh`
 acusava defeito inexistente. `guia.py` (screenshots) apaga a própria aula no fim,
 senão deixava R$ 90 em outubro e o teste financeiro acusava dinheiro no crédito.
 
+### Backup e restauração
+
+O banco inteiro vive num volume do Railway — ponto único de falha. `GET /api/backup`
+devolve um arquivo que fica **com o usuário**, independente do Railway e de nós.
+
+**`VACUUM INTO`, não cópia do arquivo.** Com WAL ativo, copiar `fitplan.db` na unha
+produz arquivo sem as escritas recentes (elas estão no `-wal`). O `VACUUM INTO` pede
+ao próprio SQLite um arquivo único e consolidado, com o app rodando.
+
+**Restauração (`POST /api/restaurar`), em ordem, e a ordem importa:**
+
+1. Valida **antes** de encostar no banco atual: cabeçalho `SQLite format 3`,
+   `PRAGMA integrity_check`, e a presença de `TABELAS_ESPERADAS`. Um `.db` de outro
+   sistema passa no integrity_check e destruiria tudo — daí a checagem de tabelas.
+2. Salva o banco atual em `antes-de-restaurar-<AAAAMMDD-HHMMSS>.db` no volume. É o
+   desfazer: listado e baixável por `/api/backup/salvaguarda/{arquivo}` (nome
+   validado por regex — sem isso, `../../etc/passwd` sairia pela rota).
+3. **Apaga `-wal` e `-shm`** antes do `os.replace`. Deixados para trás, o SQLite os
+   mescla no arquivo novo e corrompe a restauração. Esta linha é o detalhe que
+   silenciosamente estraga tudo se sumir.
+4. Roda `init_db` de novo: backup antigo pode não ter as colunas do código de hoje.
+5. **Reescreve a `secret_key` com a desta instalação.** `SECRET_KEY` é global
+   carregada no start; sem este passo o app seguiria em memória com a chave velha e,
+   no próximo restart do Railway, derrubaria todo mundo sem explicação. A chave é da
+   instalação, não do dado.
+
+Fica com as **5 salvaguardas mais recentes** — volume cheio derruba o app, que seria
+o jeito mais irônico de perder dado por causa do backup.
+
+Tudo sob `require_dono`: o personal recebe 403 nas quatro rotas.
+
+Teste: `tbackup.py` (tela, 390px, com download e restauração reais) mais a bateria
+de recusa por curl — sem confirmação, arquivo que não é banco, banco de outro
+sistema, backup truncado, path traversal, e o personal tentando. O ciclo completo
+foi verificado destruindo dados de propósito e trazendo-os de volta.
+
 ### Segurança já implementada
 
 - Chave de assinatura dos tokens sorteada no 1º start e guardada no banco

@@ -11,15 +11,20 @@ Módulos:
 """
 import os
 import re
+import glob
+import shutil
+import sqlite3
+import tempfile
 import calendar as _cal
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional, List
 
 import aiosqlite
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends, HTTPException, Query, Request
+from fastapi import FastAPI, Depends, HTTPException, Query, Request, UploadFile, File, Form
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.responses import FileResponse
+from fastapi.background import BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -2508,6 +2513,178 @@ async def evolucao(exercicio: Optional[str] = Query(None, description="Nome do e
 # ── Static / SPA ──────────────────────────────────────────────────────────────
 _static = os.path.join(os.path.dirname(__file__), "static")
 app.mount("/static", StaticFiles(directory=_static), name="static")
+
+
+# ══════════════════════ BACKUP E RESTAURAÇÃO ═════════════════════════════════
+# O banco inteiro mora num volume do Railway. Volume é ponto único de falha:
+# serviço apagado por engano, volume desconectado numa troca de configuração,
+# migração minha que corrompe dado. Nada disso é hipotético o bastante para um
+# app onde o usuário lança aula por aula desde setembro.
+#
+# A cópia sai daqui como ARQUIVO NA MÃO DELE — não depende do Railway, não
+# depende de mim, abre em qualquer leitor de SQLite.
+
+TABELAS_ESPERADAS = {"usuarios", "aulas", "aula_exercicios", "exercicios"}
+PREFIXO_SALVAGUARDA = "antes-de-restaurar-"
+
+
+def _copia_consistente(destino: str):
+    """VACUUM INTO: snapshot íntegro com o app rodando.
+
+    Copiar fitplan.db na unha, com WAL ativo, pode produzir arquivo truncado —
+    as escritas recentes vivem no -wal e o leitor ingênuo não as vê. O VACUUM
+    INTO pede ao próprio SQLite um arquivo único e consolidado.
+    """
+    con = sqlite3.connect(DB_PATH)
+    try:
+        con.execute("VACUUM INTO ?", (destino,))
+    finally:
+        con.close()
+
+
+def _resumo_do_banco(caminho: str) -> dict:
+    """Conta o que existe lá dentro. É o que deixa o usuário CONFERIR a cópia."""
+    con = sqlite3.connect(f"file:{caminho}?mode=ro", uri=True)
+    try:
+        con.row_factory = sqlite3.Row
+        tabelas = {r[0] for r in con.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'")}
+        def n(t):
+            return con.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] if t in tabelas else 0
+        periodo = con.execute("SELECT MIN(data), MAX(data) FROM aulas").fetchone() \
+                  if "aulas" in tabelas else (None, None)
+        return {
+            "tabelas": sorted(tabelas),
+            "aulas": n("aulas"), "exercicios_de_aula": n("aula_exercicios"),
+            "exercicios": n("exercicios"), "modelos": n("modelos"),
+            "pagamentos": n("pagamentos"), "medidas": n("medidas"),
+            "usuarios": n("usuarios"),
+            "primeira_aula": periodo[0], "ultima_aula": periodo[1],
+            "bytes": os.path.getsize(caminho),
+        }
+    finally:
+        con.close()
+
+
+@app.get("/api/backup/info")
+async def backup_info(user=Depends(require_dono)):
+    """O que existe no banco AGORA, e as cópias de segurança guardadas no volume."""
+    atual = _resumo_do_banco(DB_PATH)
+    salvaguardas = []
+    for f in sorted(glob.glob(os.path.join(os.path.dirname(DB_PATH),
+                                           f"{PREFIXO_SALVAGUARDA}*.db")), reverse=True):
+        salvaguardas.append({
+            "arquivo": os.path.basename(f),
+            "bytes": os.path.getsize(f),
+            "em": datetime.fromtimestamp(os.path.getmtime(f), TZ_APP).strftime("%d/%m/%Y %H:%M"),
+        })
+    return {"atual": atual, "salvaguardas": salvaguardas, "caminho": DB_PATH}
+
+
+@app.get("/api/backup")
+async def baixar_backup(tarefas: BackgroundTasks, user=Depends(require_dono)):
+    """Baixa o banco inteiro como arquivo. É a cópia que fica com o usuário."""
+    tmp = os.path.join(tempfile.gettempdir(),
+                       f"fitplan-{_agora().strftime('%Y%m%d-%H%M%S')}.db")
+    if os.path.exists(tmp):
+        os.remove(tmp)
+    _copia_consistente(tmp)
+    # O arquivo temporário só pode sair depois de enviado — daí o background.
+    tarefas.add_task(lambda: os.path.exists(tmp) and os.remove(tmp))
+    return FileResponse(tmp, media_type="application/octet-stream",
+                        filename=os.path.basename(tmp), background=tarefas)
+
+
+@app.get("/api/backup/salvaguarda/{arquivo}")
+async def baixar_salvaguarda(arquivo: str, user=Depends(require_dono)):
+    """Baixa uma cópia feita automaticamente antes de uma restauração."""
+    # Sem isto, "../../etc/passwd" como nome de arquivo sairia pela rota.
+    if not re.fullmatch(rf"{PREFIXO_SALVAGUARDA}[0-9\-]+\.db", arquivo):
+        raise HTTPException(400, "Nome de arquivo inválido.")
+    caminho = os.path.join(os.path.dirname(DB_PATH), arquivo)
+    if not os.path.isfile(caminho):
+        raise HTTPException(404, "Cópia não encontrada.")
+    return FileResponse(caminho, media_type="application/octet-stream", filename=arquivo)
+
+
+@app.post("/api/restaurar")
+async def restaurar_backup(arquivo: UploadFile = File(...),
+                           confirmacao: str = Form(""),
+                           user=Depends(require_dono)):
+    """Substitui o banco pelo arquivo enviado. Irreversível — e por isso guardado.
+
+    Antes de trocar qualquer coisa: valida o arquivo recebido e salva o banco
+    ATUAL no volume. Restaurar o backup errado é o jeito mais fácil de perder
+    dado justamente tentando protegê-lo.
+    """
+    if confirmacao.strip().upper() != "RESTAURAR":
+        raise HTTPException(400, "Digite RESTAURAR para confirmar: isto apaga os dados atuais.")
+
+    pasta = os.path.dirname(DB_PATH)
+    recebido = os.path.join(pasta, ".recebido.db")
+    try:
+        with open(recebido, "wb") as out:
+            shutil.copyfileobj(arquivo.file, out)
+
+        # 1) É mesmo um banco do FITPLAN, e está íntegro?
+        with open(recebido, "rb") as f:
+            if f.read(16) != b"SQLite format 3\x00":
+                raise HTTPException(400, "Este arquivo não é um banco SQLite.")
+        try:
+            con = sqlite3.connect(f"file:{recebido}?mode=ro", uri=True)
+            ok = con.execute("PRAGMA integrity_check").fetchone()[0]
+            tabelas = {r[0] for r in con.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'")}
+            con.close()
+        except sqlite3.DatabaseError:
+            raise HTTPException(400, "Arquivo corrompido ou ilegível.")
+        if ok != "ok":
+            raise HTTPException(400, f"O arquivo está corrompido: {ok}")
+        faltando = TABELAS_ESPERADAS - tabelas
+        if faltando:
+            raise HTTPException(400, "Este banco não é do FITPLAN — faltam as tabelas: "
+                                     f"{', '.join(sorted(faltando))}.")
+        novo = _resumo_do_banco(recebido)
+
+        # 2) Guarda o banco atual ANTES de trocar.
+        marca = _agora().strftime("%Y%m%d-%H%M%S")
+        salvaguarda = os.path.join(pasta, f"{PREFIXO_SALVAGUARDA}{marca}.db")
+        antes = _resumo_do_banco(DB_PATH)
+        _copia_consistente(salvaguarda)
+
+        # 3) Troca. O -wal e o -shm do banco velho PRECISAM sair: deixados para
+        #    trás, o SQLite os mescla no arquivo novo e corrompe a restauração.
+        for sufixo in ("-wal", "-shm"):
+            if os.path.exists(DB_PATH + sufixo):
+                os.remove(DB_PATH + sufixo)
+        os.replace(recebido, DB_PATH)
+
+        # 4) Backup antigo pode não ter as colunas que o código de hoje usa.
+        await init_db(_hash)
+
+        # 5) A chave de assinatura é desta INSTALAÇÃO, não do dado restaurado.
+        #    Sem reescrever, o app continuaria em memória com a chave velha e, no
+        #    próximo restart do Railway, derrubaria todo mundo sem explicação.
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute("INSERT INTO config (chave, valor) VALUES ('secret_key', ?) "
+                             "ON CONFLICT(chave) DO UPDATE SET valor=excluded.valor",
+                             (SECRET_KEY,))
+            await db.commit()
+
+        # Salvaguarda acumulada enche o volume, e volume cheio derruba o app —
+        # o jeito mais irônico de perder dado por causa do backup. Fica com as 5
+        # últimas: o erro que se desfaz é o recente.
+        copias = sorted(glob.glob(os.path.join(pasta, f"{PREFIXO_SALVAGUARDA}*.db")), reverse=True)
+        for velha in copias[5:]:
+            try: os.remove(velha)
+            except OSError: pass
+
+        return {"ok": True, "antes": antes, "agora": novo,
+                "salvaguarda": os.path.basename(salvaguarda),
+                "copias_guardadas": len(copias[:5])}
+    finally:
+        if os.path.exists(recebido):
+            os.remove(recebido)
 
 
 @app.get("/health")
