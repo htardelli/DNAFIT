@@ -233,6 +233,18 @@ input[type="time"]::-webkit-calendar-picker-indicator { margin-left: auto; }
 .b-agendada  { background: var(--info-l);    color: var(--info-ink); }
 .b-falta     { background: var(--danger-l);  color: var(--danger-ink); }
 .b-cancelada { background: var(--neutro-l);  color: var(--neutro-ink); }
+/* Transferida: laranja — a aula ficou no dia original, mas o treino saiu daqui.
+   Crédito: roxo — aula paga em outro mês que caiu neste. As duas precisam se
+   distinguir de "falta" (vermelho) e "cancelada" (cinza), porque nenhuma das
+   duas é perda: o dinheiro continua valendo um treino. */
+.b-transferida { background: var(--warn-l); color: var(--warn-ink); }
+.b-credito     { background: var(--fer-l);  color: var(--fer-ink); }
+.chip-transferida { background: var(--warn-l); border-left-color: var(--warn); color: var(--warn-ink); }
+.chip.credito::after {
+  content: ''; position: absolute; right: 3px; top: 3px; width: 5px; height: 5px;
+  border-radius: 50%; background: var(--fer);
+}
+.chip { position: relative; }
 .badge-solo  { background: var(--info-l);    color: var(--info-ink); }
 :root[data-theme="dark"] .b-realizada { color: var(--primary); }
 

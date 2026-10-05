@@ -34,7 +34,7 @@ código compartilhado.
 
 ---
 
-## 2. Estado atual — 05/09/2026
+## 2. Estado atual — 05/10/2026
 
 ### Código
 
@@ -90,6 +90,13 @@ código compartilhado.
   isso, desmarcar um dia já pago derruba o valor do mês sem o sistema saber.
 - **Multi-aluno** — o sistema assume um aluno; incluir a esposa é mudança de
   estrutura.
+- **Recusa de transferência devolve a chance?** Implementei **sim**: só a
+  aprovação consome a única transferência da aula. Punir o aluno por uma decisão
+  do personal deixaria a aula presa num dia que já se sabe inviável — mas é regra
+  de negócio dele, não minha. Confirmar.
+- **Prazo para transferir?** Hoje não existe: dá para remarcar até uma aula de
+  mês fechado, desde que esteja `agendada`. Se ele quiser exigir aviso com
+  antecedência (24h, por exemplo), é uma validação na rota `transferir`.
 
 ---
 
@@ -608,6 +615,75 @@ A senha provisória é devolvida **uma vez** na resposta, para o dono repassar.
 Nunca é gravada em texto puro (só o hash) e não vai para log. Quem perder o valor
 pede outro reset. Alfabeto sem `0/O/1/l/I`: ela é ditada por WhatsApp ou lida em
 voz alta, e caractere ambíguo vira chamado de "não entro".
+
+### Transferência de aula paga (remarcar para outro dia)
+
+Única exceção sancionada ao "pré-pago, sem devolução". A transferência move o
+**direito de treinar**, nunca o dinheiro.
+
+Duas linhas na tabela `aulas`, ligadas pelos dois lados:
+
+| campo | na origem | no crédito |
+|---|---|---|
+| `transferida_para` | id do crédito | `NULL` |
+| `credito_de` | `NULL` | id da origem |
+| `transf_status` | `pendente` \| `aprovada` \| `recusada` | igual à origem |
+| `transf_motivo` | o que o aluno escreveu (ou a recusa do personal) | `NULL` |
+| `valor` | **continua o valor pago** | **nasce 0** |
+| `status` | `agendada` → `transferida` na aprovação | `agendada` |
+
+**Invariante do dinheiro:** o valor fica no mês em que a aula foi agendada. A
+origem guarda o `valor`; o crédito nasce com `valor 0`. Sem isso a mesma aula
+seria cobrada duas vezes — em setembro, onde foi paga, e em outubro, onde foi
+treinada. É por isso também que `transferida` **saiu do balde `perdido`** em
+`/api/resumo` e `/api/financeiro`: transferência não é perda, é a aula em outro
+dia. Os dois relatórios ganharam `transferido`, `aulas_transferidas` e
+`creditos_recebidos` (e, por mês, `transferido`/`transferidas`/`creditos`).
+
+**Uma vez por aula — mas só a aprovação consome a cota.** `transf_status`
+`pendente` ou `aprovada` bloqueia novo pedido; `recusada` libera. Recusa que
+queimasse a aula puniria o aluno por uma decisão do personal, e a aula ficaria
+presa num dia que ele já disse que não dá. *Decisão minha, confirmar com o
+usuário.*
+
+Rotas (todas em `app.py`):
+
+| rota | quem | efeito |
+|---|---|---|
+| `POST /api/aulas/{id}/transferir` | **aluno** | cria o crédito e marca os dois lados como `pendente` |
+| `GET /api/transferencias` | ambos | pedidos pendentes, com origem e destino no mesmo objeto |
+| `POST /api/aulas/{id}/transferencia/aprovar` | **só personal** | origem vira `transferida`, os dois lados `aprovada` |
+| `POST /api/aulas/{id}/transferencia/recusar` | **só personal** | apaga o crédito, limpa `transferida_para`, grava `recusada` + motivo |
+| `POST /api/aulas/{id}/transferencia/cancelar` | **aluno** | desiste do pedido e restaura a origem para `agendada` |
+
+O aluno pedir e o personal aprovar é o ponto todo da regra do usuário. Daí o
+403 quando o aluno chama `aprovar` na própria aula: sem isso, "precisa da
+aprovação do personal" seria decoração.
+
+Guardas (as que já foram quebradas uma vez, e por isso estão testadas):
+
+- `CAMPOS_SO_TRANSFERENCIA` — PATCH não escreve campo de transferência. Hoje o
+  modelo `AulaUpdate` nem declara esses campos (o Pydantic já os descarta), mas a
+  guarda fica: quem um dia adicionar o campo ao modelo não abre o caminho sem ver.
+- `status="transferida"` à mão → 400. Esse status vem da aprovação, não da tela.
+- Pedido `pendente` → PATCH de `data` ou `status` → 400. Cancele o pedido antes.
+- Origem `transferida` → PATCH de `status` → 400, com a mensagem apontando o dia
+  de destino. O treino se registra no crédito.
+- Crédito nunca é transferido de novo, nem a aula já `aprovada`.
+- DELETE recusa apagar origem transferida ou com pedido pendente. Apagar o
+  **crédito** restaura a origem para `agendada` com os campos limpos — é o
+  caminho de saída quando os dois lados concordam em desfazer.
+
+Na tela: `renderTransferencia(a)` cobre os quatro estados (pendente, transferida,
+crédito, recusada) e `podeTransferir(a)` decide o botão — só aluno, só
+`com_personal`, só `agendada`, nunca um crédito, nunca com pedido vivo.
+`verificarTransferencias()` sobe o aviso prioritário **para o personal**, no
+mesmo lugar do aviso de Pix. Cores: `.b-transferida` laranja (*warn*) na origem,
+`.b-credito` roxo (*fer*) no destino — a cor diferente em cada ponta foi pedido
+explícito, para o mês não parecer ter duas aulas iguais.
+
+Teste: `ttransf.py` (fluxo na tela, 390px) e `apitransf.sh` (as 20 regras pela
+API). Os dois no diretório de scratch da sessão.
 
 ### Segurança já implementada
 

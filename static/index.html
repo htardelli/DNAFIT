@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="FITPLAN">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2316A34A'/%3E%3Cg stroke='white' stroke-width='9' stroke-linecap='round'%3E%3Cpath d='M30 32v36M70 32v36M18 42v16M82 42v16M30 50h40'/%3E%3C/g%3E%3C/svg%3E">
-<link rel="stylesheet" href="/static/css/style.css?v=6.4">
+<link rel="stylesheet" href="/static/css/style.css?v=6.5">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -113,6 +113,8 @@
           <span class="badge b-realizada" title="realizada">feita</span>
           <span class="badge b-falta">falta</span>
           <span class="badge b-cancelada" title="cancelada">cancel</span>
+          <span class="badge b-transferida" title="transferida para outro dia">transf.</span>
+          <span class="badge b-credito" title="aula paga em outro mês, remanejada para cá">crédito</span>
           <span class="legenda-modo"><i class="modo modo-p">P</i>personal</span>
           <span class="legenda-modo"><i class="modo modo-i">I</i>individual</span>
           <span class="legenda-modo"><i class="modo modo-a"><span>A</span></i>corrida</span>
@@ -294,6 +296,7 @@
           <thead><tr>
             <th>Mês</th><th class="right">Aulas</th><th class="right">Valor do mês</th>
             <th class="right">Treinadas</th><th class="right">A treinar</th><th class="right">Perdidas</th>
+            <th class="right" title="↗ saíram daqui · ↘ chegaram como crédito">Transf.</th>
           </tr></thead>
           <tbody id="lista-financeiro"></tbody>
         </table>
@@ -557,6 +560,44 @@
   </div>
 </div>
 
+<!-- ══ Modal: Transferir aula para outro dia ══ -->
+<div class="modal-bg" id="m-transferir">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-head">
+      <span class="modal-title">Transferir aula</span>
+      <button class="btn btn-sm btn-ghost" onclick="fecharModal('m-transferir')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="aviso" style="margin-bottom:14px" id="tr-contexto"></div>
+      <div class="grid g2">
+        <div class="form-dt"><label>Novo dia *</label><input type="date" id="tr-data"></div>
+        <div class="form-dt"><label>Horário</label><input type="time" id="tr-hora"></div>
+      </div>
+      <div><label>Motivo (o personal vai ler)</label>
+        <input id="tr-motivo" placeholder="viagem de trabalho, compromisso…"></div>
+      <p class="muted" style="font-size:11px;margin-top:10px">
+        O valor <b>continua no mês em que você pagou</b> — a aula original fica lá,
+        marcada como transferida. No novo dia ela entra como <b>crédito</b>, sem
+        custo. Cada aula pode ser transferida <b>uma única vez</b>, e só vale
+        depois que o personal aprovar.
+      </p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="fecharModal('m-transferir')">Cancelar</button>
+      <button class="btn btn-primary" onclick="pedirTransferencia()">Pedir transferência</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Aviso prioritário: transferências aguardando o personal ══ -->
+<div class="modal-bg" id="m-transf-aviso">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-head"><span class="modal-title">🔄 Transferência de aula</span></div>
+    <div class="modal-body" id="tv-corpo"></div>
+    <div class="modal-foot" id="tv-acoes"></div>
+  </div>
+</div>
+
 <!-- ══ Modal: Trocar a senha (obrigatório) ══
      Sem ✕ e sem Cancelar de propósito: com a troca pendente o servidor recusa
      toda rota do app (HTTP 423), então um modal fechável só daria a impressão
@@ -723,6 +764,7 @@
       <div id="a-aviso-feito" class="aviso aviso-ok" style="display:none"></div>
 
       <div id="a-aviso-sugestao" class="aviso aviso-info" style="display:none"></div>
+      <div id="a-aviso-transf" class="aviso" style="display:none"></div>
 
       <div id="a-aviso-futuro" class="aviso" style="display:none">
         Aula <b>ainda não começou</b> — não dá para fazer nem para faltar a ela.
@@ -833,6 +875,7 @@
     </div>
     <div class="modal-foot">
       <button class="btn btn-danger" id="a-btn-del" onclick="excluirAula()" style="margin-right:auto;display:none">Excluir</button>
+      <button class="btn" id="a-btn-transf" onclick="abrirTransferencia()" style="display:none">Transferir</button>
       <button class="btn" onclick="fecharModal('m-aula')">Cancelar</button>
       <button class="btn btn-primary" onclick="salvarAula()">Salvar</button>
     </div>
@@ -1020,6 +1063,6 @@
 </div>
 
 <div class="toast-wrap" id="toasts"></div>
-<script src="/static/js/app.js?v=6.4"></script>
+<script src="/static/js/app.js?v=6.5"></script>
 </body>
 </html>

@@ -210,6 +210,46 @@ o app mostra um aviso no topo de todas as telas.
 
 ---
 
+## Transferir uma aula paga para outro dia
+
+Imprevisto de trabalho não devolve dinheiro — mas também não precisa queimar a
+aula. Você remarca, e o personal aprova no app.
+
+1. Abra a aula e toque em **Transferir para outro dia**. Escolha a data nova (pode
+   ser em **outro mês**) e escreva o motivo.
+2. A aula original fica no dia dela, em **laranja**, com o aviso de que há um
+   pedido aguardando. A aula nova aparece no dia escolhido, em **roxo**, como
+   **crédito**.
+3. Na próxima vez que o **personal** abrir o app, o pedido aparece **por cima da
+   tela inicial**, com os dois dias, o motivo e o valor. Ele *Aprova* ou *Recusa*.
+4. **Aprovado:** a original muda para o status **Transferida** e o treino passa a
+   ser registrado no dia novo — é lá que você marca *Realizada*.
+   **Recusado:** o crédito é apagado, a aula volta ao normal e você pode propor
+   outro dia.
+
+### As regras, sem letra miúda
+
+- **Uma transferência por aula.** Só a **aprovação** gasta essa chance. Se ele
+  recusar, você pode propor outro dia — não seria justo você perder a aula por uma
+  decisão dele.
+- **Precisa da aprovação dele.** Você pede; só ele aprova. Enquanto o pedido está
+  pendente, a data e o status da aula ficam travados (cancele o pedido para mexer).
+- **O dinheiro não se move.** O valor continua no mês em que a aula foi agendada:
+  setembro continua com os R$ 90, e outubro recebe a aula como **crédito, valendo
+  R$ 0**. É assim que a mesma aula não é cobrada duas vezes.
+- **Transferida não é perdida.** No Financeiro ela sai do bolo *Perdido* e aparece
+  na coluna **Transf.** — você não faltou, você remarcou.
+- **Só aula com o personal, só se estiver agendada.** Treino sozinho e aeróbico não
+  custam nada: para esses, mude a data direto. E um crédito não é transferido de
+  novo — ele já é o resultado de uma transferência.
+- **Desfazer:** apagar a aula-crédito devolve a original ao estado **agendada**,
+  como se o pedido nunca tivesse existido.
+
+*Exemplo real:* as aulas de 29 e 30/09 não deram por causa de viagem. Você as
+transfere para 21 e 22/10. Setembro continua pago e mostra 2 aulas transferidas;
+outubro ganha 2 créditos sem custo; a frequência conta o treino no dia em que ele
+de fato aconteceu.
+
 ## Informar pagamento
 
 O dinheiro anda por fora do app — o que o app faz é registrar **as duas pontas**,
@@ -297,6 +337,7 @@ ano futuro que você for planejar.
 ## Conceitos que o app usa (para os números fazerem sentido)
 
 - **Status da aula:** `agendada` · `realizada` · `falta` (perdeu sem avisar) · `cancelada` (cancelada com aviso).
+  · `transferida` (remarcada para outro dia, com aprovação do personal).
 - **Consome aula do pacote:** `realizada` e `falta`. `cancelada` não consome.
 - **Frequência (aderência)** = realizadas ÷ (realizadas + faltas + agendadas que já passaram).
   Canceladas ficam fora da conta de propósito — senão um cancelamento do professor derruba sua nota.
@@ -307,7 +348,9 @@ ano futuro que você for planejar.
   agenda**, antes de treinar. Marcar os dias já fecha o valor do mês.
   - **Valor do mês** = **todas** as aulas do mês. É o que o aluno transfere.
   - **Virou treino** = realizadas · **A treinar** = agendadas ·
-    **Perdido** = faltas **+ cancelamentos**.
+    **Perdido** = faltas **+ cancelamentos** · **Transferido** = remarcadas para outro dia.
+  - **Transferência não é perda nem devolução:** o valor fica no mês de origem e a
+    aula reaparece no mês de destino como crédito de R$ 0.
   - **Nenhum status devolve dinheiro.** Mudar o status não altera o valor do mês —
     só muda o destino do que já foi pago.
   - É o mesmo número para os dois lados: **"Pago no mês"** (aluno) ou

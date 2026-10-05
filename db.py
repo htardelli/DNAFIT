@@ -337,6 +337,15 @@ async def init_db(hash_fn):
         # Senha definida por outra pessoa (criação ou reset pelo dono) é sempre
         # provisória: o app obriga a troca antes de liberar qualquer tela.
         await _add_col("usuarios", "deve_trocar_senha", "INTEGER NOT NULL DEFAULT 0")
+        # Transferência de aula paga para outro mês. A regra base continua: o
+        # valor é do mês em que a aula entrou na agenda e não volta. O que a
+        # transferência faz é mover o DIREITO de treinar, não o dinheiro — por
+        # isso a aula de origem guarda o valor e a de destino nasce com zero.
+        await _add_col("aulas", "transferida_para", "INTEGER")   # id da aula-crédito
+        await _add_col("aulas", "credito_de", "INTEGER")         # id da aula de origem
+        await _add_col("aulas", "transf_status", "TEXT")         # pendente | aprovada | recusada
+        await _add_col("aulas", "transf_motivo", "TEXT")
+        await _add_col("aulas", "transf_em", "TIMESTAMP")
         # aulas criadas antes desta coluna eram todas com o personal
         await db.execute("UPDATE aulas SET modalidade='com_personal' "
                          "WHERE modalidade IS NULL OR modalidade=''")

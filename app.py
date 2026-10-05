@@ -48,7 +48,12 @@ TOKEN_EXPIRE_HOURS = int(os.environ.get("FITPLAN_TOKEN_HORAS", "720"))  # 30 dia
 _pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 _oauth2 = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
-STATUS_VALIDOS = ("agendada", "realizada", "falta", "cancelada")
+# "transferida" é a aula de ORIGEM depois que o personal aprova: ela fica no dia
+# original, com o valor dela, e o direito de treinar passou para a aula-crédito
+# em outro dia. Não é falta (o aluno não perdeu) nem cancelada (não virou pó).
+STATUS_VALIDOS = ("agendada", "realizada", "falta", "cancelada", "transferida")
+STATUS_TRANSFERIDA = "transferida"
+TRANSF_STATUS = ("pendente", "aprovada", "recusada")
 
 # Bloqueio de força bruta no login. App exposto na internet com 2 usuários: sem isso,
 # uma senha fraca cai em minutos. Em memória — reinício do container zera, o que é
@@ -101,6 +106,11 @@ MODALIDADE_AEROBICA = "aerobico"
 CAMPOS_ALUNO_EM_AULA_DO_PERSONAL = {"data", "hora", "status", "obs", "pse", "valor",
                                     "modalidade", "energia", "fadiga",
                                     "distancia_km", "tempo_min"}
+
+# Transferência tem rota própria, com aprovação. Mexer nela pelo PATCH da aula
+# deixaria o aluno aprovar a própria transferência.
+CAMPOS_SO_TRANSFERENCIA = {"transferida_para", "credito_de", "transf_status",
+                           "transf_motivo", "transf_em"}
 
 
 def _pode_montar_treino(user, aula) -> bool:
@@ -1053,6 +1063,19 @@ async def editar_aula(aid: int, body: AulaUpdate, user=Depends(get_current_user)
     data = body.dict(exclude_unset=True)
     if "status" in data and data["status"] not in STATUS_VALIDOS:
         raise HTTPException(400, f"Status deve ser um de: {', '.join(STATUS_VALIDOS)}")
+    # Transferência só existe pela rota própria, que passa pela aprovação do
+    # personal. Solta no PATCH, o aluno aprovaria a própria transferência.
+    if set(data) & CAMPOS_SO_TRANSFERENCIA:
+        raise HTTPException(400, "Transferência é feita em 'Transferir para outro dia', "
+                                 "com aprovação do personal.")
+    if data.get("status") == STATUS_TRANSFERIDA:
+        raise HTTPException(400, "O status 'transferida' vem da aprovação do personal.")
+    if atual["transf_status"] == "pendente" and ("data" in data or "status" in data):
+        raise HTTPException(400, "Esta aula tem uma transferência aguardando o personal. "
+                                 "Cancele o pedido antes de mudar a data ou o status.")
+    if atual["status"] == STATUS_TRANSFERIDA:
+        raise HTTPException(400, "Esta aula foi transferida: o treino dela está no dia de "
+                                 "destino. Registre na aula-crédito, não nesta.")
     if "modalidade" in data and data["modalidade"] not in MODALIDADES:
         raise HTTPException(400, f"Modalidade deve ser um de: {', '.join(MODALIDADES)}")
     for campo, teto in (("distancia_km", 500), ("tempo_min", 1440)):
@@ -1125,9 +1148,169 @@ async def editar_aula(aid: int, body: AulaUpdate, user=Depends(get_current_user)
     return await obter_aula(aid, user, db)
 
 
+# ── Transferência de aula paga para outro dia/mês ────────────────────────────
+# A regra do acordo continua de pé: o valor pertence ao mês em que a aula entrou
+# na agenda e nunca volta. A transferência move o DIREITO de treinar, não o
+# dinheiro. Por isso:
+#   • a aula de ORIGEM fica no lugar, guardando o valor dela (o mês continua pago);
+#   • a aula de DESTINO nasce com valor 0 — é crédito, não compra nova.
+# Sem isso, a mesma aula seria cobrada duas vezes no fechamento do ano.
+class TransferenciaIn(BaseModel):
+    data: str
+    hora: Optional[str] = None
+    motivo: Optional[str] = None
+
+
+class RecusaIn(BaseModel):
+    motivo: Optional[str] = None
+
+
+async def _aula_ou_404(db, aid: int):
+    row = await (await db.execute("SELECT * FROM aulas WHERE id=?", (aid,))).fetchone()
+    if not row:
+        raise HTTPException(404, "Aula não encontrada")
+    return row
+
+
+@app.post("/api/aulas/{aid}/transferir")
+async def transferir_aula(aid: int, body: TransferenciaIn, user=Depends(require_dono),
+                          db: aiosqlite.Connection = Depends(get_db)):
+    """O ALUNO pede para levar uma aula paga para outro dia. Fica pendente até o
+    personal aprovar — é o horário dele que está sendo remanejado."""
+    aula = await _aula_ou_404(db, aid)
+    if (aula["modalidade"] or "com_personal") != "com_personal":
+        raise HTTPException(400, "Só aula com o personal tem valor para transferir.")
+    if aula["status"] != "agendada":
+        raise HTTPException(400, "Só aula ainda agendada pode ser transferida.")
+    if aula["credito_de"]:
+        raise HTTPException(400, "Esta aula já é um crédito de outra transferência — "
+                                 "ela não pode ser transferida de novo.")
+    if aula["transf_status"] == "pendente":
+        raise HTTPException(400, "Já existe um pedido de transferência desta aula "
+                                 "aguardando o personal.")
+    if aula["transf_status"] == "aprovada":
+        raise HTTPException(400, "Esta aula já foi transferida uma vez.")
+
+    nova_data = _parse_data(body.data)
+    if nova_data == aula["data"] and (body.hora or None) == aula["hora"]:
+        raise HTTPException(400, "Escolha um dia ou horário diferente do atual.")
+    hora = body.hora or aula["hora"]
+    if await (await db.execute(
+            "SELECT id FROM aulas WHERE data=? AND COALESCE(hora,'')=COALESCE(?,'')",
+            (nova_data, hora))).fetchone():
+        raise HTTPException(409, "Já existe aula nesse dia e horário.")
+
+    cur = await db.execute("""
+        INSERT INTO aulas (data, hora, duracao_min, tipo, foco, local, professor,
+                           status, modalidade, plano_id, valor, credito_de,
+                           transf_status, atualizado_em)
+        VALUES (?,?,?,?,?,?,?, 'agendada', 'com_personal', ?, 0, ?, 'pendente', CURRENT_TIMESTAMP)
+    """, (nova_data, hora, aula["duracao_min"], aula["tipo"], aula["foco"],
+          aula["local"], aula["professor"], aula["plano_id"], aid))
+    novo_id = cur.lastrowid
+    await db.execute("""
+        UPDATE aulas SET transferida_para=?, transf_status='pendente',
+                         transf_motivo=?, transf_em=CURRENT_TIMESTAMP, atualizado_em=CURRENT_TIMESTAMP
+         WHERE id=?
+    """, (novo_id, (body.motivo or "").strip() or None, aid))
+    await db.commit()
+    return {"origem": aid, "credito": novo_id, "data": nova_data, "hora": hora,
+            "status": "pendente"}
+
+
+@app.get("/api/transferencias")
+async def listar_transferencias(user=Depends(get_current_user),
+                                db: aiosqlite.Connection = Depends(get_db)):
+    """Pedidos aguardando o personal. É o que alimenta o aviso sobre a tela inicial."""
+    cur = await db.execute("""
+        SELECT o.id origem_id, o.data origem_data, o.hora origem_hora, o.valor,
+               o.transf_motivo, c.id credito_id, c.data credito_data, c.hora credito_hora
+          FROM aulas o JOIN aulas c ON c.id = o.transferida_para
+         WHERE o.transf_status = 'pendente'
+      ORDER BY o.data
+    """)
+    return [dict(r) for r in await cur.fetchall()]
+
+
+@app.post("/api/aulas/{aid}/transferencia/aprovar")
+async def aprovar_transferencia(aid: int, user=Depends(get_current_user),
+                                db: aiosqlite.Connection = Depends(get_db)):
+    """Só o PERSONAL aprova: o dia remanejado é o horário dele."""
+    if user["role"] != "personal":
+        raise HTTPException(403, "Só o personal aprova a transferência de uma aula.")
+    aula = await _aula_ou_404(db, aid)
+    if aula["transf_status"] != "pendente":
+        raise HTTPException(400, "Esta transferência não está pendente.")
+    await db.execute(
+        "UPDATE aulas SET status=?, transf_status='aprovada', atualizado_em=CURRENT_TIMESTAMP"
+        " WHERE id=?", (STATUS_TRANSFERIDA, aid))
+    await db.execute(
+        "UPDATE aulas SET transf_status='aprovada', atualizado_em=CURRENT_TIMESTAMP WHERE id=?",
+        (aula["transferida_para"],))
+    await db.commit()
+    return {"origem": aid, "credito": aula["transferida_para"], "status": "aprovada"}
+
+
+@app.post("/api/aulas/{aid}/transferencia/recusar")
+async def recusar_transferencia(aid: int, body: RecusaIn, user=Depends(get_current_user),
+                                db: aiosqlite.Connection = Depends(get_db)):
+    """Recusar desfaz o pedido: a aula-crédito some e a origem volta ao que era.
+
+    Recusa não gasta a única transferência da aula — o aluno pode propor outro
+    dia. O que não se repete é a transferência APROVADA: é ela que evita empurrar
+    a mesma aula de mês em mês para sempre.
+    """
+    if user["role"] != "personal":
+        raise HTTPException(403, "Só o personal decide sobre a transferência.")
+    aula = await _aula_ou_404(db, aid)
+    if aula["transf_status"] != "pendente":
+        raise HTTPException(400, "Esta transferência não está pendente.")
+    if aula["transferida_para"]:
+        await db.execute("DELETE FROM aulas WHERE id=? AND credito_de=?",
+                         (aula["transferida_para"], aid))
+    await db.execute("""
+        UPDATE aulas SET transferida_para=NULL, transf_status='recusada',
+                         transf_motivo=?, atualizado_em=CURRENT_TIMESTAMP WHERE id=?
+    """, ((body.motivo or "").strip() or None, aid))
+    await db.commit()
+    return {"origem": aid, "status": "recusada"}
+
+
+@app.post("/api/aulas/{aid}/transferencia/cancelar")
+async def cancelar_transferencia(aid: int, user=Depends(require_dono),
+                                 db: aiosqlite.Connection = Depends(get_db)):
+    """O aluno desiste do pedido antes de o personal responder."""
+    aula = await _aula_ou_404(db, aid)
+    if aula["transf_status"] != "pendente":
+        raise HTTPException(400, "Não há pedido pendente nesta aula.")
+    if aula["transferida_para"]:
+        await db.execute("DELETE FROM aulas WHERE id=? AND credito_de=?",
+                         (aula["transferida_para"], aid))
+    await db.execute(
+        "UPDATE aulas SET transferida_para=NULL, transf_status=NULL,"
+        " atualizado_em=CURRENT_TIMESTAMP WHERE id=?", (aid,))
+    await db.commit()
+    return {"origem": aid, "status": None}
+
+
 @app.delete("/api/aulas/{aid}", status_code=204)
 async def remover_aula(aid: int, user=Depends(get_current_user),
                        db: aiosqlite.Connection = Depends(get_db)):
+    # Transferência é um par: apagar uma ponta sem tratar a outra deixaria um
+    # crédito sem origem (dinheiro que ninguém sabe de onde veio) ou uma origem
+    # apontando para o nada.
+    aula = await (await db.execute("SELECT * FROM aulas WHERE id=?", (aid,))).fetchone()
+    if aula:
+        if aula["status"] == STATUS_TRANSFERIDA or aula["transf_status"] == "pendente":
+            raise HTTPException(400, "Esta aula faz parte de uma transferência. "
+                                     "Apague a aula-crédito, no dia de destino.")
+        if aula["credito_de"]:
+            # Apagar o crédito devolve a origem ao estado anterior: o aluno volta
+            # a ter a aula no dia original e pode propor outra transferência.
+            await db.execute(
+                "UPDATE aulas SET status='agendada', transferida_para=NULL,"
+                " transf_status=NULL, atualizado_em=CURRENT_TIMESTAMP WHERE id=?",
+                (aula["credito_de"],))
     await db.execute("DELETE FROM aula_exercicios WHERE aula_id=?", (aid,))
     await db.execute("DELETE FROM aulas WHERE id=?", (aid,))
     await db.commit()
@@ -2035,6 +2218,14 @@ async def resumo(mes: Optional[str] = None, user=Depends(get_current_user),
         return sum(fin.get(x, {}).get("n", 0) for x in sts)
     valor_mes = _v(*STATUS_VALIDOS)
 
+    # Créditos que CHEGARAM neste mês (aulas pagas em outro mês e remanejadas
+    # para cá). Valem treino, não valem dinheiro — por isso contam à parte.
+    creditos_mes = (await (await db.execute("""
+        SELECT COUNT(*) FROM aulas
+         WHERE data BETWEEN ? AND ? AND credito_de IS NOT NULL
+           AND COALESCE(transf_status,'') = 'aprovada'
+    """, (ini, fim))).fetchone())[0]
+
     # Aulas sem treino montado — a fila de trabalho do personal
     sem_treino = (await (await db.execute("""
         SELECT COUNT(*) FROM aulas a
@@ -2111,6 +2302,12 @@ async def resumo(mes: Optional[str] = None, user=Depends(get_current_user),
             "a_treinar": _v("agendada"),             # pago, ainda por acontecer
             "perdido": _v("falta", "cancelada"),     # pago e não treinado — não volta
             "aulas_perdidas": _n("falta", "cancelada"),
+            # Transferido NÃO é perdido: o valor ficou neste mês e o treino foi
+            # para outro dia como crédito (que nasce com valor zero, para a mesma
+            # aula não ser cobrada duas vezes).
+            "transferido": _v("transferida"),
+            "aulas_transferidas": _n("transferida"),
+            "creditos_recebidos": creditos_mes,
             "pix_informado": round(pg["t"], 2),
             "pix_confirmado": round(pg["c"], 2),
             "pix_pendentes": pg["pend"] or 0,
@@ -2127,7 +2324,8 @@ async def financeiro(ano: Optional[int] = None, user=Depends(get_current_user),
     ano = ano or _hoje().year
     ini, fim = date(ano, 1, 1).isoformat(), date(ano, 12, 31).isoformat()
     meses = [{"mes": m, "aulas": 0, "valor": 0.0, "treinado": 0.0, "a_treinar": 0.0,
-              "perdido": 0.0, "realizadas": 0, "perdidas": 0, "agendadas": 0}
+              "perdido": 0.0, "transferido": 0.0, "realizadas": 0, "perdidas": 0,
+              "agendadas": 0, "transferidas": 0, "creditos": 0}
              for m in range(1, 13)]
     cur = await db.execute("""
         SELECT CAST(substr(data,6,2) AS INTEGER) m, status,
@@ -2145,16 +2343,33 @@ async def financeiro(ano: Optional[int] = None, user=Depends(get_current_user),
             alvo["realizadas"] = r["n"]; alvo["treinado"] += r["v"]
         elif r["status"] == "agendada":
             alvo["agendadas"] = r["n"]; alvo["a_treinar"] += r["v"]
+        elif r["status"] == STATUS_TRANSFERIDA:
+            # Pago aqui, treinado em outro mês. Não é perda: sai do "perdido"
+            # para não acusar prejuízo onde houve só remanejamento.
+            alvo["transferidas"] += r["n"]; alvo["transferido"] += r["v"]
         else:   # falta ou cancelada — pago e não treinado
             alvo["perdidas"] += r["n"]; alvo["perdido"] += r["v"]
+    # Créditos recebidos: aulas pagas em OUTRO mês que caíram neste. Entram como
+    # contagem, nunca como valor — o dinheiro ficou no mês de origem.
+    cur = await db.execute("""
+        SELECT CAST(substr(data,6,2) AS INTEGER) m, COUNT(*) n
+          FROM aulas WHERE data BETWEEN ? AND ? AND credito_de IS NOT NULL
+           AND COALESCE(transf_status,'') = 'aprovada'
+      GROUP BY m
+    """, (ini, fim))
+    for r in await cur.fetchall():
+        if 1 <= r["m"] <= 12:
+            meses[r["m"] - 1]["creditos"] = r["n"]
+
     for m in meses:
-        for k in ("valor", "treinado", "a_treinar", "perdido"):
+        for k in ("valor", "treinado", "a_treinar", "perdido", "transferido"):
             m[k] = round(m[k], 2)
     return {
         "ano": ano, "meses": meses,
         "total_valor": round(sum(m["valor"] for m in meses), 2),
         "total_treinado": round(sum(m["treinado"] for m in meses), 2),
         "total_perdido": round(sum(m["perdido"] for m in meses), 2),
+        "total_transferido": round(sum(m["transferido"] for m in meses), 2),
         "valor_hora": await _valor_hora(db),
     }
 

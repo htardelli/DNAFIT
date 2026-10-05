@@ -154,6 +154,7 @@ async function iniciar() {
   // Por cima de tudo: o aviso de pagamento é a única coisa no app que a outra pessoa
   // está esperando de você.
   verificarAvisosPix();
+  verificarTransferencias();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -302,6 +303,16 @@ function renderKpis(r) {
     cards.push({ l: 'Valor perdido', v: fmtR(f.perdido),
                  s: `${f.aulas_perdidas} aula(s) pagas e não treinadas — o valor não volta` });
   }
+  // Transferido não entra em "perdido": o valor ficou no mês e o treino foi para
+  // outro dia. Misturar os dois acusaria prejuízo onde houve remanejamento.
+  if (f.transferido) {
+    cards.push({ l: 'Transferido', v: fmtR(f.transferido),
+                 s: `${f.aulas_transferidas} aula(s) pagas aqui, treinadas em outro dia` });
+  }
+  if (f.creditos_recebidos) {
+    cards.push({ l: 'Créditos recebidos', v: f.creditos_recebidos,
+                 s: 'aulas pagas em outro mês, remanejadas para cá — sem custo' });
+  }
   if (r.sem_treino) {
     cards.push({ l: 'Sem treino montado', v: r.sem_treino,
                  s: 'aulas esperando o personal' });
@@ -321,6 +332,7 @@ const ICONE_STATUS = {
   realizada: { i: '✅', t: 'Treino feito' },
   falta:     { i: '❌', t: 'Falta' },
   cancelada: { i: '🚫', t: 'Cancelada' },
+  transferida: { i: '🔄', t: 'Transferida para outro dia' },
 };
 
 // A aula já começou? Só depois disso ela pode ser dada como feita ou como falta.
@@ -395,7 +407,7 @@ function renderCal() {
     const fora = d.getMonth() !== mes;
     if (fora && i >= 35) continue;                     // não desenha a 6ª linha vazia
     const chips = (porDia[k] || []).map(a => `
-      <div class="chip chip-${a.status}${semTreino(a) ? ' pend' : ''}${(a.modalidade === 'sozinho') ? ' solo' : ''}${ehAerobico(a.modalidade) ? ' aer' : ''}" onclick="event.stopPropagation();abrirAula(${a.id})"
+      <div class="chip chip-${a.status}${semTreino(a) ? ' pend' : ''}${(a.modalidade === 'sozinho') ? ' solo' : ''}${ehAerobico(a.modalidade) ? ' aer' : ''}${a.credito_de ? ' credito' : ''}" onclick="event.stopPropagation();abrirAula(${a.id})"
            title="${esc((a.hora||'') + ' ' + (a.tipo||a.foco||'Aula') + ' · ' + rotuloModalidade(a.modalidade) + (semTreino(a) ? ' — sem treino montado' : ''))}">
         ${a.hora ? `<span class="chip-hora">${a.hora}</span> ` : ''}<span class="chip-txt">${esc(a.tipo || a.foco || 'Aula')}</span>
       </div>`).join('');
@@ -425,6 +437,12 @@ function renderLista() {
     // A linha inteira abre a aula — dispensa um botão e devolve a largura à
     // coluna do treino, que é o conteúdo que interessa.
     const treino = esc(a.tipo || a.foco || a.descricao || '—');
+    // Crédito e pendência não são status — são o estado da transferência. Ficam
+    // como etiqueta, sem disputar a coluna de status.
+    const selo = a.credito_de
+      ? `<span class="badge b-credito" title="aula paga em outro mês">crédito</span>`
+      : (a.transf_status === 'pendente'
+          ? `<span class="badge b-transferida" title="aguardando o personal">transf. pendente</span>` : '');
     const nEx = a.qtd_exercicios
       ? `<span class="ex-tag">${a.qtd_exercicios} ex</span>`
       : (semTreino(a) ? '<span class="ex-tag pend" title="sem treino montado">sem treino</span>' : '');
@@ -435,7 +453,7 @@ function renderLista() {
         <div class="q-sub"><span class="muted">${diaSemana(a.data)}</span><b>${a.hora || '—'}</b></div>
       </td>
       <td class="c-modo"><span class="modo ${mod.cls}" title="${mod.t}"><span>${mod.l}</span></span></td>
-      <td class="c-treino">${treino}${nEx}</td>
+      <td class="c-treino">${treino}${selo}${nEx}</td>
       <td class="c-st"><span class="st b-${a.status}" title="${st.t}">${st.i}</span></td>
       <td class="right c-acoes">
         ${a.status === 'agendada' && jaComecou(a.data, a.hora)
@@ -464,6 +482,11 @@ async function marcar(id, status) {
 function limparAula() {
   const sg = document.getElementById('a-aviso-sugestao');
   if (sg) sg.style.display = 'none';
+  _trAula = null;
+  const tz = document.getElementById('a-aviso-transf');
+  if (tz) tz.style.display = 'none';
+  const tb = document.getElementById('a-btn-transf');
+  if (tb) tb.style.display = 'none';
   ['a-id','a-hora','a-foco','a-descricao','a-obs','a-valor',
    'a-aer-texto','a-distancia','a-tempo'].forEach(i => setVal(i, ''));
   document.getElementById('a-pse').innerHTML = opcoesEscala(PSE_ESCALA, '');
@@ -524,6 +547,8 @@ async function abrirAula(id, remarcar) {
     document.getElementById('a-btn-del').style.display = '';
     document.getElementById('a-recorrencia').style.display = 'none';   // recorrência só na criação
     aplicarModoAula();
+    _trAula = a;
+    renderTransferencia(a);
     renderSugestao(a);
     abrirModal('m-aula');
     // veio do botão de remarcar: leva direto ao campo da data
@@ -1203,6 +1228,8 @@ async function loadFinanceiro() {
         s: 'todas as aulas que entraram na agenda' },
       { l: 'Virou treino', v: fmtR(d.total_treinado), s: 'aulas efetivamente realizadas' },
       { l: 'Valor perdido', v: fmtR(d.total_perdido), s: 'faltas e cancelamentos — não volta' },
+      { l: 'Transferido', v: fmtR(d.total_transferido || 0),
+        s: 'pago num mês, treinado em outro — não é perda' },
     ].map(c => `<div class="kpi"><div class="kpi-label">${c.l}</div>
                   <div class="kpi-value sm">${c.v}</div><div class="kpi-sub">${c.s}</div></div>`).join('');
     document.getElementById('lista-financeiro').innerHTML = d.meses.map((m, i) => m.aulas ? `
@@ -1213,8 +1240,11 @@ async function loadFinanceiro() {
         <td class="right">${m.realizadas || '—'}</td>
         <td class="right">${m.agendadas || '—'}</td>
         <td class="right">${m.perdidas ? `<span style="color:var(--danger)">${m.perdidas} · ${fmtR(m.perdido)}</span>` : '—'}</td>
+        <td class="right">${m.transferidas || m.creditos
+          ? `<span style="color:var(--warn-ink)">${m.transferidas ? '↗' + m.transferidas : ''}${m.transferidas && m.creditos ? ' ' : ''}${m.creditos ? '↘' + m.creditos : ''}</span>`
+          : '—'}</td>
       </tr>` : '').join('') ||
-      '<tr><td colspan="6"><div class="empty">Nenhuma aula neste ano.</div></td></tr>';
+      '<tr><td colspan="7"><div class="empty">Nenhuma aula neste ano.</div></td></tr>';
   } catch (e) { toast(e.message, 'err'); }
 }
 
@@ -2437,4 +2467,123 @@ function selecionarSenha() {
   const r = document.createRange(); r.selectNodeContents(el);
   const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
   toast('Selecionada — toque e segure para copiar', 'warn');
+}
+
+// ═══════════════════ TRANSFERÊNCIA DE AULA PAGA ══════════════════════════════
+// A regra do acordo continua: o valor é do mês em que a aula entrou na agenda e
+// não volta. A transferência move o DIREITO de treinar — a aula original fica no
+// lugar, marcada como transferida, e no novo dia entra um CRÉDITO sem custo.
+// Sem isso, a mesma aula seria cobrada duas vezes no fechamento do ano.
+let _trAula = null;
+
+function podeTransferir(a) {
+  return _user && _user.role === 'aluno'
+    && (a.modalidade || 'com_personal') === 'com_personal'
+    && a.status === 'agendada' && !a.credito_de
+    && a.transf_status !== 'pendente' && a.transf_status !== 'aprovada';
+}
+
+// Estado da transferência dentro da aula: aviso no topo e botão no rodapé.
+function renderTransferencia(a) {
+  const box = document.getElementById('a-aviso-transf');
+  const btn = document.getElementById('a-btn-transf');
+  box.style.display = 'none';
+  btn.style.display = podeTransferir(a) ? '' : 'none';
+
+  if (a.transf_status === 'pendente' && !a.credito_de) {
+    box.style.display = '';
+    box.className = 'aviso';
+    box.innerHTML = `<b>Transferência aguardando o personal.</b>
+      ${a.transf_motivo ? `Motivo: ${esc(a.transf_motivo)}. ` : ''}
+      Enquanto ele não responder, a data e o status desta aula ficam travados.
+      <button class="btn btn-sm" style="margin-left:8px"
+        onclick="cancelarTransferencia(${a.id})">Cancelar pedido</button>`;
+  } else if (a.status === 'transferida') {
+    box.style.display = '';
+    box.className = 'aviso';
+    box.innerHTML = `<b>Aula transferida.</b> O valor segue neste mês — o treino
+      foi para o dia de destino, onde ela aparece como <b>crédito</b>.
+      Registre lá o que aconteceu.`;
+  } else if (a.credito_de) {
+    box.style.display = '';
+    box.className = 'aviso aviso-info';
+    box.innerHTML = `<b>Crédito.</b> Esta aula foi paga em outro mês e remanejada
+      para cá, por isso o valor dela é zero. Ela não pode ser transferida de novo.`;
+  } else if (a.transf_status === 'recusada') {
+    box.style.display = '';
+    box.className = 'aviso';
+    box.innerHTML = `<b>O personal recusou a transferência.</b>
+      ${a.transf_motivo ? esc(a.transf_motivo) + '. ' : ''}Você pode propor outro dia.`;
+  }
+}
+
+function abrirTransferencia() {
+  const a = _trAula;
+  if (!a) return;
+  document.getElementById('tr-contexto').innerHTML =
+    `Levar a aula de <b>${fmtData(a.data)}${a.hora ? ' às ' + a.hora : ''}</b>
+     (${fmtR(a.valor || 0)}) para outro dia.`;
+  setVal('tr-data', ''); setVal('tr-hora', a.hora || ''); setVal('tr-motivo', '');
+  abrirModal('m-transferir');
+}
+
+async function pedirTransferencia() {
+  if (!val('tr-data')) return toast('Escolha o novo dia', 'err');
+  try {
+    await api('POST', `/api/aulas/${_trAula.id}/transferir`, {
+      data: val('tr-data'), hora: val('tr-hora') || null, motivo: val('tr-motivo') || null
+    });
+    fecharModal('m-transferir'); fecharModal('m-aula');
+    toast('Pedido enviado — aguardando o personal');
+    loadAgenda();
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+async function cancelarTransferencia(id) {
+  if (!confirm('Cancelar o pedido de transferência? A aula volta ao dia original.')) return;
+  try {
+    await api('POST', `/api/aulas/${id}/transferencia/cancelar`);
+    fecharModal('m-aula'); toast('Pedido cancelado'); loadAgenda();
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+// ── Aviso prioritário para o personal ───────────────────────────────────────
+async function verificarTransferencias() {
+  if (!_user || _user.role !== 'personal') return;
+  let itens;
+  try { itens = await api('GET', '/api/transferencias'); } catch (e) { return; }
+  if (!itens.length) { fecharModal('m-transf-aviso'); return; }
+  const t = itens[0];
+  const resto = itens.length > 1
+    ? `<p class="muted" style="font-size:12px;margin-top:10px">E mais ${itens.length - 1}
+       ${itens.length === 2 ? 'pedido' : 'pedidos'} depois deste.</p>` : '';
+  document.getElementById('tv-corpo').innerHTML = `
+    <p style="margin:0 0 10px">O aluno pediu para transferir a aula de
+      <b>${fmtData(t.origem_data)}${t.origem_hora ? ' às ' + t.origem_hora : ''}</b>
+      para <b>${fmtData(t.credito_data)}${t.credito_hora ? ' às ' + t.credito_hora : ''}</b>.</p>
+    ${t.transf_motivo ? `<p class="muted" style="margin:0 0 10px">Motivo: ${esc(t.transf_motivo)}</p>` : ''}
+    <p class="muted" style="font-size:12px;margin:0">
+      O valor de ${fmtR(t.valor || 0)} continua no mês original — você não perde
+      nem recebe a mais. O que muda é o dia em que o treino acontece.</p>${resto}`;
+  document.getElementById('tv-acoes').innerHTML = `
+    <button class="btn btn-danger" onclick="responderTransferencia(${t.origem_id}, false)">Recusar</button>
+    <button class="btn" onclick="fecharModal('m-transf-aviso')">Depois</button>
+    <button class="btn btn-primary" onclick="responderTransferencia(${t.origem_id}, true)">Aprovar</button>`;
+  abrirModal('m-transf-aviso');
+}
+
+async function responderTransferencia(id, aprovar) {
+  try {
+    if (aprovar) {
+      await api('POST', `/api/aulas/${id}/transferencia/aprovar`);
+      toast('Transferência aprovada');
+    } else {
+      const motivo = prompt('Por que não dá? (o aluno vai ler)', '') || '';
+      await api('POST', `/api/aulas/${id}/transferencia/recusar`, { motivo });
+      toast('Transferência recusada');
+    }
+    fecharModal('m-transf-aviso');
+    loadAgenda();
+    verificarTransferencias();   // encadeia o próximo pedido
+  } catch (e) { toast(e.message, 'err'); }
 }
