@@ -787,3 +787,18 @@ tbody tr:hover { background: var(--card-2); }
    Já aconteceu uma vez com a régua sobre o modo treino; agora é regra explícita. */
 #m-escolher-ex, #m-regua { z-index: 220; }
 #m-pix-aviso { z-index: 240; }   /* aviso de pagamento fica acima de tudo */
+
+/* ── Senha provisória ─────────────────────────────────────────────────────
+   Mostrada uma vez só: fonte monoespaçada e tamanho grande porque ela vai ser
+   lida em voz alta ou digitada à mão do outro lado. */
+.senha-caixa {
+  display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+  background: var(--card-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+.senha-caixa code {
+  flex: 1; min-width: 0; font-size: 20px; font-weight: 700; letter-spacing: .06em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  word-break: break-all; user-select: all; color: var(--text);
+}
+/* Com a troca pendente, nada atrás do modal deve parecer clicável */
+#m-trocar-senha { z-index: 260; background: rgba(6,14,10,.82); }

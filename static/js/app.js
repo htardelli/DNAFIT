@@ -28,6 +28,12 @@ async function api(method, url, body) {
   if (Auth.token) h['Authorization'] = 'Bearer ' + Auth.token;
   const res = await fetch(url, { method, headers: h, body: body ? JSON.stringify(body) : undefined });
   if (res.status === 401) { Auth.clear(); mostrarLogin(); throw new Error('Sessão expirada'); }
+  // 423: o dono resetou a senha enquanto a sessão estava aberta. O servidor
+  // recusa tudo até a troca — a tela acompanha em vez de mostrar erro solto.
+  if (res.status === 423 && !url.startsWith('/auth/')) {
+    if (typeof exigirTrocaSenha === 'function') exigirTrocaSenha();
+    throw new Error('Troque a senha para continuar usando o app.');
+  }
   if (!res.ok) {
     const e = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(typeof e.detail === 'string' ? e.detail : 'Erro na requisição');
@@ -138,6 +144,9 @@ async function iniciar() {
   document.getElementById('side-user').textContent = `${_user.nome} · ${_user.role === 'aluno' ? 'Aluno' : 'Personal'}`;
   // App publicado na internet: senha inicial ainda em uso é o risco nº 1
   document.getElementById('aviso-senha').style.display = _user.senha_padrao ? '' : 'none';
+  // Senha definida por outra pessoa: o servidor já recusa todo /api/* (423), então
+  // a tela não tenta carregar nada antes da troca.
+  if (_user.deve_trocar_senha) return exigirTrocaSenha();
   document.getElementById('card-usuarios').style.display = _user.role === 'aluno' ? '' : 'none';
   await Promise.all([carregarExercicios(), carregarModelos(), carregarPlanos(),
                      carregarConfig(), carregarCadastros()]);
@@ -1302,8 +1311,10 @@ async function loadUsuarios() {
         <td><b>${esc(u.nome)}</b></td>
         <td class="muted">${esc(u.email)}</td>
         <td>${u.role === 'aluno' ? 'Aluno (dono)' : 'Personal'}</td>
-        <td><span class="badge ${u.ativo ? 'b-realizada' : 'b-cancelada'}">${u.ativo ? 'ativo' : 'inativo'}</span></td>
+        <td><span class="badge ${u.ativo ? 'b-realizada' : 'b-cancelada'}">${u.ativo ? 'ativo' : 'inativo'}</span>
+          ${u.deve_trocar_senha ? '<span class="badge b-falta" title="ainda não escolheu a própria senha">senha provisória</span>' : ''}</td>
         <td class="right">
+          <button class="btn btn-sm" onclick="resetarSenha(${u.id}, '${esc(u.nome).replace(/'/g, "\\'")}')">Resetar senha</button>
           <button class="btn btn-sm" onclick="abrirUsuario(${u.id})">Editar</button>
           ${u.id !== _user.id ? `<button class="btn btn-sm btn-danger" onclick="removerUsuario(${u.id})">Remover</button>` : ''}
         </td>
@@ -1342,8 +1353,11 @@ async function salvarUsuario() {
       if (senha) body.nova_senha = senha;
       await api('PATCH', `/api/usuarios/${id}`, body);
     } else {
-      if (senha.length < 8) return toast('A senha deve ter no mínimo 8 caracteres', 'err');
-      await api('POST', '/api/usuarios', { nome, email, senha, role });
+      // Senha em branco: o app sorteia uma provisória e mostra uma vez só
+      if (senha && senha.length < 8) return toast('A senha deve ter no mínimo 8 caracteres', 'err');
+      const r = await api('POST', '/api/usuarios', { nome, email, senha: senha || null, role });
+      fecharModal('m-user'); loadUsuarios();
+      return mostrarSenhaProvisoria({ nome, email, senha_provisoria: r.senha_provisoria });
     }
     fecharModal('m-user'); toast('Acesso salvo'); loadUsuarios();
   } catch (e) { toast(e.message, 'err'); }
@@ -2339,4 +2353,71 @@ function escolherEx(id) {
 function usarNomeDigitado() {
   if (_exAlvo) _exAlvo.value = val('ex-busca');
   fecharModal('m-escolher-ex');
+}
+
+// ══════════════════════ SENHA: RESET E TROCA OBRIGATÓRIA ═════════════════════
+// Senha escolhida por outra pessoa é sempre provisória. Enquanto a troca não
+// acontece, o servidor recusa toda rota do app (HTTP 423) — o modal abaixo não
+// é um pedido, é o único caminho adiante.
+function exigirTrocaSenha() {
+  ['ts-atual', 'ts-nova', 'ts-nova2'].forEach(i => setVal(i, ''));
+  document.getElementById('ts-erro').textContent = '';
+  abrirModal('m-trocar-senha');
+  setTimeout(() => document.getElementById('ts-atual').focus(), 150);
+}
+
+async function concluirTrocaSenha() {
+  const erro = document.getElementById('ts-erro');
+  const atual = val('ts-atual'), nova = val('ts-nova'), nova2 = val('ts-nova2');
+  if (!atual) return erro.textContent = 'Informe a senha provisória que você recebeu.';
+  if (nova.length < 8) return erro.textContent = 'A nova senha precisa de pelo menos 8 caracteres.';
+  if (nova !== nova2) return erro.textContent = 'As duas senhas novas não são iguais.';
+  if (nova === atual) return erro.textContent = 'A nova senha precisa ser diferente da provisória.';
+  try {
+    await api('POST', '/auth/senha', { senha_atual: atual, nova_senha: nova });
+    fecharModal('m-trocar-senha');
+    toast('Senha alterada — bem-vindo!');
+    _user.deve_trocar_senha = false;
+    _user.senha_padrao = false;
+    iniciar();          // agora o app carrega normalmente
+  } catch (e) { erro.textContent = e.message; }
+}
+
+// ── Reset feito pelo dono ───────────────────────────────────────────────────
+async function resetarSenha(uid, nome) {
+  const escolhida = prompt(
+    `Resetar a senha de ${nome}.\n\n` +
+    `Digite uma senha provisória (mín. 8 caracteres) ou deixe em branco para o ` +
+    `app sortear uma.\n\nEla será mostrada uma vez, para você repassar.`, '');
+  if (escolhida === null) return;          // cancelou
+  const senha = escolhida.trim();
+  if (senha && senha.length < 8) return toast('A senha precisa de pelo menos 8 caracteres', 'err');
+  try {
+    const r = await api('POST', `/api/usuarios/${uid}/resetar-senha`, { senha: senha || null });
+    mostrarSenhaProvisoria(r);
+    loadUsuarios();
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+function mostrarSenhaProvisoria(r) {
+  document.getElementById('sn-quem').innerHTML =
+    `Senha provisória de <b>${esc(r.nome)}</b> (${esc(r.email)}):`;
+  document.getElementById('sn-valor').textContent = r.senha_provisoria;
+  abrirModal('m-senha-nova');
+}
+
+function copiarSenha() {
+  const txt = document.getElementById('sn-valor').textContent;
+  // navigator.clipboard só existe em HTTPS; o fallback cobre o resto
+  const ok = () => toast('Senha copiada');
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(txt).then(ok).catch(() => selecionarSenha());
+  } else selecionarSenha();
+}
+
+function selecionarSenha() {
+  const el = document.getElementById('sn-valor');
+  const r = document.createRange(); r.selectNodeContents(el);
+  const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+  toast('Selecionada — toque e segure para copiar', 'warn');
 }

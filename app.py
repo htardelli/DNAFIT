@@ -157,7 +157,14 @@ def _create_token(data: dict) -> str:
     return jwt.encode({**data, "exp": exp}, SECRET_KEY, algorithm=ALGORITHM)
 
 
-async def get_current_user(token: str = Depends(_oauth2),
+# Com a senha pendente de troca, só duas rotas respondem: a que diz quem é o
+# usuário e a que troca a senha. Bloquear no servidor (e não só na tela) é o que
+# torna a exigência real — senão basta fechar o aviso e seguir usando.
+ROTAS_LIVRES_SENHA_PENDENTE = {"/auth/me", "/auth/senha"}
+
+
+async def get_current_user(request: Request,
+                           token: str = Depends(_oauth2),
                            db: aiosqlite.Connection = Depends(get_db)):
     exc = HTTPException(401, "Token inválido ou expirado", headers={"WWW-Authenticate": "Bearer"})
     try:
@@ -168,6 +175,11 @@ async def get_current_user(token: str = Depends(_oauth2),
     row = await (await db.execute("SELECT * FROM usuarios WHERE id=? AND ativo=1", (uid,))).fetchone()
     if not row:
         raise exc
+    # A checagem lê o banco a cada requisição (a linha do usuário já era
+    # carregada aqui), então um reset feito pelo dono vale na hora — inclusive
+    # para quem estiver com a sessão aberta.
+    if row["deve_trocar_senha"] and request.url.path not in ROTAS_LIVRES_SENHA_PENDENTE:
+        raise HTTPException(423, "Troque a senha para continuar usando o app.")
     return dict(row)
 
 
@@ -216,7 +228,8 @@ async def me(user=Depends(get_current_user)):
     except Exception:
         padrao = False
     return {"id": user["id"], "nome": user["nome"], "email": user["email"],
-            "role": user["role"], "senha_padrao": padrao}
+            "role": user["role"], "senha_padrao": padrao,
+            "deve_trocar_senha": bool(user["deve_trocar_senha"])}
 
 
 class SenhaIn(BaseModel):
@@ -231,16 +244,34 @@ async def trocar_senha(body: SenhaIn, user=Depends(get_current_user),
         raise HTTPException(400, "Senha atual incorreta")
     if len(body.nova_senha) < 8:
         raise HTTPException(400, "A nova senha deve ter no mínimo 8 caracteres")
-    await db.execute("UPDATE usuarios SET senha_hash=? WHERE id=?", (_hash(body.nova_senha), user["id"]))
+    if body.nova_senha == body.senha_atual:
+        raise HTTPException(400, "A nova senha precisa ser diferente da atual.")
+    await db.execute("UPDATE usuarios SET senha_hash=?, deve_trocar_senha=0 WHERE id=?",
+                     (_hash(body.nova_senha), user["id"]))
     await db.commit()
     return {"msg": "Senha alterada"}
+
+
+# Alfabeto sem 0/O/1/l/I: a senha provisória é ditada por WhatsApp ou lida em
+# voz alta, e caractere ambíguo vira chamado de "não entro".
+_ALFABETO_SENHA = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"
+
+
+def _senha_provisoria(n: int = 10) -> str:
+    import secrets
+    return "".join(secrets.choice(_ALFABETO_SENHA) for _ in range(n))
 
 
 class UsuarioIn(BaseModel):
     nome: str
     email: str
-    senha: str
+    senha: Optional[str] = None     # vazio → o app sorteia uma provisória
     role: str = "personal"
+
+
+class ResetSenhaIn(BaseModel):
+    """Senha definida pelo dono. Sem valor, o app sorteia uma provisória."""
+    senha: Optional[str] = None
 
 
 class UsuarioUpdate(BaseModel):
@@ -253,7 +284,8 @@ class UsuarioUpdate(BaseModel):
 
 @app.get("/api/usuarios")
 async def listar_usuarios(user=Depends(require_dono), db: aiosqlite.Connection = Depends(get_db)):
-    cur = await db.execute("SELECT id, nome, email, role, ativo, criado_em FROM usuarios ORDER BY id")
+    cur = await db.execute("SELECT id, nome, email, role, ativo, criado_em, deve_trocar_senha"
+                           " FROM usuarios ORDER BY id")
     return [dict(r) for r in await cur.fetchall()]
 
 
@@ -262,16 +294,20 @@ async def criar_usuario(body: UsuarioIn, user=Depends(require_dono),
                         db: aiosqlite.Connection = Depends(get_db)):
     if body.role not in ("aluno", "personal"):
         raise HTTPException(400, "Perfil deve ser 'aluno' ou 'personal'")
-    if len(body.senha) < 8:
+    senha = (body.senha or "").strip() or _senha_provisoria()
+    if len(senha) < 8:
         raise HTTPException(400, "A senha deve ter no mínimo 8 caracteres")
     email = body.email.lower().strip()
     if await (await db.execute("SELECT id FROM usuarios WHERE email=?", (email,))).fetchone():
         raise HTTPException(400, "E-mail já cadastrado")
+    # Nasce com a troca pendente: quem entra pela primeira vez escolhe a própria
+    # senha, e o dono deixa de ser quem conhece a senha do outro.
     cur = await db.execute(
-        "INSERT INTO usuarios (nome, email, senha_hash, role) VALUES (?,?,?,?)",
-        (body.nome.strip(), email, _hash(body.senha), body.role))
+        "INSERT INTO usuarios (nome, email, senha_hash, role, deve_trocar_senha)"
+        " VALUES (?,?,?,?,1)",
+        (body.nome.strip(), email, _hash(senha), body.role))
     await db.commit()
-    return {"id": cur.lastrowid}
+    return {"id": cur.lastrowid, "senha_provisoria": senha}
 
 
 @app.patch("/api/usuarios/{uid}")
@@ -298,6 +334,8 @@ async def editar_usuario(uid: int, body: UsuarioUpdate, user=Depends(require_don
         if len(body.nova_senha) < 8:
             raise HTTPException(400, "A senha deve ter no mínimo 8 caracteres")
         sets.append("senha_hash=?"); params.append(_hash(body.nova_senha))
+        # Senha que outra pessoa escolheu nunca é definitiva
+        sets.append("deve_trocar_senha=1")
     # Trava de segurança: nunca deixar a conta sem um dono ativo
     if (body.role and body.role != "aluno") or body.ativo is False:
         n = (await (await db.execute(
@@ -310,6 +348,28 @@ async def editar_usuario(uid: int, body: UsuarioUpdate, user=Depends(require_don
     await db.execute(f"UPDATE usuarios SET {', '.join(sets)} WHERE id=?", params)
     await db.commit()
     return {"msg": "Usuário atualizado"}
+
+
+@app.post("/api/usuarios/{uid}/resetar-senha")
+async def resetar_senha(uid: int, body: ResetSenhaIn, user=Depends(require_dono),
+                        db: aiosqlite.Connection = Depends(get_db)):
+    """Define uma senha nova para outra pessoa e exige a troca no próximo acesso.
+
+    A senha provisória é devolvida UMA vez, para o dono repassar. Ela não fica
+    guardada em lugar nenhum em texto puro — só o hash vai para o banco — e não
+    entra em log: quem perder o valor pede outro reset.
+    """
+    alvo = await (await db.execute("SELECT * FROM usuarios WHERE id=?", (uid,))).fetchone()
+    if not alvo:
+        raise HTTPException(404, "Usuário não encontrado")
+    senha = (body.senha or "").strip() or _senha_provisoria()
+    if len(senha) < 8:
+        raise HTTPException(400, "A senha deve ter no mínimo 8 caracteres")
+    await db.execute("UPDATE usuarios SET senha_hash=?, deve_trocar_senha=1 WHERE id=?",
+                     (_hash(senha), uid))
+    await db.commit()
+    return {"id": uid, "nome": alvo["nome"], "email": alvo["email"],
+            "senha_provisoria": senha}
 
 
 @app.delete("/api/usuarios/{uid}", status_code=204)

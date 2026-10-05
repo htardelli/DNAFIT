@@ -235,6 +235,27 @@ Em **Ajustes → Professores e locais** você monta a lista que aparece nos camp
 um atalho *"+ Cadastrar novo…"* dentro do próprio campo. Remover uma opção não
 altera as aulas já marcadas.
 
+## Senhas: criar acesso e resetar
+
+Em **Ajustes → Acessos**:
+
+- **+ Novo acesso** — preencha nome e e-mail e **deixe a senha em branco**: o app
+  sorteia uma provisória e mostra **uma vez**, com botão de copiar. Repasse para a
+  pessoa.
+- **Resetar senha** — em qualquer linha da lista. Você pode digitar uma senha ou
+  deixar em branco para o app sortear. Também é mostrada uma vez só.
+
+Quem recebe uma senha provisória **é obrigado a trocá-la no primeiro acesso**: ao
+entrar, o app abre uma tela que não dá para fechar e só libera depois da troca.
+Não adianta contornar pela tela — o servidor recusa todas as telas do app até lá.
+
+Enquanto a pessoa não escolheu a senha dela, a lista de acessos mostra a etiqueta
+**senha provisória** ao lado dela.
+
+Duas consequências boas: **você nunca fica sabendo a senha definitiva de ninguém**,
+e resetar a senha de alguém **derruba o acesso dele na hora**, mesmo que esteja com
+o app aberto.
+
 ## Sair do aplicativo
 
 **Ajustes → Minha conta → Sair do aplicativo.** No computador o botão também está

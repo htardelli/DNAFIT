@@ -334,6 +334,9 @@ async def init_db(hash_fn):
         # de corrida) e o resultado é distância e tempo — não série × carga.
         await _add_col("aulas", "distancia_km", "REAL")
         await _add_col("aulas", "tempo_min", "REAL")
+        # Senha definida por outra pessoa (criação ou reset pelo dono) é sempre
+        # provisória: o app obriga a troca antes de liberar qualquer tela.
+        await _add_col("usuarios", "deve_trocar_senha", "INTEGER NOT NULL DEFAULT 0")
         # aulas criadas antes desta coluna eram todas com o personal
         await db.execute("UPDATE aulas SET modalidade='com_personal' "
                          "WHERE modalidade IS NULL OR modalidade=''")

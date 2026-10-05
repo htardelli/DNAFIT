@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="FITPLAN">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2316A34A'/%3E%3Cg stroke='white' stroke-width='9' stroke-linecap='round'%3E%3Cpath d='M30 32v36M70 32v36M18 42v16M82 42v16M30 50h40'/%3E%3C/g%3E%3C/svg%3E">
-<link rel="stylesheet" href="/static/css/style.css?v=6.2">
+<link rel="stylesheet" href="/static/css/style.css?v=6.3">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -559,6 +559,59 @@
   </div>
 </div>
 
+<!-- ══ Modal: Trocar a senha (obrigatório) ══
+     Sem ✕ e sem Cancelar de propósito: com a troca pendente o servidor recusa
+     toda rota do app (HTTP 423), então um modal fechável só daria a impressão
+     de escapar para uma tela que não responderia nada. ══ -->
+<div class="modal-bg" id="m-trocar-senha">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-head">
+      <span class="modal-title">Escolha a sua senha</span>
+    </div>
+    <div class="modal-body">
+      <div class="aviso" style="margin-bottom:14px">
+        <b>Primeiro acesso.</b> A senha que você usou foi definida por outra
+        pessoa. Escolha a sua para continuar — ela não fica visível para ninguém.
+      </div>
+      <div><label>Senha atual (a provisória) *</label>
+        <input id="ts-atual" type="password" autocomplete="current-password"></div>
+      <div><label>Nova senha *</label>
+        <input id="ts-nova" type="password" autocomplete="new-password" placeholder="mín. 8 caracteres"></div>
+      <div><label>Repita a nova senha *</label>
+        <input id="ts-nova2" type="password" autocomplete="new-password"
+               onkeydown="if(event.key==='Enter')concluirTrocaSenha()"></div>
+      <div id="ts-erro" class="muted" style="color:var(--danger);font-size:12px;margin-top:8px"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="sair()">Sair</button>
+      <button class="btn btn-primary" onclick="concluirTrocaSenha()">Salvar e entrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Modal: Senha provisória gerada ══ -->
+<div class="modal-bg" id="m-senha-nova">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-head">
+      <span class="modal-title">Senha provisória</span>
+      <button class="btn btn-sm btn-ghost" onclick="fecharModal('m-senha-nova')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin:0 0 10px" id="sn-quem"></p>
+      <div class="senha-caixa"><code id="sn-valor"></code>
+        <button class="btn btn-sm" onclick="copiarSenha()">Copiar</button></div>
+      <p class="muted" style="font-size:12px;margin-top:12px">
+        Anote ou envie agora: <b>ela não é mostrada de novo</b> — o app guarda só
+        o embaralhado, não a senha. No próximo acesso, o app obriga a pessoa a
+        escolher a senha dela.
+      </p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-primary" onclick="fecharModal('m-senha-nova')">Entendi</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ Modal: Escolher exercício ══
      O <datalist> do campo funciona no computador (abre uma lista), mas no
      Safari do iPhone ele vira apenas três sugestões na barra do teclado — sem
@@ -953,7 +1006,12 @@
         <div><label>Perfil</label>
           <select id="u-role"><option value="personal">Personal</option><option value="aluno">Aluno (dono)</option></select>
         </div>
-        <div><label>Senha</label><input id="u-senha" type="password" placeholder="mín. 8 caracteres"></div>
+        <div><label>Senha provisória</label>
+          <input id="u-senha" type="text" autocomplete="off" placeholder="deixe vazio para sortear"></div>
+        <div class="form-full muted" style="font-size:11px">
+          A senha é <b>provisória</b>: no primeiro acesso o app obriga a pessoa a
+          escolher a dela, e a partir daí ninguém mais conhece a senha do outro.
+        </div>
       </div>
     </div>
     <div class="modal-foot">
@@ -964,6 +1022,6 @@
 </div>
 
 <div class="toast-wrap" id="toasts"></div>
-<script src="/static/js/app.js?v=6.2"></script>
+<script src="/static/js/app.js?v=6.3"></script>
 </body>
 </html>

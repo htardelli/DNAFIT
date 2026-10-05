@@ -581,6 +581,29 @@ frente de `_hoje()`, e registrar um pagamento ou uma pesagem que acabou de
 acontecer devolvia HTTP 400. Um dia à frente é desencontro de relógio; dois já é
 engano de digitação. Vale para `/api/pagamentos` e `/api/medidas`.
 
+### Senha provisória e troca obrigatória
+
+Senha que **outra pessoa** escolheu é sempre provisória. Vale para os três
+caminhos: criar acesso, `nova_senha` no PATCH do usuário e
+`POST /api/usuarios/{id}/resetar-senha`. Todos marcam
+`usuarios.deve_trocar_senha = 1`.
+
+Com a marca ligada, `get_current_user` responde **HTTP 423** em tudo que não
+esteja em `ROTAS_LIVRES_SENHA_PENDENTE` (`/auth/me` e `/auth/senha`). O bloqueio
+é no servidor, não só na tela: um modal fechável daria a impressão de escapar
+para uma tela que não responderia nada. Como a função já carregava a linha do
+usuário do banco a cada requisição, a checagem **não custa consulta extra** — e,
+por ler o banco, um reset vale na hora, inclusive para quem está com a sessão
+aberta (o front trata o 423 reabrindo o modal).
+
+`/auth/senha` limpa a marca e exige que a nova senha seja **diferente** da atual
+— senão "trocar" viraria confirmar a provisória.
+
+A senha provisória é devolvida **uma vez** na resposta, para o dono repassar.
+Nunca é gravada em texto puro (só o hash) e não vai para log. Quem perder o valor
+pede outro reset. Alfabeto sem `0/O/1/l/I`: ela é ditada por WhatsApp ou lida em
+voz alta, e caractere ambíguo vira chamado de "não entro".
+
 ### Segurança já implementada
 
 - Chave de assinatura dos tokens sorteada no 1º start e guardada no banco
