@@ -40,10 +40,16 @@ código compartilhado.
 
 | Item | Valor |
 |---|---|
-| Repositório | `htardelli/planges` (privado) |
-| Branch | `claude/aulas-control-app-a0wprp` |
+| Repositório | `htardelli/DNAFIT` |
+| Branch | `main` |
 | Último commit | `HEAD` |
-| Pasta do app | `fitplan/` |
+| Pasta do app | a **raiz** do repositório |
+
+> Até 05/10/2026 o app morava em `htardelli/planges`, pasta `fitplan/`, na branch
+> `claude/aulas-control-app-a0wprp`, dividindo repositório com o PLANGEST. Foi
+> movido para cá com `git subtree split`, então os 51 commits do FITPLAN vieram
+> junto: `git log` e `git blame` continuam contando a história inteira. A landing
+> page que já existia aqui ficou em `landing/`.
 
 ### Railway
 
@@ -52,9 +58,9 @@ código compartilhado.
 | Projeto | **FIT_DNA** — `2fefe5cd-54a5-4062-96a7-48760fa4e2f3` |
 | Ambiente | `production` — `bf58e74f-fdc2-48e6-ad9e-1dbf4a191181` |
 | Serviço | **`fitplan`** |
-| Source Repo | `htardelli/planges` |
-| Root Directory | `fitplan` |
-| Branch | `claude/aulas-control-app-a0wprp` |
+| Source Repo | `htardelli/DNAFIT` |
+| Root Directory | *(vazio — o app é a raiz)* |
+| Branch | `main` |
 | Volume | montado em **`/data`** (nome do volume: `d100-challenge-volume`, herdado) |
 | Domínio | **https://dna-academia.up.railway.app** |
 | Porta | 8080 (injetada pelo Railway via `PORT`) |
@@ -62,7 +68,7 @@ código compartilhado.
 
 ### Já resolvido
 
-- [x] Serviço criado, apontado para `fitplan/` e renomeado para `fitplan`.
+- [x] Serviço criado, apontado para a raiz do DNAFIT e renomeado para `fitplan`.
 - [x] Volume em `/data` — o log do start confirma `[DB] FITPLAN em: /data/fitplan.db`.
 - [x] Domínio público gerado; app usado pelo Chrome e pelo iPhone.
 - [x] Auto-deploy pelo GitHub funcionando (push na branch → republica sozinho).
@@ -102,9 +108,9 @@ código compartilhado.
 
 ## 3. Regras invioláveis
 
-1. **Nunca** fazer push na branch `main` de `htardelli/planges`. Ela é o PLANGEST
-   em produção, com deploy automático. Todo trabalho do FITPLAN vai na branch
-   `claude/aulas-control-app-a0wprp`.
+1. **Nunca** fazer push em `htardelli/planges`. É o PLANGEST em produção, com
+   deploy automático, e não tem mais nada do FITPLAN. Todo trabalho do FITPLAN
+   vai na `main` de `htardelli/DNAFIT`.
 2. **Não tocar** no repositório `htardelli/d100-challenge` nem no projeto **D100**
    do Railway. São outro trabalho do usuário, já publicado.
 3. **Não** desabilitar verificação TLS nem contornar proxy.
@@ -166,7 +172,7 @@ auto-hospedada em `static/fonts` (variável: um arquivo por subset cobre 400–9
 ### Arquivos
 
 ```
-fitplan/
+DNAFIT/  (raiz do repositório)
 ├── app.py                # API: auth, aulas, treinos, modelos, planos, financeiro
 ├── db.py                 # schema, migrações idempotentes, seeds
 ├── requirements.txt      # 7 pacotes

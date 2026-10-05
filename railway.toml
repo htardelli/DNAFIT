@@ -1,6 +1,6 @@
-# Deploy do FITPLAN como serviço PRÓPRIO no Railway.
-# Em Settings → Root Directory aponte para "fitplan" (assim este arquivo é lido
-# e o serviço do PLANGEST, na raiz do repositório, não é afetado).
+# Deploy do FITPLAN no Railway.
+# O app é a RAIZ deste repositório: em Settings → Root Directory deixe vazio.
+# (Antes o app vivia em planges/fitplan e o Root Directory era "fitplan".)
 [build]
 builder = "nixpacks"
 

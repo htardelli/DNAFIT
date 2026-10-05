@@ -213,11 +213,9 @@ o app mostra um aviso no topo de todas as telas.
 
 ## Como publicar no Railway (acesso pelo celular, de qualquer lugar)
 
-1. No projeto do Railway, **+ New → GitHub Repo → `htardelli/planges`** (um **novo serviço**,
-   não mexa no serviço do PLANGEST).
-2. Settings → **Root Directory** = `fitplan`. É isso que separa os dois apps; sem isso o
-   Railway sobe o PLANGEST de novo.
-3. Settings → **Branch** = `claude/aulas-control-app-a0wprp` (ou `main`, depois do merge).
+1. No projeto do Railway, **+ New → GitHub Repo → `htardelli/DNAFIT`**.
+2. Settings → **Root Directory** = *vazio*. O app é a raiz deste repositório.
+3. Settings → **Branch** = `main`.
 4. Settings → **Volumes** → adicionar volume em **`/data`**. Sem volume, o banco é apagado
    a cada deploy — você perde agenda, treinos e histórico financeiro.
 5. Variables (nenhuma é obrigatória, mas estas valem a pena):
@@ -441,12 +439,13 @@ ano futuro que você for planejar.
 ## Arquivos
 
 ```
-fitplan/
+DNAFIT/  (raiz do repositório)
 ├── app.py                # API FastAPI (auth, aulas, treinos, planos, frequência)
 ├── db.py                 # schema SQLite + biblioteca inicial de exercícios
 ├── requirements.txt
 ├── railway.toml          # deploy do serviço próprio
 ├── iniciar_fitplan.bat   # atalho local (Windows)
+├── landing/              # landing page do DNAFIT (site estático, fora do app)
 └── static/
     ├── index.html        # SPA
     ├── css/style.css
