@@ -682,8 +682,26 @@ mesmo lugar do aviso de Pix. Cores: `.b-transferida` laranja (*warn*) na origem,
 `.b-credito` roxo (*fer*) no destino — a cor diferente em cada ponta foi pedido
 explícito, para o mês não parecer ter duas aulas iguais.
 
-Teste: `ttransf.py` (fluxo na tela, 390px) e `apitransf.sh` (as 20 regras pela
-API). Os dois no diretório de scratch da sessão.
+**Mudar a data × transferir.** PATCH de `data` continua preso ao mês — mas só
+para aula que **custa dinheiro**. A regra existe por causa do fechamento do mês;
+aula que nasce R$ 0 (sozinho, aeróbico) muda de data livremente, inclusive para
+outro mês. A mensagem de recusa aponta o botão **Transferir** e diz explicitamente
+para **não excluir e recriar** — o conselho antigo ("exclua e crie lá") tirava a
+aula do mês pago e cobrava o destino, ou seja, mandava o usuário pagar duas vezes.
+
+**Empilhamento.** `#m-transferir` abre de dentro de `#m-aula`: sem z-index próprio,
+ele herda 200, e com empate vence quem vem depois no HTML — `#m-aula`. O modal
+*aparecia*, mas o `#a-ex-aviso` da aula interceptava o toque em "Pedir
+transferência". Entrou na escada (220), junto com `#m-transf-aviso` em 240.
+O teste não pegou porque chamava `pedirTransferencia()` por `evaluate`; agora
+`ttransf.py` **clica de verdade** nos dois botões. É a mesma armadilha do item 4
+desta seção: função chamada direto não prova que o botão é alcançável.
+
+Teste: `ttransf.py` (fluxo na tela, 390px, com cliques reais) e `apitransf.sh`
+(as 20 regras pela API). Ambos limpam pedidos pendentes antes de rodar — pedido
+órfão de execução anterior fazia o personal aprovar o pedido errado e o teste
+acusava defeito inexistente. `guia.py` (screenshots) apaga a própria aula no fim,
+senão deixava R$ 90 em outubro e o teste financeiro acusava dinheiro no crédito.
 
 ### Segurança já implementada
 

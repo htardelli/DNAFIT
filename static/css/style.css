@@ -797,8 +797,9 @@ tbody tr:hover { background: var(--card-2); }
    mesmo z-index vence quem vem depois no HTML — e o modal da aula vem depois,
    então o seletor de exercício e a régua abriam atrás dele e travavam a tela.
    Já aconteceu uma vez com a régua sobre o modo treino; agora é regra explícita. */
-#m-escolher-ex, #m-regua { z-index: 220; }
-#m-pix-aviso { z-index: 240; }   /* aviso de pagamento fica acima de tudo */
+#m-escolher-ex, #m-regua, #m-transferir { z-index: 220; }
+/* Avisos prioritários: sobem acima de qualquer modal aberto */
+#m-pix-aviso, #m-transf-aviso { z-index: 240; }
 
 /* ── Senha provisória ─────────────────────────────────────────────────────
    Mostrada uma vez só: fonte monoespaçada e tamanho grande porque ela vai ser

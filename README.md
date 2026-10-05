@@ -215,8 +215,8 @@ o app mostra um aviso no topo de todas as telas.
 Imprevisto de trabalho não devolve dinheiro — mas também não precisa queimar a
 aula. Você remarca, e o personal aprova no app.
 
-1. Abra a aula e toque em **Transferir para outro dia**. Escolha a data nova (pode
-   ser em **outro mês**) e escreva o motivo.
+1. Abra a aula e toque em **Transferir** (no rodapé, entre *Excluir* e *Cancelar*).
+   Escolha a data nova — pode ser em **outro mês** — e escreva o motivo.
 2. A aula original fica no dia dela, em **laranja**, com o aviso de que há um
    pedido aguardando. A aula nova aparece no dia escolhido, em **roxo**, como
    **crédito**.
@@ -240,7 +240,8 @@ aula. Você remarca, e o personal aprova no app.
 - **Transferida não é perdida.** No Financeiro ela sai do bolo *Perdido* e aparece
   na coluna **Transf.** — você não faltou, você remarcou.
 - **Só aula com o personal, só se estiver agendada.** Treino sozinho e aeróbico não
-  custam nada: para esses, mude a data direto. E um crédito não é transferido de
+  custam nada: para esses, **mude a data direto**, inclusive para outro mês — não
+  há o que transferir onde não há dinheiro. E um crédito não é transferido de
   novo — ele já é o resultado de uma transferência.
 - **Desfazer:** apagar a aula-crédito devolve a original ao estado **agendada**,
   como se o pedido nunca tivesse existido.

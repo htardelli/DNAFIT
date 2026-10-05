@@ -1099,13 +1099,18 @@ async def editar_aula(aid: int, body: AulaUpdate, user=Depends(get_current_user)
                 f"Campos bloqueados: {', '.join(sorted(proibidos))}.")
     if "data" in data and data["data"]:
         nova = _parse_data(data["data"])
-        # O mês é pago quando as aulas entram na agenda. Remarcar é trocar de dia
+        # O mês é pago quando as aulas entram na agenda. Mudar a data é trocar de dia
         # DENTRO do mês pago; jogar a aula para outro mês moveria dinheiro de um
-        # fechamento para outro, então é recusado.
-        if nova[:7] != (atual["data"] or "")[:7]:
+        # fechamento para outro. O caminho para isso é a TRANSFERÊNCIA, que deixa o
+        # valor no mês de origem e cria um crédito de R$ 0 no destino.
+        # A regra só existe por causa do dinheiro: aula que não custa nada
+        # (sozinho, aeróbico) muda de data livremente.
+        if nova[:7] != (atual["data"] or "")[:7] and float(atual["valor"] or 0) > 0:
             raise HTTPException(400,
-                f"Remarcação só dentro do mesmo mês. Esta aula é de {atual['data'][5:7]}/{atual['data'][:4]}, "
-                f"que já está pago. Para mover para outro mês, exclua esta aula e crie uma nova lá.")
+                f"Esta aula é de {atual['data'][5:7]}/{atual['data'][:4]}, que já está pago. "
+                f"Para levá-la a outro mês use o botão 'Transferir' na aula: ela continua "
+                f"paga aqui e entra no dia novo como crédito, sem custo, depois que o "
+                f"personal aprovar. Excluir e recriar faria você pagar duas vezes.")
         data["data"] = nova
     # Aula já realizada: só entra o registro do que aconteceu.
     # A trava vale para aula que de fato aconteceu. Uma marcada como feita num
