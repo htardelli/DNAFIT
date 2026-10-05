@@ -1480,23 +1480,39 @@ function reguaPara(inputId, titulo, unidade, min, max, step) {
     onOk: v => { el.value = v; } });
 }
 
-// ══════════════════════════ TREINO DE HOJE (cartão) ══════════════════════════
-// ── Ver treino: leitura, não cadastro ───────────────────────────────────────
+// ── Ver treino: leitura + checklist ─────────────────────────────────────────
 // "Ver treino" abria abrirAula(), o formulário com data, status, professor,
 // pacote, valor, modelo... Quem abre o app na academia quer saber o que vai
-// fazer. Aqui só se lê; editar continua a um toque, em "Abrir aula".
-async function verTreino(aulaId) {
-  let a;
-  try { a = await api('GET', `/api/aulas/${aulaId}`); }
-  catch (e) { return toast(e.message, 'err'); }
+// fazer — e ir riscando. O modo treino (um exercício por vez, régua, cronômetro)
+// é para quem quer registrar carga série a série; aqui é a lista inteira à vista,
+// um toque por exercício. Editar a PRESCRIÇÃO continua a um toque, em "Abrir aula".
+let _vtAula = null;
 
+async function verTreino(aulaId) {
+  try { _vtAula = await api('GET', `/api/aulas/${aulaId}`); }
+  catch (e) { return toast(e.message, 'err'); }
+  vtRender();
+  abrirModal('m-ver-treino');
+}
+
+// Marcar exercício é EXECUÇÃO: vale também na aula do personal, e só depois que
+// a aula começou — riscar exercício de um treino de amanhã é dado inconsistente.
+function vtPodeMarcar(a) {
+  return !!a.ja_comecou && a.status !== 'cancelada' && a.status !== 'transferida';
+}
+
+function vtRender() {
+  const a = _vtAula;
+  if (!a) return;
   const aer = ehAerobico(a.modalidade);
   const exs = a.exercicios || [];
+  const marcavel = vtPodeMarcar(a);
+
   document.getElementById('vt-titulo').textContent =
     a.foco || a.tipo || (aer ? 'Treino de corrida'
       : a.modalidade === 'sozinho' ? 'Treino individual' : 'Treino com o personal');
 
-  const meta = [
+  document.getElementById('vt-meta').innerHTML = [
     `<span><b>${diaSemana(a.data)} ${fmtData(a.data)}</b>${a.hora ? ' às <b>' + a.hora + '</b>' : ''}</span>`,
     `<span>${esc(rotuloModalidade(a.modalidade))}</span>`,
     a.professor ? `<span>com <b>${esc(a.professor)}</b></span>` : '',
@@ -1504,8 +1520,8 @@ async function verTreino(aulaId) {
     a.duracao_min ? `<span><b>${a.duracao_min}</b> min previstos</span>` : '',
     `<span>${ICONE_STATUS[a.status] ? ICONE_STATUS[a.status].i + ' ' + esc(ICONE_STATUS[a.status].t) : esc(a.status)}</span>`
   ].filter(Boolean).join('');
-  document.getElementById('vt-meta').innerHTML = meta;
 
+  const feitos = exs.filter(e => e.feito).length;
   let corpo;
   if (aer) {
     const texto = (a.descricao || '').trim();
@@ -1521,10 +1537,12 @@ async function verTreino(aulaId) {
     corpo = `<div class="empty">O treino deste dia ainda não foi montado${
       a.modalidade === 'com_personal' ? ' pelo personal' : ''}.</div>`;
   } else {
-    const feitos = exs.filter(e => e.feito).length;
-    corpo = `<p class="muted" style="font-size:12px;margin:0 0 4px">
-        ${exs.length} ${exs.length === 1 ? 'exercício' : 'exercícios'}${
-        feitos ? ` · <b>${feitos}</b> já ${feitos === 1 ? 'feito' : 'feitos'}` : ''}</p>` +
+    const pct = Math.round(feitos / exs.length * 100);
+    corpo = `<div class="vt-progresso">
+        <div class="vt-barra"><span style="width:${pct}%"></span></div>
+        <span class="vt-conta"><b>${feitos}</b> de ${exs.length} ${
+          feitos === 1 ? 'feito' : 'feitos'}</span>
+      </div>` +
       exs.map((e, i) => {
         const dados = [
           e.series && e.repeticoes ? `<b>${e.series} × ${esc(e.repeticoes)}</b>`
@@ -1533,26 +1551,77 @@ async function verTreino(aulaId) {
           e.carga ? `${fmtN(e.carga)} kg` : '',
           e.descanso_seg ? `${e.descanso_seg}s de descanso` : ''
         ].filter(Boolean).join(' · ');
-        return `<div class="vt-ex${e.feito ? ' feito' : ''}">
-          <span class="n">${e.feito ? '✓' : i + 1}</span>
-          <span class="c">
+        const miolo = `<span class="c">
             <span class="nome">${e.feito ? `<s>${esc(e.nome)}</s>` : esc(e.nome)}</span>
             ${dados ? `<div class="dados">${dados}</div>` : ''}
             ${e.obs ? `<div class="obs">${esc(e.obs)}</div>` : ''}
-          </span>
-        </div>`;
-      }).join('');
+          </span>`;
+        // Alvo de toque inteiro: na academia, com a mão suada, acertar um
+        // quadradinho de 20px é o que faz a pessoa desistir de marcar.
+        return marcavel
+          ? `<label class="vt-ex marcavel${e.feito ? ' feito' : ''}">
+               <input type="checkbox" class="vt-check" ${e.feito ? 'checked' : ''}
+                      onchange="vtMarcar(${e.id}, this.checked)">
+               <span class="n">${e.feito ? '✓' : i + 1}</span>${miolo}
+             </label>`
+          : `<div class="vt-ex${e.feito ? ' feito' : ''}">
+               <span class="n">${e.feito ? '✓' : i + 1}</span>${miolo}
+             </div>`;
+      }).join('') +
+      (marcavel ? '' : `<p class="muted" style="font-size:12px;margin:12px 0 0">
+         ${a.status === 'cancelada' || a.status === 'transferida'
+           ? 'Aula ' + esc(a.status) + ': não há o que registrar aqui.'
+           : 'Dá para ir marcando a partir do horário da aula.'}</p>`);
   }
   document.getElementById('vt-corpo').innerHTML = corpo;
 
   const temTreino = aer ? !!(a.descricao || '').trim() : exs.length > 0;
-  const podeTreinar = temTreino && a.ja_comecou && a.status !== 'cancelada'
-                      && a.status !== 'transferida';
-  document.getElementById('vt-acoes').innerHTML = `
-    <button class="btn" style="margin-right:auto" onclick="vtAbrirAula(${a.id})">Abrir aula</button>
-    <button class="btn" onclick="fecharModal('m-ver-treino')">Fechar</button>
-    ${podeTreinar ? `<button class="btn btn-primary" onclick="vtTreinar(${a.id})">Treinar agora</button>` : ''}`;
-  abrirModal('m-ver-treino');
+  const tudoFeito = exs.length > 0 && feitos === exs.length;
+  const podeFinalizar = marcavel && a.status !== 'realizada' && temTreino;
+  // Terminou tudo: finalizar é o próximo passo óbvio e vira o botão verde.
+  // Parou no meio (com ao menos um marcado): ainda dá para finalizar, em botão
+  // discreto — treino cortado pelo relógio é rotina, e obrigar a passar pelo
+  // modo treino só para encerrar faria ele deixar a aula "agendada" para sempre.
+  // Sem nada marcado o botão não aparece: finalizar é irreversível, e ali ele
+  // ainda não disse que treinou nada.
+  const acoes = [
+    `<button class="btn" style="margin-right:auto" onclick="vtAbrirAula(${a.id})">Abrir aula</button>`,
+    podeFinalizar && feitos > 0 && !tudoFeito
+      ? `<button class="btn" onclick="vtFinalizar()">Finalizar aula</button>` : '',
+    `<button class="btn" onclick="fecharModal('m-ver-treino')">Fechar</button>`,
+    podeFinalizar && tudoFeito
+      ? `<button class="btn btn-primary" onclick="vtFinalizar()">Finalizar aula</button>`
+      : (temTreino && marcavel && a.status !== 'realizada'
+          ? `<button class="btn btn-primary" onclick="vtTreinar(${a.id})">Treinar agora</button>` : '')
+  ].filter(Boolean).join('');
+  document.getElementById('vt-acoes').innerHTML = acoes;
+}
+
+async function vtMarcar(eid, feito) {
+  const a = _vtAula;
+  if (!a) return;
+  try {
+    await api('PATCH', `/api/aulas/${a.id}/exercicios/${eid}`, { feito });
+    const it = (a.exercicios || []).find(e => e.id === eid);
+    if (it) it.feito = feito ? 1 : 0;
+    vtRender();
+    loadAgenda();   // o cartão de hoje mostra "x feitos"
+  } catch (e) {
+    toast(e.message, 'err');
+    vtRender();     // desfaz o check na tela: o banco não aceitou
+  }
+}
+
+// m-concluir vem ANTES de m-ver-treino no HTML; com o mesmo z-index, abriria
+// atrás. Fecha a leitura primeiro — mesma escada de empilhamento de sempre.
+function vtFinalizar() {
+  const a = _vtAula;
+  if (!a) return;
+  const exs = a.exercicios || [];
+  const feitos = exs.filter(e => e.feito).length;
+  fecharModal('m-ver-treino');
+  abrirConclusao(a.id, (exs.length && feitos < exs.length)
+    ? `Você marcou ${feitos} de ${exs.length} exercícios.` : '');
 }
 
 // O modo treino vive abaixo dos modais na pilha: sem fechar este, ele abriria atrás.
@@ -2284,7 +2353,8 @@ function rotuloEscala(escala, v) {
 let _cc = { id: null, depois: null };
 
 function abrirConclusao(id, aviso, depois) {
-  const a = (_aulas.find(x => x.id === id)) || (_tm.aula && _tm.aula.id === id ? _tm.aula : null);
+  const a = (_aulas.find(x => x.id === id)) || (_tm.aula && _tm.aula.id === id ? _tm.aula : null)
+            || (_vtAula && _vtAula.id === id ? _vtAula : null);
   _cc = { id, depois: depois || null };
   const quando = a ? `${fmtDataCurta(a.data)}${a.hora ? ' às ' + a.hora : ''}` : 'deste treino';
   document.getElementById('cc-aviso').innerHTML =
@@ -2315,6 +2385,7 @@ async function confirmarConclusao() {
   try {
     await api('PATCH', `/api/aulas/${_cc.id}`, body);
     fecharModal('m-concluir');
+    if (_vtAula && _vtAula.id === _cc.id) _vtAula = null;   // estado velho em memória
     toast('Treino registrado como feito');
     if (_cc.depois) _cc.depois();
     loadAgenda();

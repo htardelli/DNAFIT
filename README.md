@@ -104,19 +104,30 @@ foram mantidas.
 
 ---
 
-## Ver treino — só ler o que foi prescrito
+## Ver treino — a lista para ir riscando
 
-No cartão de hoje, **Ver treino** abre uma tela de **leitura**: o dia, a hora, com
-quem e onde, e a lista dos exercícios que o personal montou — `4 × 10 · 60 kg ·
-90s de descanso`, com a observação dele embaixo. O que você já fez aparece riscado
-com ✓. Em corrida, aparece a prescrição em texto com a distância e o tempo.
+No cartão de hoje, **Ver treino** abre o treino que o personal montou: o dia, a
+hora, com quem e onde, e cada exercício com `4 × 10 · 60 kg · 90s de descanso` e a
+observação dele embaixo. Em corrida, a prescrição em texto com distância e tempo.
 
-Nada ali é editável — é para consultar no vestiário sem medo de mexer em algo sem
-querer. Os três botões: **Abrir aula** (o cadastro completo, se você realmente
-quiser editar), **Fechar** e **Treinar agora**.
+**Toque na linha do exercício para marcar que fez.** O alvo é a linha inteira, não
+um quadradinho — dá para acertar com a mão suada. O exercício fica riscado com ✓,
+a barra no topo anda (`3 de 6 feitos`) e **salva na hora**: não existe botão de
+salvar e não tem como perder o registro saindo da tela.
+
+Terminou tudo? **Finalizar aula** vira o botão verde e pergunta energia, fadiga e
+percepção de esforço — a mesma conclusão do modo treino. Parou no meio porque o
+horário apertou? O botão continua ali, discreto: ele avisa quantos você marcou e
+encerra do mesmo jeito. Com nada marcado o botão não aparece — finalizar não tem
+volta, e ali você ainda não disse que treinou nada.
+
+Nenhum campo de cadastro aparece nessa tela: data, status, valor e professor ficam
+em **Abrir aula**, que é o cadastro completo. Os outros botões são **Fechar** e
+**Treinar agora** (o modo treino, um exercício por vez, com régua de carga e
+cronômetro de descanso, para quando você quiser registrar série a série).
 
 A lista de aulas e o calendário continuam abrindo o cadastro completo: ali o que
-você quer é gerenciar a agenda, não ler o treino do dia.
+você quer é gerenciar a agenda, não treinar.
 
 ## Modo treino — a tela para usar na academia
 

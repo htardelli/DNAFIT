@@ -616,7 +616,7 @@ Nunca é gravada em texto puro (só o hash) e não vai para log. Quem perder o v
 pede outro reset. Alfabeto sem `0/O/1/l/I`: ela é ditada por WhatsApp ou lida em
 voz alta, e caractere ambíguo vira chamado de "não entro".
 
-### Ver treino × abrir aula (leitura separada do cadastro)
+### Ver treino: checklist, não cadastro
 
 O cartão de hoje tinha dois botões: *Treinar agora* (modo treino) e *Ver treino*,
 que chamava `abrirAula()` — o **formulário de cadastro**: data, hora, duração,
@@ -629,20 +629,48 @@ modalidade, professor, local, duração e status; um cartão por exercício com
 `séries × reps`, carga, descanso e observação; o que já foi feito aparece riscado
 com ✓. Corrida mostra a prescrição em texto, mais distância e tempo registrados.
 
+**Checklist.** Cada linha é um `<label>` inteiro, não um quadradinho: o alvo de
+toque é a linha, porque errar 20px com a mão suada é o que faz alguém desistir de
+marcar e perder o registro. `vtMarcar()` faz `PATCH .../exercicios/{eid}
+{feito}` na hora — não existe "salvar" — atualiza `_vtAula` em memória, redesenha
+e chama `loadAgenda()` para o cartão de hoje acompanhar. Se o PATCH falhar,
+`vtRender()` roda de novo e o check volta: a tela nunca mostra o que o banco não
+aceitou. Marcar é **execução**, então vale também na aula do personal; `vtPodeMarcar`
+exige `ja_comecou` e status fora de cancelada/transferida — riscar exercício de um
+treino de amanhã é dado inconsistente.
+
+**Finalizar.** Com tudo marcado, *Finalizar aula* vira o botão verde e substitui
+*Treinar agora*. Com parte marcada, aparece discreto ao lado: treino cortado pelo
+relógio é rotina, e obrigar a passar pelo modo treino só para encerrar faria a
+aula ficar "agendada" para sempre. **Com nada marcado não aparece** — finalizar é
+irreversível e ali ele ainda não disse que treinou. `vtFinalizar()` cai no mesmo
+`abrirConclusao()` do modo treino (energia · fadiga · esforço), com o mesmo aviso
+de "você marcou X de Y" quando ficou gente para trás. Duas portas, um fluxo só.
+
 Rodapé: **Abrir aula** (o formulário, para quem realmente quer editar),
-**Fechar** e **Treinar agora**. `vtTreinar()` fecha a leitura **antes** de chamar
-`tmAbrir()`: o modo treino fica em z-index 120, abaixo dos modais (200), então
-sem fechar ele abriria atrás. Mesma armadilha da escada de empilhamento.
+**Fechar**, e *Treinar agora* ou *Finalizar aula*. `vtTreinar()` e `vtFinalizar()`
+fecham a leitura **antes** de abrir o que vem depois: o modo treino fica em
+z-index 120, abaixo dos modais (200), e `#m-concluir` vem antes de `#m-ver-treino`
+no HTML, então com z-index empatado abriria atrás. Mesma armadilha da escada de
+empilhamento, duas vezes no mesmo botão.
+
+`abrirConclusao()` procura a aula em `_aulas`, em `_tm.aula` e agora em `_vtAula`
+— aberta pela leitura, ela pode não estar no mês carregado. E `confirmarConclusao()`
+zera `_vtAula` depois de gravar, senão a leitura reabriria com o estado velho.
 
 A lista e o calendário continuam abrindo o formulário — ali o gesto é gerenciar a
 agenda, não ler o treino do dia. Se ele pedir leitura ali também, `verTreino` já
 serve: é só trocar a chamada.
 
-Teste: `tvertreino.py` — além de abrir, confere que **nenhum campo editável**
-existe na leitura (`input, select, textarea` = 0), que *Treinar agora* abre o modo
-treino com a leitura fechada, e que *Abrir aula* leva ao formulário. O setup
-monta o cenário real pela API (o aluno marca o dia, o personal prescreve) e apaga
-a aula no fim — ela nasce paga e poluía o financeiro de outubro.
+Teste: `tvertreino.py` — 14 asserções. Que **nenhum campo de cadastro** existe na
+leitura (`input:not([type=checkbox]), select, textarea` = 0 — o check de feito é
+execução, não cadastro); que marcar **grava no banco** e desmarcar volta; que o
+contador anda; que sem nada marcado não há *Finalizar*; que com parte marcada há;
+que com tudo marcado ele vira o principal e *Treinar agora* some; que finalizar
+abre a conclusão com a leitura fechada e grava `realizada` com energia, fadiga e
+PSE; e que uma aula já realizada não oferece finalizar de novo. O setup monta o
+cenário real pela API (o aluno marca o dia, o personal prescreve) e apaga a aula
+no fim — ela nasce paga e poluía o financeiro de outubro.
 
 ### Transferência de aula paga (remarcar para outro dia)
 

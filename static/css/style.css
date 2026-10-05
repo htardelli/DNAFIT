@@ -844,7 +844,7 @@ tbody tr:hover { background: var(--card-2); }
 .vt-meta > span:not(:last-child)::after { content: '·'; margin-left: 10px; opacity: .5; }
 .vt-ex {
   display: flex; gap: 12px; align-items: flex-start; padding: 12px 0;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border); position: relative;
 }
 .vt-ex:last-child { border-bottom: 0; }
 .vt-ex .n {
@@ -864,3 +864,23 @@ tbody tr:hover { background: var(--card-2); }
   background: var(--card-2); border: 1px solid var(--border);
   border-radius: var(--radius-sm); padding: 12px 14px;
 }
+
+/* ── Checklist dentro de "Ver treino" ─────────────────────────────────────
+   O alvo de toque é a linha inteira (<label>), não o quadradinho: na academia,
+   com a mão suada, errar um alvo de 20px é o que faz a pessoa desistir de
+   marcar e perder o registro do treino. */
+.vt-progresso { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; }
+.vt-barra {
+  flex: 1; height: 6px; border-radius: 3px; background: var(--card-2); overflow: hidden;
+}
+.vt-barra span {
+  display: block; height: 100%; background: var(--pri, #11A05A);
+  border-radius: 3px; transition: width .18s ease;
+}
+.vt-conta { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.vt-conta b { color: var(--text); }
+.vt-ex.marcavel { cursor: pointer; margin: 0; -webkit-tap-highlight-color: transparent; }
+.vt-ex.marcavel:active { background: var(--card-2); }
+.vt-check { position: absolute; opacity: 0; pointer-events: none; }
+.vt-ex.marcavel .n { border: 1.5px solid var(--border); transition: all .15s ease; }
+.vt-ex.marcavel.feito .n { border-color: transparent; }
