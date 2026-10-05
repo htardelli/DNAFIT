@@ -267,6 +267,7 @@ async function loadAgenda() {
     renderCal();
     renderLista();
     carregarHoje();
+    verificarTransferencias(false);   // só o trilho, sem reabrir o aviso dispensado
   } catch (e) { toast(e.message, 'err'); }
 }
 
@@ -2493,11 +2494,23 @@ function renderTransferencia(a) {
   if (a.transf_status === 'pendente' && !a.credito_de) {
     box.style.display = '';
     box.className = 'aviso';
-    box.innerHTML = `<b>Transferência aguardando o personal.</b>
-      ${a.transf_motivo ? `Motivo: ${esc(a.transf_motivo)}. ` : ''}
-      Enquanto ele não responder, a data e o status desta aula ficam travados.
-      <button class="btn btn-sm" style="margin-left:8px"
-        onclick="cancelarTransferencia(${a.id})">Cancelar pedido</button>`;
+    // Cada lado vê a SUA ação. Mostrar "Cancelar pedido" ao personal fazia ele
+    // desistir em nome do aluno achando que estava recusando.
+    box.innerHTML = _user && _user.role === 'personal'
+      ? `<b>O aluno pediu para transferir esta aula.</b>
+         ${a.transf_motivo ? `Motivo: ${esc(a.transf_motivo)}. ` : ''}
+         O valor continua neste mês — muda só o dia do treino.
+         <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+           <button class="btn btn-sm btn-primary"
+             onclick="responderTransferencia(${a.id}, true)">Aprovar</button>
+           <button class="btn btn-sm btn-danger"
+             onclick="responderTransferencia(${a.id}, false)">Recusar</button>
+         </div>`
+      : `<b>Transferência aguardando o personal.</b>
+         ${a.transf_motivo ? `Motivo: ${esc(a.transf_motivo)}. ` : ''}
+         Enquanto ele não responder, a data e o status desta aula ficam travados.
+         <button class="btn btn-sm" style="margin-left:8px"
+           onclick="cancelarTransferencia(${a.id})">Cancelar pedido</button>`;
   } else if (a.status === 'transferida') {
     box.style.display = '';
     box.className = 'aviso';
@@ -2548,11 +2561,32 @@ async function cancelarTransferencia(id) {
 }
 
 // ── Aviso prioritário para o personal ───────────────────────────────────────
-async function verificarTransferencias() {
+// Trilho na Agenda: o aviso sobre a tela inicial é dispensável em "Depois", e
+// sem isto o pedido só reaparecia no próximo start do app. Enquanto ele não
+// responde, a aula do aluno fica com data e status travados — o pedido não pode
+// depender de ele lembrar de recarregar a tela.
+function renderTrilhoTransf(itens) {
+  const t = document.getElementById('transf-trilho');
+  if (!t) return;
+  if (!_user || _user.role !== 'personal' || !itens.length) {
+    t.style.display = 'none'; return;
+  }
+  t.style.display = '';
+  t.innerHTML = `<b>${itens.length} ${itens.length === 1 ? 'pedido' : 'pedidos'} de
+    transferência ${itens.length === 1 ? 'esperando' : 'esperando'} você.</b>
+    Enquanto você não responde, ${itens.length === 1 ? 'a aula fica travada' : 'as aulas ficam travadas'}
+    para o aluno.
+    <button class="btn btn-sm" style="margin-left:8px"
+      onclick="verificarTransferencias()">Ver ${itens.length === 1 ? 'o pedido' : 'os pedidos'}</button>`;
+}
+
+async function verificarTransferencias(abrirAviso = true) {
   if (!_user || _user.role !== 'personal') return;
   let itens;
   try { itens = await api('GET', '/api/transferencias'); } catch (e) { return; }
+  renderTrilhoTransf(itens);
   if (!itens.length) { fecharModal('m-transf-aviso'); return; }
+  if (!abrirAviso) return;   // só o trilho: não reabre o que ele dispensou
   const t = itens[0];
   const resto = itens.length > 1
     ? `<p class="muted" style="font-size:12px;margin-top:10px">E mais ${itens.length - 1}
@@ -2583,6 +2617,7 @@ async function responderTransferencia(id, aprovar) {
       toast('Transferência recusada');
     }
     fecharModal('m-transf-aviso');
+    fecharModal('m-aula');       // pode ter vindo de dentro da aula
     loadAgenda();
     verificarTransferencias();   // encadeia o próximo pedido
   } catch (e) { toast(e.message, 'err'); }

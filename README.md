@@ -220,8 +220,11 @@ aula. Você remarca, e o personal aprova no app.
 2. A aula original fica no dia dela, em **laranja**, com o aviso de que há um
    pedido aguardando. A aula nova aparece no dia escolhido, em **roxo**, como
    **crédito**.
-3. Na próxima vez que o **personal** abrir o app, o pedido aparece **por cima da
-   tela inicial**, com os dois dias, o motivo e o valor. Ele *Aprova* ou *Recusa*.
+3. O **personal** encontra o pedido em **três lugares**, para não depender de ele
+   ver no momento certo: (a) um aviso **por cima da tela inicial** quando abre o
+   app, com os dois dias, o motivo e o valor; (b) se ele tocar em *Depois*, uma
+   **faixa no topo da Agenda** que fica lá até ele responder; (c) dentro da
+   própria aula, com os botões *Aprovar* e *Recusar*.
 4. **Aprovado:** a original muda para o status **Transferida** e o treino passa a
    ser registrado no dia novo — é lá que você marca *Realizada*.
    **Recusado:** o crédito é apagado, a aula volta ao normal e você pode propor

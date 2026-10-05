@@ -674,6 +674,18 @@ Guardas (as que já foram quebradas uma vez, e por isso estão testadas):
   **crédito** restaura a origem para `agendada` com os campos limpos — é o
   caminho de saída quando os dois lados concordam em desfazer.
 
+**Onde o personal encontra o pedido — três lugares, de propósito.** O aviso sobre
+a tela inicial (`verificarTransferencias()`) tem um botão **Depois**, e só rodava
+no start do app: dispensado, o pedido sumia até ele recarregar — enquanto isso a
+aula do aluno fica com data e status travados. Por isso existe o **trilho**
+(`#transf-trilho`, `renderTrilhoTransf`) no topo da Agenda, refeito a cada
+`loadAgenda()` via `verificarTransferencias(false)` — o `false` atualiza o trilho
+**sem** reabrir o aviso que ele já dispensou. E a própria aula mostra o pedido com
+**Aprovar/Recusar**. Antes ela mostrava ao personal o aviso escrito para o aluno,
+com o botão *Cancelar pedido*: ele desistiria em nome do aluno achando que estava
+recusando, e o aluno veria o pedido evaporar sem resposta. `renderTransferencia`
+agora ramifica por `_user.role`.
+
 Na tela: `renderTransferencia(a)` cobre os quatro estados (pendente, transferida,
 crédito, recusada) e `podeTransferir(a)` decide o botão — só aluno, só
 `com_personal`, só `agendada`, nunca um crédito, nunca com pedido vivo.
