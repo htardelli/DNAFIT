@@ -769,6 +769,20 @@ com o botão *Cancelar pedido*: ele desistiria em nome do aluno achando que esta
 recusando, e o aluno veria o pedido evaporar sem resposta. `renderTransferencia`
 agora ramifica por `_user.role`.
 
+**Cor do crédito.** Nasceu usando `--fer` (roxo), que já era a cor do feriado: no
+calendário, um dia de feriado e um dia com crédito ficavam iguais, e o crédito em
+si era um ponto de 5px na barra — invisível na grade do celular, onde a barra tem
+9px e nenhum texto. Agora existe `--cred` (#BE185D, magenta), que não colide com
+feriado (roxo), agendada (azul), falta (vermelho) nem transferida (laranja), e não
+lê como perda. No celular a barra do crédito é **cor cheia e mais alta** (13px
+contra 9px) — altura e cor são os dois únicos sinais que sobrevivem ali. No
+desktop entra um selo **"C"** *antes* do texto: o chip corta pela direita com
+ellipsis, então rótulo no fim virava "CRÉ…" justamente no dia cheio. A legenda e a
+etiqueta da lista repetem o mesmo "C" para o olho ligar uma coisa na outra.
+
+Teste: `tcredito.py` cria um crédito **em 12/10, que é feriado**, e compara as cores
+computadas do chip, do dia de feriado e de uma aula comum, no celular e no desktop.
+
 Na tela: `renderTransferencia(a)` cobre os quatro estados (pendente, transferida,
 crédito, recusada) e `podeTransferir(a)` decide o botão — só aluno, só
 `com_personal`, só `agendada`, nunca um crédito, nunca com pedido vivo.

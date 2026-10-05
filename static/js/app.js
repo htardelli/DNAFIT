@@ -409,7 +409,7 @@ function renderCal() {
     if (fora && i >= 35) continue;                     // não desenha a 6ª linha vazia
     const chips = (porDia[k] || []).map(a => `
       <div class="chip chip-${a.status}${semTreino(a) ? ' pend' : ''}${(a.modalidade === 'sozinho') ? ' solo' : ''}${ehAerobico(a.modalidade) ? ' aer' : ''}${a.credito_de ? ' credito' : ''}" onclick="event.stopPropagation();abrirAula(${a.id})"
-           title="${esc((a.hora||'') + ' ' + (a.tipo||a.foco||'Aula') + ' · ' + rotuloModalidade(a.modalidade) + (semTreino(a) ? ' — sem treino montado' : ''))}">
+           title="${esc((a.hora||'') + ' ' + (a.tipo||a.foco||'Aula') + ' · ' + rotuloModalidade(a.modalidade) + (a.credito_de ? ' · CRÉDITO (aula paga em outro mês)' : '') + (semTreino(a) ? ' — sem treino montado' : ''))}">
         ${a.hora ? `<span class="chip-hora">${a.hora}</span> ` : ''}<span class="chip-txt">${esc(a.tipo || a.foco || 'Aula')}</span>
       </div>`).join('');
     const f = feriadoDe(k);

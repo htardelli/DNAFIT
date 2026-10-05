@@ -39,6 +39,11 @@
   --warn:   #C2620A;  --warn-l:   #FDF0DC;  --warn-ink:   #8A4708;
   --info:   #0E86C4;  --info-l:   #DDF0FA;  --info-ink:   #0B6A9C;
   --fer:    #7C3AED;  --fer-l:    #EDE9FE;  --fer-ink:    #5B21B6;
+  /* Crédito tinha a cor do feriado (--fer, roxo): no calendário o dia 12
+     feriado e um dia com crédito ficavam iguais. Magenta não colide com
+     feriado (roxo), agendada (azul), falta (vermelho) nem transferida
+     (laranja) — e não lê como perda, que é o ponto do crédito. */
+  --cred:   #BE185D;  --cred-l:   #FCE7F3;  --cred-ink:   #9D174D;
   --neutro: #7C8B83;  --neutro-l: #E8EDEA;  --neutro-ink: #4A5A52;
 
   /* neutros com leve viés verde, para conversarem com o acento */
@@ -238,11 +243,32 @@ input[type="time"]::-webkit-calendar-picker-indicator { margin-left: auto; }
    distinguir de "falta" (vermelho) e "cancelada" (cinza), porque nenhuma das
    duas é perda: o dinheiro continua valendo um treino. */
 .b-transferida { background: var(--warn-l); color: var(--warn-ink); }
-.b-credito     { background: var(--fer-l);  color: var(--fer-ink); }
+/* O contorno repete o da barra no calendário: a legenda precisa parecer
+   a mesma coisa que ele vê na grade, senão não liga uma na outra. */
+.b-credito     { background: var(--cred-l); color: var(--cred-ink);
+                 box-shadow: inset 0 0 0 1.5px var(--cred); }
+/* O mesmo "C" da barra no calendário: é o que liga a legenda à grade. */
+.b-credito::before {
+  content: 'C'; display: inline-block; width: 13px; height: 13px; line-height: 13px;
+  text-align: center; border-radius: 4px; background: var(--cred); color: #fff;
+  font-size: 9px; font-weight: 800; margin-right: 5px; vertical-align: 1px;
+}
 .chip-transferida { background: var(--warn-l); border-left-color: var(--warn); color: var(--warn-ink); }
-.chip.credito::after {
-  content: ''; position: absolute; right: 3px; top: 3px; width: 5px; height: 5px;
-  border-radius: 50%; background: var(--fer);
+/* O crédito marcava a barra com um ponto de 5px. Na grade do celular a barra
+   tem 9px de altura e nenhum texto: o ponto desaparecia. A barra inteira muda
+   de cor — é o único sinal que sobrevive àquele tamanho. */
+.chip.credito {
+  background: var(--cred-l) !important; color: var(--cred-ink) !important;
+  border-left-color: var(--cred) !important;
+  box-shadow: inset 0 0 0 1px var(--cred);
+}
+/* A marca vai ANTES do texto: a barrinha corta pela direita (ellipsis), então
+   um rótulo no fim vira "CRÉ…" justamente no dia cheio, que é quando mais
+   importa distinguir. */
+.chip.credito::before {
+  content: 'C'; display: inline-block; width: 14px; height: 14px; line-height: 14px;
+  text-align: center; border-radius: 4px; background: var(--cred); color: #fff;
+  font-size: 9px; font-weight: 800; margin-right: 5px; vertical-align: 1px;
 }
 .chip { position: relative; }
 .badge-solo  { background: var(--info-l);    color: var(--info-ink); }
@@ -478,6 +504,14 @@ tbody tr:hover { background: var(--card-2); }
   .chip-realizada { background: var(--primary); }
   .chip-falta     { background: var(--danger); }
   .chip-cancelada { background: var(--neutro); }
+  /* Crédito: barra MAIS ALTA e na cor cheia. Aqui não há texto nem borda
+     esquerda, então altura e cor são os dois únicos sinais disponíveis — e
+     crédito é a coisa mais fácil de esquecer que existe na agenda. */
+  .chip.credito {
+    background: var(--cred) !important; height: 13px; border-radius: 5px;
+    box-shadow: 0 0 0 2px var(--cred-l);
+  }
+  .chip.credito::before { content: none; }   /* a marca não cabe numa barra de 13px */
 
   .kpi-value { font-size: 24px; }
   .ex-row, .ex-head { grid-template-columns: 1fr 1fr 1fr; }
