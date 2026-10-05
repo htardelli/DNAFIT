@@ -51,6 +51,29 @@ código compartilhado.
 > junto: `git log` e `git blame` continuam contando a história inteira. A landing
 > page que já existia aqui ficou em `landing/`.
 
+### Procedência (para quem vier depois perguntar "veio tudo?")
+
+Origem: `htardelli/planges`, branch `claude/aulas-control-app-a0wprp`, último
+commit do FITPLAN lá: **`7d4f195`** (o anterior, `eb0d9c1`, era o estado antes do
+backup). Se a branch já tiver sido apagada, o GitHub ainda a restaura pelo botão
+*Restore branch* na aba Branches, e os commits seguem acessíveis pelo SHA.
+
+Conferido **antes** de qualquer remoção, e é isto que sustenta o "não perdemos nada":
+
+- `app.py`, `db.py`, `requirements.txt`, `static/index.html`, `static/js/app.js` e
+  `static/css/style.css` — **md5 idêntico** dos dois lados.
+- Os 52 assuntos de commit do planges contra os 56 daqui: o único que não aparece
+  com o mesmo título é o do backup, que foi escrito em cada repositório com a
+  mensagem adequada ao seu contexto — o **conteúdo** é o mesmo, pelos md5 acima.
+- `HANDOFF.md`, `README.md` e `railway.toml` diferem **de propósito**: aqui eles
+  apontam para o repositório, a branch e o Root Directory novos.
+- O `.claude/launch.json` do planges **não veio, e não devia**: ele sobe
+  `main:app` na porta 8000, que é o PLANGEST.
+- Fora de `fitplan/`, a branch de origem não tocou em **nenhum** arquivo do
+  planges (`git log origin/main..HEAD -- . ":(exclude)fitplan"` veio vazio), e
+  `fitplan/` **nunca** existiu na `main` do planges. Por isso liberar o planges é
+  apagar uma branch, não mexer na produção dele.
+
 ### Railway
 
 | Item | Valor |
