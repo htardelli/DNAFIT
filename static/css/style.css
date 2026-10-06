@@ -292,7 +292,20 @@ tbody tr:hover { background: var(--card-2); }
 .q-sub { margin-top: 3px; font-size: 12px; }
 .q-sub .muted { margin-right: 6px; }
 .c-modo, .c-st { width: 1%; white-space: nowrap; text-align: center; }
+/* Uma informação por linha: nome do treino, estado da transferência, treino
+   montado. Lado a lado tudo isso lia como uma frase só. As margens laterais das
+   etiquetas zeram aqui — elas existiam para separar o que agora já está em
+   linhas diferentes. */
 .c-treino { min-width: 70px; }
+.c-treino .t-linha { display: block; }
+.c-treino .t-linha + .t-linha { margin-top: 4px; }
+.c-treino .t-linha > .badge,
+.c-treino .t-linha > .ex-tag { margin-left: 0; }
+/* "crédito de 29/09/26" é UMA informação. Na coluna estreita do celular o par
+   não cabe lado a lado e a data cai para baixo da etiqueta — tudo bem, desde que
+   continue colada nela: sem margem acima e com o mesmo recuo, lê como legenda da
+   etiqueta e não como mais um item da pilha. */
+.c-treino .t-linha > .seta-transf { display: inline-block; margin: 2px 0 0 2px; }
 .c-acoes { white-space: nowrap; width: 1%; }
 .linha-aula { cursor: pointer; }
 .ex-tag {
@@ -533,7 +546,6 @@ tbody tr:hover { background: var(--card-2); }
   .c-quando { font-size: 13px; }
   .q-sub { font-size: 11.5px; }
   .c-treino { font-size: 13px; min-width: 62px; }
-  .c-treino .ex-tag { display: block; margin: 4px 0 0; width: fit-content; }
   .ic { width: 34px; height: 34px; margin-left: 3px; }
 
   .legenda { gap: 5px; font-size: 10px; }

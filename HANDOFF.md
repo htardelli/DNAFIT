@@ -809,6 +809,20 @@ desktop entra um selo **"C"** *antes* do texto: o chip corta pela direita com
 ellipsis, então rótulo no fim virava "CRÉ…" justamente no dia cheio. A legenda e a
 etiqueta da lista repetem o mesmo "C" para o olho ligar uma coisa na outra.
 
+**Uma informação por linha.** A coluna TREINO empilhava tudo lado a lado
+(`Funcional [crédito] de 29/09/26 [sem treino]`), e lia como uma frase só: o olho
+tinha que separar o que é nome do treino, o que é estado da transferência e o que
+é treino montado. Agora cada parte é um `.t-linha`. Duas decisões dentro disso:
+
+- O travessão de aula sem nome **não ocupa linha**. Empilhado, ele empurrava o
+  resto para baixo sem informar nada. Só aparece quando é a única coisa a dizer,
+  para a célula nunca ficar vazia. (É por isso que `tlista.py` procura uma
+  transferida **com nome** para checar o riscado: sem nome não há o que riscar, e
+  o sinal que sobrevive é a data riscada.)
+- `crédito` e `de 29/09/26` continuam sendo **uma** informação. Na coluna estreita
+  do celular não cabem lado a lado e a data desce, mas sem margem acima e com
+  recuo próprio — lê como legenda da etiqueta, não como mais um item da pilha.
+
 **Na lista.** A linha transferida só tinha o ícone 🔄 na coluna de status —
 parecia uma aula como as outras, e o treino dela nem aconteceu ali. Agora: data e
 nome **riscados**, linha a 62% de opacidade, faixa laranja à esquerda, etiqueta

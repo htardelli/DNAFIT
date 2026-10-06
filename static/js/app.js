@@ -458,6 +458,23 @@ function renderLista() {
     const nEx = a.qtd_exercicios
       ? `<span class="ex-tag">${a.qtd_exercicios} ex</span>`
       : (semTreino(a) ? '<span class="ex-tag pend" title="sem treino montado">sem treino</span>' : '');
+    // Uma informação por linha. Tudo lado a lado ("Funcional crédito de 29/09/26
+    // sem treino") lia como uma frase só, e o olho tinha que separar o que é nome
+    // do treino, o que é estado da transferência e o que é o treino montado.
+    // Empilhado, cada coisa ocupa seu lugar e a coluna fica com uma altura
+    // previsível de linha para linha.
+    const semNome = !(a.tipo || a.foco || a.descricao);
+    const partes = [
+      // Aula sem nome ainda: o travessão sozinho numa linha só empurra o resto
+      // para baixo sem informar nada. Só aparece quando é a ÚNICA coisa a dizer,
+      // para a célula nunca ficar vazia.
+      semNome ? '' : (transf ? `<s>${treino}</s>` : treino),
+      selo,
+      transf ? '' : nEx,
+    ].filter(Boolean);
+    const linhasTreino = partes.length
+      ? partes.map(x => `<div class="t-linha">${x}</div>`).join('')
+      : `<div class="t-linha">${treino}</div>`;
     return `
     <tr class="linha-aula${transf ? ' transferida' : ''}${a.credito_de ? ' credito' : ''}"
         onclick="abrirAula(${a.id})" title="${transf ? 'Aula transferida — o treino está no dia de destino' : 'Abrir a aula'}">
@@ -466,7 +483,7 @@ function renderLista() {
         <div class="q-sub"><span class="muted">${diaSemana(a.data)}</span><b>${a.hora || '—'}</b></div>
       </td>
       <td class="c-modo"><span class="modo ${mod.cls}" title="${mod.t}"><span>${mod.l}</span></span></td>
-      <td class="c-treino">${transf ? `<s>${treino}</s>` : treino}${selo}${transf ? '' : nEx}</td>
+      <td class="c-treino">${linhasTreino}</td>
       <td class="c-st"><span class="st b-${a.status}" title="${st.t}">${st.i}</span></td>
       <td class="right c-acoes">
         ${a.status === 'agendada' && jaComecou(a.data, a.hora)
